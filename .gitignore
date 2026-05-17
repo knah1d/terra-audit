@@ -1,0 +1,21 @@
+# Environments
+venv/
+env/
+.env
+.venv/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# IDE / OS specific files
+.vscode/
+.idea/
+.DS_Store
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Google Earth Engine
+.config/earthengine/
