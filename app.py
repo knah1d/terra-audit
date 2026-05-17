@@ -23,9 +23,19 @@ st.caption("Verra VM0051 Digital Compliance Sandbox // Phase 2 Engine Core")
 
 @st.cache_resource
 def init_modules():
-    return SpatialDataEngine(), AdaptiveAWDGate()
+    try:
+        return SpatialDataEngine(), AdaptiveAWDGate(), None
+    except Exception as e:
+        return None, None, str(e)
 
-engine, gate = init_modules()
+engine, gate, init_error = init_modules()
+
+if init_error:
+    st.error(f"Failed to start: {init_error}")
+    st.info("💡 **How to fix this:** You need to link your Google Earth Engine account to a Cloud Project.")
+    st.code("earthengine set_project YOUR_PROJECT_ID", language="bash")
+    st.markdown("If you don't know your Project ID, go to [Google Cloud Console](https://console.cloud.google.com/) and create one, then use its ID in the command above.")
+    st.stop()
 
 with get_db_connection() as conn:
     fields = conn.execute("SELECT field_id, name FROM fields").fetchall()
@@ -33,11 +43,18 @@ with get_db_connection() as conn:
 if not fields:
     st.info("Initializing baseline system storage metadata...")
     mock_polygon = {
-        "type": "Polygon",
-        "coordinates": [[[90.4100, 24.7500], [90.4150, 24.7500], [90.4150, 24.7550], [90.4100, 24.7550], [90.4100, 24.7500]]]
+        "type": "FeatureCollection",
+        "features": [{
+            "type": "Feature",
+            "properties": {"name": "Mymensingh Reference Parcel Alpha"},
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [[[90.4100, 24.7500], [90.4150, 24.7500], [90.4150, 24.7550], [90.4100, 24.7550], [90.4100, 24.7500]]]
+            }
+        }]
     }
     with get_db_connection() as conn:
-        conn.execute("INSERT INTO fields (field_id, name, district, geojson_geometry) VALUES (?, ?, ?, ?)",
+        conn.execute("INSERT OR REPLACE INTO fields (field_id, name, district, geojson_geometry) VALUES (?, ?, ?, ?)",
                      ("F-101", "Mymensingh Reference Parcel Alpha", "Mymensingh", json.dumps(mock_polygon)))
         conn.commit()
     st.rerun()
