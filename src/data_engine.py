@@ -12,7 +12,14 @@ class SpatialDataEngine:
             raise RuntimeError(f"Earth Engine Initialization Failed: {e}")
 
     def extract_clean_timeseries(self, geojson_geometry: dict, start_date: str, end_date: str) -> pd.DataFrame:
-        ee_geometry = ee.Geometry(geojson_geometry)
+        if "features" in geojson_geometry:
+            geom_dict = geojson_geometry["features"][0]["geometry"]
+        elif "geometry" in geojson_geometry:
+            geom_dict = geojson_geometry["geometry"]
+        else:
+            geom_dict = geojson_geometry
+            
+        ee_geometry = ee.Geometry(geom_dict)
         
         # Core Upgrade: Filter by DESCENDING orbit pass to stop sawtooth signal artifacts
         s1_stack = ee.ImageCollection('COPERNICUS/S1_GRD') \
