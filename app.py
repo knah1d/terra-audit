@@ -23,6 +23,7 @@ st.caption("Verra VM0051 Digital Compliance Sandbox // Phase 2 Engine Core")
 
 @st.cache_resource
 def init_modules():
+    # Cache invalidation trigger
     try:
         return SpatialDataEngine(), AdaptiveAWDGate(), None
     except Exception as e:
