@@ -41,24 +41,44 @@ if init_error:
 with get_db_connection() as conn:
     fields = conn.execute("SELECT field_id, name FROM fields").fetchall()
 
-if not fields:
-    st.info("Initializing baseline system storage metadata...")
-    mock_polygon = {
-        "type": "FeatureCollection",
-        "features": [{
-            "type": "Feature",
-            "properties": {"name": "Mymensingh Reference Parcel Alpha"},
-            "geometry": {
-                "type": "Polygon",
-                "coordinates": [[[90.4100, 24.7500], [90.4150, 24.7500], [90.4150, 24.7550], [90.4100, 24.7550], [90.4100, 24.7500]]]
-            }
-        }]
-    }
-    with get_db_connection() as conn:
+existing_ids = [f['field_id'] for f in fields]
+
+with get_db_connection() as conn:
+    if "F-101" not in existing_ids:
+        st.info("Initializing baseline system storage metadata...")
+        mock_polygon = {
+            "type": "FeatureCollection",
+            "features": [{
+                "type": "Feature",
+                "properties": {"name": "Mymensingh Reference Parcel Alpha"},
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [[[90.4100, 24.7500], [90.4150, 24.7500], [90.4150, 24.7550], [90.4100, 24.7550], [90.4100, 24.7500]]]
+                }
+            }]
+        }
         conn.execute("INSERT OR REPLACE INTO fields (field_id, name, district, geojson_geometry) VALUES (?, ?, ?, ?)",
                      ("F-101", "Mymensingh Reference Parcel Alpha", "Mymensingh", json.dumps(mock_polygon)))
         conn.commit()
-    st.rerun()
+
+    if "F-102" not in existing_ids:
+        mock_polygon_custom = {
+            "type": "FeatureCollection",
+            "features": [{
+                "type": "Feature",
+                "properties": {"name": "Faridpur Custom Zone Beta"},
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [[[89.5785, 23.0912], [89.5825, 23.0912], [89.5825, 23.0952], [89.5785, 23.0952], [89.5785, 23.0912]]]
+                }
+            }]
+        }
+        conn.execute("INSERT OR REPLACE INTO fields (field_id, name, district, geojson_geometry) VALUES (?, ?, ?, ?)",
+                     ("F-102", "Faridpur Custom Zone Beta", "Faridpur", json.dumps(mock_polygon_custom)))
+        conn.commit()
+
+    if "F-101" not in existing_ids or "F-102" not in existing_ids:
+        st.rerun()
 
 selected_field = st.sidebar.selectbox("Active Field Tracker", [f"{f['field_id']} - {f['name']}" for f in fields])
 current_id = selected_field.split(" - ")[0]
@@ -71,7 +91,19 @@ geom = json.loads(field_row['geojson_geometry'])
 tab_map, tab_signal = st.tabs(["🌍 Spatial Asset Inspection", "📈 Statistical Signal Analytics"])
 
 with tab_map:
-    m = geemap.Map(center=[24.7525, 90.4125], zoom=14)
+    if "features" in geom:
+        coords = geom["features"][0]["geometry"]["coordinates"][0]
+    elif "geometry" in geom:
+        coords = geom["geometry"]["coordinates"][0]
+    else:
+        coords = geom["coordinates"][0]
+        
+    lats = [c[1] for c in coords]
+    lons = [c[0] for c in coords]
+    center_lat = sum(lats) / len(lats)
+    center_lon = sum(lons) / len(lons)
+
+    m = geemap.Map(center=[center_lat, center_lon], zoom=14)
     m.add_geojson(geom, layer_name="Target Polygon Boundary")
     m.to_streamlit(height=400)
 
@@ -105,40 +137,79 @@ with tab_signal:
             if not df_processed.empty:
                 # Run the adaptive statistical rule processor
                 df_final = gate.analyze_irrigation_behavior(df_processed)
+                df_final = gate.extract_phenology(df_final)
+                
                 total_awd = int(df_final['drydown_event'].sum())
+                
+                sowing_row = df_final[df_final['is_sowing'] == 1]
+                harvest_row = df_final[df_final['is_harvest'] == 1]
+                
+                sowing_date_str = sowing_row['date'].iloc[0] if not sowing_row.empty else "N/A"
+                harvest_date_str = harvest_row['date'].iloc[0] if not harvest_row.empty else "N/A"
+                
+                season_length = "N/A"
+                if not sowing_row.empty and not harvest_row.empty:
+                    s_date = pd.to_datetime(sowing_date_str)
+                    h_date = pd.to_datetime(harvest_date_str)
+                    season_length = f"{(h_date - s_date).days} Days"
                 
                 with col_pipeline:
                     st.markdown(f"**Data Source Asset Provenance:** `{cache_source}`")
-                    st.metric(label="Verified Field Drainage (AWD) Sequences", value=total_awd)
+                    col1, col2, col3, col4 = st.columns(4)
+                    col1.metric(label="AWD Sequences", value=total_awd)
+                    col2.metric(label="Sowing Date", value=sowing_date_str)
+                    col3.metric(label="Harvest Date", value=harvest_date_str)
+                    col4.metric(label="Season Length", value=season_length)
                 
                 # 2. Advanced Multi-Axis Data Plotting
                 fig = go.Figure()
                 fig.add_trace(go.Scatter(
                     x=df_final['date'], y=df_final['vv'],
-                    mode='markers', name='Raw Backscatter (Speckled)',
+                    mode='markers', name='Raw VV Backscatter',
                     marker=dict(color='rgba(255,255,255,0.3)', size=5)
                 ))
                 fig.add_trace(go.Scatter(
                     x=df_final['date'], y=df_final['vv_smoothed'],
-                    mode='lines+markers', name='Savitzky-Golay Filter Curve',
+                    mode='lines+markers', name='VV Filter Curve (Flooding)',
                     line=dict(color='#00ffcc', width=2.5)
                 ))
+                
+                if 'vh_smoothed' in df_final.columns:
+                    fig.add_trace(go.Scatter(
+                        x=df_final['date'], y=df_final['vh_smoothed'],
+                        mode='lines', name='VH Filter Curve (Phenology)',
+                        line=dict(color='#ff66cc', width=2, dash='dash')
+                    ))
                 
                 events = df_final[df_final['drydown_event'] == 1]
                 fig.add_trace(go.Scatter(
                     x=events['date'], y=events['vv_smoothed'],
-                    mode='markers', name='Statistical Drainage Marker',
+                    mode='markers', name='Drainage Marker',
                     marker=dict(color='#ffcc00', size=14, symbol='star')
                 ))
                 
+                if not sowing_row.empty:
+                    fig.add_trace(go.Scatter(
+                        x=sowing_row['date'], y=sowing_row['vh_smoothed'],
+                        mode='markers', name='Sowing Date',
+                        marker=dict(color='#00ff00', size=16, symbol='triangle-up', line=dict(width=2, color='white'))
+                    ))
+                    
+                if not harvest_row.empty:
+                    fig.add_trace(go.Scatter(
+                        x=harvest_row['date'], y=harvest_row['vh_smoothed'],
+                        mode='markers', name='Harvest Date',
+                        marker=dict(color='#ff0000', size=16, symbol='triangle-down', line=dict(width=2, color='white'))
+                    ))
+                
                 fig.update_layout(
                     template="plotly_dark", height=450,
-                    xaxis_title="Timeline Calendar Passes", yaxis_title="VV Energy Signature (dB)"
+                    xaxis_title="Timeline Calendar Passes", yaxis_title="Energy Signature (dB)"
                 )
                 st.plotly_chart(fig, use_container_width=True)
                 
                 # 3. Open Audit Trail Preview Output Block
                 st.markdown("### Compliance Audit Trail Ledger Payload")
-                st.json(df_final[['date', 'vv_smoothed', 'vv_zscore', 'is_flooded', 'drydown_event']].to_dict(orient="records")[:5])
+                st.json(df_final[['date', 'vv_smoothed', 'vh_smoothed', 'is_flooded', 'drydown_event', 'is_sowing', 'is_harvest']].to_dict(orient="records")[:5])
             else:
                 st.error("No valid radar tracking observations found within parameters.")
