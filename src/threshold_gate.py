@@ -49,3 +49,38 @@ class AdaptiveAWDGate:
         )
         
         return df
+
+    def extract_phenology(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Identifies key cultivation dates based on VH backscatter phenology.
+        Sowing Date: Absolute minimum of the smoothed VH series.
+        Harvest Date: The steepest drop (crash) following the peak VH value after sowing.
+        """
+        if df.empty or 'vh_smoothed' not in df.columns:
+            return df
+            
+        df = df.copy()
+        df['is_sowing'] = 0
+        df['is_harvest'] = 0
+        
+        # 1. Sowing Date: Absolute bottom of the trough in smoothed VH
+        sowing_idx = df['vh_smoothed'].idxmin()
+        df.loc[sowing_idx, 'is_sowing'] = 1
+        
+        # 2. Harvest Date: Peak followed by a sharp crash
+        post_sowing_df = df.loc[sowing_idx:]
+        if len(post_sowing_df) > 0:
+            # Find the peak after the sowing date
+            peak_idx = post_sowing_df['vh_smoothed'].idxmax()
+            
+            # Find the sharpest crash (minimum diff) after the peak
+            df['vh_diff'] = df['vh_smoothed'].diff().fillna(0)
+            post_peak_df = df.loc[peak_idx:]
+            if len(post_peak_df) > 1:
+                harvest_idx = post_peak_df['vh_diff'].idxmin()
+            else:
+                harvest_idx = peak_idx
+                
+            df.loc[harvest_idx, 'is_harvest'] = 1
+            
+        return df
