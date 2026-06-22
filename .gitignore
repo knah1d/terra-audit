@@ -20,4 +20,5 @@ __pycache__/
 # Google Earth Engine
 .config/earthengine/
 
-CLAUDE.md/
+CLAUDE.md
+data/project_store.db

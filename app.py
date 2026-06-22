@@ -3,11 +3,119 @@ os.environ["USE_FOLIUM"] = "1"
 
 import datetime
 import json
+import math
+import xml.etree.ElementTree as ET
 
 import pandas as pd
 import streamlit as st
-import geemap.foliumap as geemap
+import folium
+from folium.plugins import Draw
 import plotly.graph_objects as go
+from streamlit_folium import st_folium
+
+
+def compute_area_ha(geojson_feature: dict) -> float:
+    coords = geojson_feature["geometry"]["coordinates"][0]
+    lat_c = sum(c[1] for c in coords) / len(coords)
+    m_per_lat = 111_320.0
+    m_per_lon = 111_320.0 * math.cos(math.radians(lat_c))
+    area_m2 = 0.0
+    n = len(coords)
+    for i in range(n - 1):
+        x1, y1 = coords[i][0] * m_per_lon,   coords[i][1] * m_per_lat
+        x2, y2 = coords[i+1][0] * m_per_lon, coords[i+1][1] * m_per_lat
+        area_m2 += x1 * y2 - x2 * y1
+    return round(abs(area_m2) / 2 / 10_000, 4)
+
+
+def parse_geojson_upload(content: str):
+    try:
+        data = json.loads(content)
+    except json.JSONDecodeError as e:
+        return None, f"Invalid JSON: {e}"
+    t = data.get("type")
+    if t == "FeatureCollection":
+        features = data.get("features", [])
+        if not features:
+            return None, "FeatureCollection contains no features."
+        feat = features[0]
+    elif t == "Feature":
+        feat = data
+    elif t in ("Polygon", "MultiPolygon"):
+        feat = {"type": "Feature", "properties": {}, "geometry": data}
+    else:
+        return None, f"Unsupported GeoJSON type: '{t}'"
+    geom_type = feat.get("geometry", {}).get("type", "")
+    if geom_type not in ("Polygon", "MultiPolygon"):
+        return None, f"Geometry must be Polygon or MultiPolygon, got '{geom_type}'."
+    return feat, None
+
+
+def parse_kml_upload(content: str):
+    try:
+        root = ET.fromstring(content)
+    except ET.ParseError as e:
+        return None, f"Invalid KML: {e}"
+    kml_ns = "http://www.opengis.net/kml/2.2"
+    tags = [f"{{{kml_ns}}}coordinates", "coordinates"]
+    for tag in tags:
+        for elem in root.iter(tag):
+            text = (elem.text or "").strip()
+            coords = []
+            for point in text.split():
+                parts = point.split(",")
+                if len(parts) >= 2:
+                    try:
+                        coords.append([float(parts[0]), float(parts[1])])
+                    except ValueError:
+                        continue
+            if len(coords) >= 3:
+                if coords[0] != coords[-1]:
+                    coords.append(coords[0])
+                return {
+                    "type": "Feature", "properties": {},
+                    "geometry": {"type": "Polygon", "coordinates": [coords]},
+                }, None
+    return None, "No valid polygon coordinates found in KML."
+
+
+def parse_coordinate_text(text: str):
+    lines = [l.strip() for l in text.strip().splitlines() if l.strip()]
+    coords, bad = [], []
+    for line in lines:
+        parts = line.replace(",", " ").replace("\t", " ").split()
+        if len(parts) < 2:
+            continue
+        try:
+            lat, lon = float(parts[0]), float(parts[1])
+        except ValueError:
+            bad.append(line)
+            continue
+        if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+            bad.append(f"{line}  ← out of range")
+            continue
+        coords.append([lon, lat])
+    if len(coords) < 3:
+        detail = f" Unparseable lines: {bad}" if bad else ""
+        return None, f"Need at least 3 valid points, got {len(coords)}.{detail}"
+    if coords[0] != coords[-1]:
+        coords.append(coords[0])
+    return {
+        "type": "Feature", "properties": {},
+        "geometry": {"type": "Polygon", "coordinates": [coords]},
+    }, None
+
+
+def render_preview_map(feature: dict, key: str, height: int = 400):
+    coords = feature["geometry"]["coordinates"][0]
+    lats = [c[1] for c in coords]
+    lons = [c[0] for c in coords]
+    m = folium.Map(location=[sum(lats)/len(lats), sum(lons)/len(lons)], zoom_start=14)
+    folium.GeoJson(
+        feature,
+        style_function=lambda _: {"color": "#ffcc00", "weight": 2.5, "fillOpacity": 0.2},
+    ).add_to(m)
+    st_folium(m, height=height, use_container_width=True, key=key, returned_objects=[])
 
 from src.database import get_db_connection, check_cache, save_cache
 from src.data_engine import SpatialDataEngine
@@ -58,60 +166,60 @@ if init_error:
 # ---------------------------------------------------------------------------
 # Seed default fields (one atomic DB transaction)
 # ---------------------------------------------------------------------------
-DEFAULT_FIELDS = {
-    "F-101": {
-        "name": "Mymensingh Reference Parcel Alpha",
-        "district": "Mymensingh",
-        "geojson": {
-            "type": "FeatureCollection",
-            "features": [{
-                "type": "Feature",
-                "properties": {"name": "Mymensingh Reference Parcel Alpha"},
-                "geometry": {
-                    "type": "Polygon",
-                    "coordinates": [[[90.4100, 24.7500], [90.4150, 24.7500],
-                                     [90.4150, 24.7550], [90.4100, 24.7550],
-                                     [90.4100, 24.7500]]]
-                }
-            }]
-        }
-    },
-    "F-102": {
-        "name": "Faridpur Custom Zone Beta",
-        "district": "Faridpur",
-        "geojson": {
-            "type": "FeatureCollection",
-            "features": [{
-                "type": "Feature",
-                "properties": {"name": "Faridpur Custom Zone Beta"},
-                "geometry": {
-                    "type": "Polygon",
-                    "coordinates": [[[89.5785, 23.0912], [89.5825, 23.0912],
-                                     [89.5825, 23.0952], [89.5785, 23.0952],
-                                     [89.5785, 23.0912]]]
-                }
-            }]
-        }
-    },
-}
+# DEFAULT_FIELDS = {
+#     "F-101": {
+#         "name": "Mymensingh Reference Parcel Alpha",
+#         "district": "Mymensingh",
+#         "geojson": {
+#             "type": "FeatureCollection",
+#             "features": [{
+#                 "type": "Feature",
+#                 "properties": {"name": "Mymensingh Reference Parcel Alpha"},
+#                 "geometry": {
+#                     "type": "Polygon",
+#                     "coordinates": [[[90.4100, 24.7500], [90.4150, 24.7500],
+#                                      [90.4150, 24.7550], [90.4100, 24.7550],
+#                                      [90.4100, 24.7500]]]
+#                 }
+#             }]
+#         }
+#     },
+#     "F-102": {
+#         "name": "Faridpur Custom Zone Beta",
+#         "district": "Faridpur",
+#         "geojson": {
+#             "type": "FeatureCollection",
+#             "features": [{
+#                 "type": "Feature",
+#                 "properties": {"name": "Faridpur Custom Zone Beta"},
+#                 "geometry": {
+#                     "type": "Polygon",
+#                     "coordinates": [[[89.5785, 23.0912], [89.5825, 23.0912],
+#                                      [89.5825, 23.0952], [89.5785, 23.0952],
+#                                      [89.5785, 23.0912]]]
+#                 }
+#             }]
+#         }
+#     },
+# }
 
-with get_db_connection() as conn:
-    existing_ids = {
-        r["field_id"]
-        for r in conn.execute("SELECT field_id FROM fields").fetchall()
-    }
-    seeded = False
-    for fid, meta in DEFAULT_FIELDS.items():
-        if fid not in existing_ids:
-            conn.execute(
-                "INSERT OR IGNORE INTO fields "
-                "(field_id, name, district, geojson_geometry) VALUES (?,?,?,?)",
-                (fid, meta["name"], meta["district"], json.dumps(meta["geojson"])),
-            )
-            seeded = True
-    if seeded:
-        conn.commit()
-        st.rerun()
+# with get_db_connection() as conn:
+#     existing_ids = {
+#         r["field_id"]
+#         for r in conn.execute("SELECT field_id FROM fields").fetchall()
+#     }
+#     seeded = False
+#     for fid, meta in DEFAULT_FIELDS.items():
+#         if fid not in existing_ids:
+#             conn.execute(
+#                 "INSERT OR IGNORE INTO fields "
+#                 "(field_id, name, district, geojson_geometry) VALUES (?,?,?,?)",
+#                 (fid, meta["name"], meta["district"], json.dumps(meta["geojson"])),
+#             )
+#             seeded = True
+#     if seeded:
+#         conn.commit()
+#         st.rerun()
 
 # ---------------------------------------------------------------------------
 # Load field list
@@ -124,40 +232,111 @@ with get_db_connection() as conn:
 field_display = {f["field_id"]: f for f in fields}
 
 # ---------------------------------------------------------------------------
-# Sidebar — Active Field Tracker
+# Sidebar — Field Selector or Registration Form
 # ---------------------------------------------------------------------------
 with st.sidebar:
-    st.markdown("## 🛰️ Active Field Tracker")
-    st.markdown("---")
+    pending_sidebar = st.session_state.get("pending_field_geom")
 
-    selected_id = st.radio(
-        "Select Monitoring Parcel",
-        options=[f["field_id"] for f in fields],
-        format_func=lambda fid: f"{fid}  —  {field_display[fid]['name']}",
-        label_visibility="collapsed",
-    )
+    if pending_sidebar:
+        st.markdown("## ✏️ Register New Field")
+        st.markdown("---")
 
-    sf = field_display[selected_id]
-    st.markdown("---")
-    st.markdown(f"""
-    <div style="background:#1e222b;border-radius:8px;padding:12px 14px;border:1px solid #3e4451;">
-        <div style="color:#aaa;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Selected Parcel</div>
-        <div style="color:#00ffcc;font-size:17px;font-weight:700;margin:4px 0">{sf['field_id']}</div>
-        <div style="color:#eee;font-size:13px;">{sf['name']}</div>
-        <div style="color:#888;font-size:12px;margin-top:6px;">📍 {sf['district']} District</div>
-    </div>
-    """, unsafe_allow_html=True)
-    st.markdown("")
+        computed_ha = compute_area_ha(pending_sidebar)
+        st.metric("Computed Area", f"{computed_ha} ha")
+        st.markdown("")
+
+        with get_db_connection() as conn:
+            existing_ids = [
+                r["field_id"]
+                for r in conn.execute("SELECT field_id FROM fields").fetchall()
+            ]
+        nums = []
+        for fid in existing_ids:
+            parts = fid.split("-")
+            if len(parts) == 2:
+                try:
+                    nums.append(int(parts[1]))
+                except ValueError:
+                    pass
+        next_num = max(nums) + 1 if nums else 101
+
+        new_fid      = st.text_input("Field ID",   value=f"F-{next_num}", key="nf_id")
+        new_fname    = st.text_input("Field Name",                          key="nf_name")
+        new_district = st.text_input("District",                            key="nf_district")
+        st.markdown("")
+
+        if st.button("💾 Save Field", type="primary", use_container_width=True):
+            if not new_fname.strip() or not new_district.strip():
+                st.error("Name and district are required.")
+            elif new_fid in existing_ids:
+                st.error(f"ID '{new_fid}' already exists.")
+            else:
+                fc = {"type": "FeatureCollection", "features": [pending_sidebar]}
+                with get_db_connection() as conn:
+                    conn.execute(
+                        "INSERT INTO fields "
+                        "(field_id, name, district, geojson_geometry, area_ha) "
+                        "VALUES (?,?,?,?,?)",
+                        (new_fid, new_fname.strip(), new_district.strip(),
+                         json.dumps(fc), computed_ha),
+                    )
+                    conn.commit()
+                st.session_state["map_version"] = st.session_state.get("map_version", 0) + 1
+                st.session_state.pop("pending_field_geom", None)
+                st.rerun()
+
+        if st.button("🗑️ Discard", use_container_width=True):
+            st.session_state["map_version"] = st.session_state.get("map_version", 0) + 1
+            st.session_state.pop("pending_field_geom", None)
+            st.rerun()
+
+        selected_id = fields[0]["field_id"] if fields else None
+
+    elif not fields:
+        st.markdown("## 🛰️ Active Field Tracker")
+        st.markdown("---")
+        st.info(
+            "No fields registered yet.\n\n"
+            "Draw a polygon on the map in the **Spatial Asset Inspection** tab to add your first field."
+        )
+        selected_id = None
+
+    else:
+        st.markdown("## 🛰️ Active Field Tracker")
+        st.markdown("---")
+        selected_id = st.radio(
+            "Select Monitoring Parcel",
+            options=[f["field_id"] for f in fields],
+            format_func=lambda fid: f"{fid}  —  {field_display[fid]['name']}",
+            label_visibility="collapsed",
+        )
+
+        sf = field_display[selected_id]
+        st.markdown("---")
+        st.markdown(f"""
+        <div style="background:#1e222b;border-radius:8px;padding:12px 14px;border:1px solid #3e4451;">
+            <div style="color:#aaa;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Selected Parcel</div>
+            <div style="color:#00ffcc;font-size:17px;font-weight:700;margin:4px 0">{sf['field_id']}</div>
+            <div style="color:#eee;font-size:13px;">{sf['name']}</div>
+            <div style="color:#888;font-size:12px;margin-top:6px;">📍 {sf['district']} District</div>
+        </div>
+        """, unsafe_allow_html=True)
+        st.markdown("")
 
 # ---------------------------------------------------------------------------
 # Load geometry for selected field
 # ---------------------------------------------------------------------------
-with get_db_connection() as conn:
-    row = conn.execute(
-        "SELECT geojson_geometry FROM fields WHERE field_id = ?", (selected_id,)
-    ).fetchone()
 
-geom = json.loads(row["geojson_geometry"])
+if selected_id:
+    with get_db_connection() as conn:
+        row = conn.execute(
+            "SELECT geojson_geometry, area_ha FROM fields WHERE field_id = ?", (selected_id,)
+        ).fetchone()
+    geom       = json.loads(row["geojson_geometry"])
+    field_area = float(row["area_ha"]) if row["area_ha"] else 1.0
+else:
+    geom       = None
+    field_area = 1.0
 
 # ---------------------------------------------------------------------------
 # Tab layout
@@ -172,26 +351,143 @@ tab_map, tab_signal, tab_carbon = st.tabs([
 # TAB 1 — MAP
 # ===========================================================================
 with tab_map:
-    if "features" in geom:
-        coords = geom["features"][0]["geometry"]["coordinates"][0]
-    elif "geometry" in geom:
-        coords = geom["geometry"]["coordinates"][0]
-    else:
-        coords = geom["coordinates"][0]
+    mode = st.radio(
+        "boundary_input_mode",
+        ["🖊️ Draw on Map", "📁 Upload GeoJSON / KML", "📍 Paste GPS Coordinates"],
+        horizontal=True,
+        label_visibility="collapsed",
+        key="input_mode",
+    )
+    st.markdown("---")
 
-    lats = [c[1] for c in coords]
-    lons = [c[0] for c in coords]
-    center_lat = sum(lats) / len(lats)
-    center_lon = sum(lons) / len(lons)
+    # ---- DRAW MODE --------------------------------------------------------
+    if mode == "🖊️ Draw on Map":
+        if geom:
+            if "features" in geom:
+                coords = geom["features"][0]["geometry"]["coordinates"][0]
+            elif "geometry" in geom:
+                coords = geom["geometry"]["coordinates"][0]
+            else:
+                coords = geom["coordinates"][0]
+            lats = [c[1] for c in coords]
+            lons = [c[0] for c in coords]
+            center_lat, center_lon, zoom = sum(lats)/len(lats), sum(lons)/len(lons), 14
+        else:
+            center_lat, center_lon, zoom = 23.8, 90.4, 7
 
-    m = geemap.Map(center=[center_lat, center_lon], zoom=14)
-    m.add_geojson(geom, layer_name="Target Polygon Boundary")
-    m.to_streamlit(height=420)
+        m = folium.Map(location=[center_lat, center_lon], zoom_start=zoom)
+        if geom:
+            folium.GeoJson(
+                geom,
+                style_function=lambda _: {"color": "#00ffcc", "weight": 2, "fillOpacity": 0.15},
+            ).add_to(m)
+        Draw(
+            export=False,
+            draw_options={
+                "polygon": {"allowIntersection": False},
+                "rectangle": True,
+                "circle": False,
+                "marker": False,
+                "polyline": False,
+                "circlemarker": False,
+            },
+        ).add_to(m)
+
+        map_version = st.session_state.get("map_version", 0)
+        map_out = st_folium(
+            m, height=500, use_container_width=True,
+            key=f"main_map_{map_version}",
+            returned_objects=["all_drawings"],
+        )
+
+        if map_out:
+            all_drawings = map_out.get("all_drawings") or []
+            if all_drawings:
+                latest = all_drawings[-1]
+                if (latest and latest.get("geometry")
+                        and latest != st.session_state.get("pending_field_geom")):
+                    st.session_state["pending_field_geom"] = latest
+                    st.rerun()
+
+        if not st.session_state.get("pending_field_geom"):
+            st.caption(
+                "💡 Use the draw toolbar (top-left) to trace a polygon or rectangle — "
+                "the registration form will appear in the sidebar."
+            )
+
+    # ---- UPLOAD MODE ------------------------------------------------------
+    elif mode == "📁 Upload GeoJSON / KML":
+        col_in, col_prev = st.columns([1, 1.5])
+
+        with col_in:
+            st.markdown("##### Upload Field Boundary File")
+            st.caption("Accepted: `.geojson` `.json` `.kml`")
+            uploaded = st.file_uploader(
+                "file", type=["geojson", "json", "kml"], label_visibility="collapsed"
+            )
+            if uploaded:
+                content = uploaded.read().decode("utf-8")
+                if uploaded.name.lower().endswith(".kml"):
+                    feat, err = parse_kml_upload(content)
+                else:
+                    feat, err = parse_geojson_upload(content)
+
+                if err:
+                    st.error(err)
+                elif feat and feat != st.session_state.get("pending_field_geom"):
+                    st.session_state["pending_field_geom"] = feat
+                    st.rerun()
+
+        with col_prev:
+            pending = st.session_state.get("pending_field_geom")
+            if pending:
+                st.markdown("##### Boundary Preview")
+                render_preview_map(pending, key="upload_preview_map")
+            else:
+                st.info("Upload a file to preview the boundary here.")
+
+    # ---- PASTE MODE -------------------------------------------------------
+    elif mode == "📍 Paste GPS Coordinates":
+        col_in, col_prev = st.columns([1, 1.5])
+
+        with col_in:
+            st.markdown("##### Paste Boundary Coordinates")
+            st.caption(
+                "One point per line — `lat, lon` in decimal degrees. "
+                "Minimum 3 points. First and last point do not need to match."
+            )
+            st.code("23.8541, 90.4120\n23.8541, 90.4180\n23.8580, 90.4180\n23.8580, 90.4120", language=None)
+            coord_text = st.text_area(
+                "coords", height=160,
+                placeholder="23.8541, 90.4120\n23.8545, 90.4180\n...",
+                label_visibility="collapsed",
+            )
+            if st.button("Parse Coordinates", type="primary", use_container_width=True):
+                if coord_text.strip():
+                    feat, err = parse_coordinate_text(coord_text)
+                    if err:
+                        st.error(err)
+                    else:
+                        st.session_state["pending_field_geom"] = feat
+                        st.rerun()
+                else:
+                    st.warning("Paste some coordinates first.")
+
+        with col_prev:
+            pending = st.session_state.get("pending_field_geom")
+            if pending:
+                st.markdown("##### Boundary Preview")
+                render_preview_map(pending, key="paste_preview_map")
+            else:
+                st.info("Parse coordinates to preview the boundary here.")
 
 # ===========================================================================
 # TAB 2 — SIGNAL ANALYTICS
 # ===========================================================================
 with tab_signal:
+    if not selected_id:
+        st.info("Draw and save a field in the **Spatial Asset Inspection** tab first.")
+        st.stop()
     col_inputs, col_pipeline = st.columns([1, 2])
 
     # ---- Inputs panel -------------------------------------------------------
@@ -244,9 +540,9 @@ with tab_signal:
             "Field Area (ha)",
             min_value=0.1,
             max_value=500.0,
-            value=1.0,
+            value=field_area,
             step=0.1,
-            help="Measured area of the polygon in hectares — used in all carbon calculations.",
+            help="Auto-computed from your drawn polygon. Override if needed.",
         )
         force_refresh = st.checkbox("Bypass Local Database Cache")
         date_valid    = (start_date < end_date) if preset_dates is None else True
@@ -388,6 +684,9 @@ with tab_signal:
 # TAB 3 — CARBON ASSET LEDGER
 # ===========================================================================
 with tab_carbon:
+    if not selected_id:
+        st.info("Draw and save a field in the **Spatial Asset Inspection** tab first.")
+        st.stop()
     st.markdown("### 💰 Carbon Compliance Ledger (VM0051)")
     st.write(
         "Parameters are auto-populated from the Signal Analytics engine after you run it. "
