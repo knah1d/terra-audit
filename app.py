@@ -588,6 +588,7 @@ with tab_signal:
                 df_final[df_final["drydown_event"] == 1]["date"].tolist()
             )
             st.session_state["export_from_phenology"] = season_from_phenology
+            st.rerun()
 
         else:
             st.session_state.pop("signal_df", None)
