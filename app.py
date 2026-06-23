@@ -121,6 +121,7 @@ from src.database import get_db_connection, check_cache, save_cache
 from src.data_engine import SpatialDataEngine
 from src.threshold_gate import AdaptiveAWDGate
 from src.carbon_calculator import CarbonAssetEngine
+from src.report_generator import generate_pdf, generate_audit_json, generate_timeseries_csv
 
 # ---------------------------------------------------------------------------
 # Page config
@@ -129,12 +130,14 @@ st.set_page_config(layout="wide", page_title="terra-audit Platform")
 
 st.markdown("""
     <style>
-    .metric-container {
+    .block-container { padding-top: 1.2rem !important; }
+    [data-testid="metric-container"] {
         background-color: #1e222b;
-        padding: 15px;
-        border-radius: 8px;
         border: 1px solid #3e4451;
+        border-radius: 8px;
+        padding: 12px 16px !important;
     }
+    .stTabs [data-baseweb="tab"] { font-size: 0.83rem; font-weight: 600; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -323,6 +326,17 @@ with st.sidebar:
         """, unsafe_allow_html=True)
         st.markdown("")
 
+    if not pending_sidebar and selected_id:
+        _s2 = st.session_state.get("signal_field_id") == selected_id
+        _s3 = (st.session_state.get("export_cr") is not None) and _s2
+        st.markdown("---")
+        st.markdown(
+            f"{'✅' if True else '⬜'}&nbsp; Field registered  \n"
+            f"{'✅' if _s2 else '⬜'}&nbsp; Analytics complete  \n"
+            f"{'✅' if _s3 else '⬜'}&nbsp; Credits calculated",
+            unsafe_allow_html=True,
+        )
+
 # ---------------------------------------------------------------------------
 # Load geometry for selected field
 # ---------------------------------------------------------------------------
@@ -495,11 +509,11 @@ with tab_signal:
         st.markdown("### Execution Scope")
 
         SEASON_PRESETS = {
-            "🌾 Boro 2025  (Jan – May)":         ("2025-01-01", "2025-05-31"),
-            "🌿 Aman 2024  (Jul – Nov)":          ("2024-07-01", "2024-11-30"),
-            "☀️ Pre-Kharif 2024  (Mar – Jun)":   ("2024-03-01", "2024-06-30"),
-            "🌾 Boro 2024  (Jan – May)":          ("2024-01-01", "2024-05-31"),
-            "🗓️ Custom Range":                   None,
+            "🌾 Boro 2026  (Jan – May)":          ("2026-01-01", "2026-05-31"),
+            "🌿 Aman 2025  (Jul – Nov)":           ("2025-07-01", "2025-11-30"),
+            "☀️ Pre-Kharif 2025  (Mar – Jun)":    ("2025-03-01", "2025-06-30"),
+            "🌾 Boro 2025  (Jan – May)":           ("2025-01-01", "2025-05-31"),
+            "🗓️ Custom Range":                    None,
         }
 
         season_choice = st.selectbox(
@@ -550,18 +564,16 @@ with tab_signal:
             "Run Analytics Engine", type="primary", disabled=not date_valid
         )
 
-    # ---- Analytics execution ------------------------------------------------
+    # ---- Data fetch (runs only on button click) --------------------------------
     if trigger:
-        sd_str = str(start_date)
-        ed_str = str(end_date)
-
-        df_processed  = pd.DataFrame()
-        cache_source  = "Local relational data store"
+        sd_str       = str(start_date)
+        ed_str       = str(end_date)
+        df_processed = pd.DataFrame()
+        cache_source = "Local relational data store"
 
         with st.spinner("Resolving spatial asset data timeline..."):
             if not force_refresh:
                 df_processed = check_cache(selected_id, sd_str, ed_str)
-
             if df_processed.empty:
                 cache_source = "Live Google Earth Engine Core API"
                 df_raw = engine.extract_clean_timeseries(geom, sd_str, ed_str)
@@ -570,115 +582,183 @@ with tab_signal:
                     df_processed = check_cache(selected_id, sd_str, ed_str)
 
         if not df_processed.empty:
-            df_final = gate.analyze_irrigation_behavior(df_processed)
-            df_final = gate.extract_phenology(df_final)
-
-            total_awd = int(df_final["drydown_event"].sum())
-
-            sowing_row  = df_final[df_final["is_sowing"]  == 1]
-            harvest_row = df_final[df_final["is_harvest"] == 1]
-
-            sowing_date_str  = sowing_row["date"].iloc[0]  if not sowing_row.empty  else "N/A"
-            harvest_date_str = harvest_row["date"].iloc[0] if not harvest_row.empty else "N/A"
-
-            season_length_val       = 120          # safe fallback
-            season_length_str       = "N/A"
-            season_from_phenology   = False
+            df_final             = gate.analyze_irrigation_behavior(df_processed)
+            df_final             = gate.extract_phenology(df_final)
+            total_awd            = int(df_final["drydown_event"].sum())
+            sowing_row           = df_final[df_final["is_sowing"]  == 1]
+            harvest_row          = df_final[df_final["is_harvest"] == 1]
+            sowing_date_str      = sowing_row["date"].iloc[0]  if not sowing_row.empty  else "N/A"
+            harvest_date_str     = harvest_row["date"].iloc[0] if not harvest_row.empty else "N/A"
+            season_length_val    = 120
+            season_from_phenology = False
 
             if not sowing_row.empty and not harvest_row.empty:
-                s_dt = pd.to_datetime(sowing_date_str)
-                h_dt = pd.to_datetime(harvest_date_str)
-                season_length_val     = (h_dt - s_dt).days
-                season_length_str     = f"{season_length_val} Days"
+                season_length_val     = (
+                    pd.to_datetime(harvest_date_str) - pd.to_datetime(sowing_date_str)
+                ).days
                 season_from_phenology = True
 
-            # ---- Key metrics ------------------------------------------------
-            with col_pipeline:
-                st.markdown(f"**Data Source Provenance:** `{cache_source}`")
-                if not season_from_phenology:
-                    st.warning(
-                        "⚠️ Phenology markers could not be detected in this window. "
-                        "Season length is **using the fallback of 120 days** in carbon "
-                        "calculations — verify manually."
-                    )
-                col1, col2, col3, col4 = st.columns(4)
-                col1.metric("AWD Sequences",   total_awd)
-                col2.metric("Sowing Date",     sowing_date_str)
-                col3.metric("Harvest Date",    harvest_date_str)
-                col4.metric("Season Length",   season_length_str or "120 Days (fallback)")
+            # Persist signal results so the chart/table survive tab switches
+            st.session_state["signal_df"]             = df_final
+            st.session_state["signal_field_id"]       = selected_id
+            st.session_state["signal_cache_source"]   = cache_source
+            st.session_state["signal_total_awd"]      = total_awd
+            st.session_state["signal_sowing_date"]    = sowing_date_str
+            st.session_state["signal_harvest_date"]   = harvest_date_str
+            st.session_state["signal_season_length"]  = season_length_val
+            st.session_state["signal_from_phenology"] = season_from_phenology
 
-            # ---- Chart -------------------------------------------------------
-            fig = go.Figure()
+            st.session_state["carbon_ready"]          = True
+            st.session_state["carbon_total_awd"]      = total_awd
+            st.session_state["carbon_season_length"]  = season_length_val
+            st.session_state["carbon_area_ha"]        = field_area_ha
+            st.session_state["season_from_phenology"] = season_from_phenology
 
-            fig.add_trace(go.Scatter(
-                x=df_final["date"], y=df_final["vv"],
-                mode="markers", name="Raw VV Backscatter",
-                marker=dict(color="rgba(255,255,255,0.3)", size=5),
-            ))
-            fig.add_trace(go.Scatter(
-                x=df_final["date"], y=df_final["vv_smoothed"],
-                mode="lines+markers", name="VV Filter Curve (Flooding)",
-                line=dict(color="#00ffcc", width=2.5),
-            ))
-
-            if "vh_smoothed" in df_final.columns:
-                fig.add_trace(go.Scatter(
-                    x=df_final["date"], y=df_final["vh_smoothed"],
-                    mode="lines", name="VH Filter Curve (Phenology)",
-                    line=dict(color="#ff66cc", width=2, dash="dash"),
-                ))
-
-            events = df_final[df_final["drydown_event"] == 1]
-            if not events.empty:
-                fig.add_trace(go.Scatter(
-                    x=events["date"], y=events["vv_smoothed"],
-                    mode="markers", name="Drainage Marker",
-                    marker=dict(color="#ffcc00", size=14, symbol="star"),
-                ))
-
-            if not sowing_row.empty and "vh_smoothed" in df_final.columns:
-                fig.add_trace(go.Scatter(
-                    x=sowing_row["date"], y=sowing_row["vh_smoothed"],
-                    mode="markers", name="Sowing Date",
-                    marker=dict(color="#00ff00", size=16, symbol="triangle-up",
-                                line=dict(width=2, color="white")),
-                ))
-
-            if not harvest_row.empty and "vh_smoothed" in df_final.columns:
-                fig.add_trace(go.Scatter(
-                    x=harvest_row["date"], y=harvest_row["vh_smoothed"],
-                    mode="markers", name="Harvest Date",
-                    marker=dict(color="#ff4444", size=16, symbol="triangle-down",
-                                line=dict(width=2, color="white")),
-                ))
-
-            fig.update_layout(
-                template="plotly_dark",
-                height=450,
-                xaxis_title="Sentinel-1 Overpass Date",
-                yaxis_title="Backscatter Energy (dB)",
-                legend=dict(orientation="h", yanchor="bottom", y=1.02),
+            _export_cols = [c for c in [
+                "date", "vv", "vh", "cross_ratio", "rvi",
+                "vv_smoothed", "vh_smoothed", "vv_zscore",
+                "is_flooded", "drydown_event", "is_sowing", "is_harvest",
+            ] if c in df_final.columns]
+            st.session_state["export_df"]             = df_final[_export_cols].copy()
+            st.session_state["export_sowing"]         = sowing_date_str
+            st.session_state["export_harvest"]        = harvest_date_str
+            st.session_state["export_window_start"]   = sd_str
+            st.session_state["export_window_end"]     = ed_str
+            st.session_state["export_season_label"]   = season_choice
+            st.session_state["export_field_id"]       = selected_id
+            st.session_state["export_field_name"]     = field_display[selected_id]["name"]
+            st.session_state["export_district"]       = field_display[selected_id]["district"]
+            st.session_state["export_area_ha"]        = field_area_ha
+            st.session_state["export_n_obs"]          = len(df_final)
+            st.session_state["export_vv_mean"]        = float(df_final["vv_smoothed"].mean())
+            st.session_state["export_vv_std"]         = float(df_final["vv_smoothed"].std())
+            st.session_state["export_awd_dates"]      = (
+                df_final[df_final["drydown_event"] == 1]["date"].tolist()
             )
-            st.plotly_chart(fig, use_container_width=True)
-
-            # ---- Audit trail JSON -------------------------------------------
-            audit_cols = ["date", "vv_smoothed", "vv_zscore",
-                          "is_flooded", "drydown_event", "is_sowing", "is_harvest"]
-            if "vh_smoothed" in df_final.columns:
-                audit_cols.insert(2, "vh_smoothed")
-            st.markdown("### Compliance Audit Trail Ledger")
-            st.json(df_final[audit_cols].to_dict(orient="records")[:5])
-
-            # ---- Pass values to Carbon tab via session state -----------------
-            st.session_state["carbon_ready"]           = True
-            st.session_state["carbon_total_awd"]       = total_awd
-            st.session_state["carbon_season_length"]   = season_length_val
-            st.session_state["carbon_area_ha"]         = field_area_ha
-            st.session_state["season_from_phenology"]  = season_from_phenology
+            st.session_state["export_from_phenology"] = season_from_phenology
 
         else:
+            st.session_state.pop("signal_df", None)
+            st.session_state.pop("signal_field_id", None)
             with col_pipeline:
                 st.error("No valid Sentinel-1 observations found for this field and window.")
+
+    # ---- Result rendering — reads from session state, persists across tab switches ----
+    _sig_df    = st.session_state.get("signal_df")
+    _sig_field = st.session_state.get("signal_field_id")
+
+    if _sig_df is not None and _sig_field == selected_id:
+        _cache_src       = st.session_state["signal_cache_source"]
+        _total_awd       = st.session_state["signal_total_awd"]
+        _sowing_str      = st.session_state["signal_sowing_date"]
+        _harvest_str     = st.session_state["signal_harvest_date"]
+        _season_len      = st.session_state["signal_season_length"]
+        _from_phenology  = st.session_state["signal_from_phenology"]
+        _season_len_str  = f"{_season_len} days" if _from_phenology else "120 days (fallback)"
+
+        with col_pipeline:
+            st.caption(f"Data source: `{_cache_src}`")
+            if not _from_phenology:
+                st.warning(
+                    "⚠️ Phenology markers not detected — season length uses the 120-day fallback. "
+                    "Verify manually before carbon submission."
+                )
+            _c1, _c2, _c3, _c4 = st.columns(4)
+            _c1.metric("AWD Events",    _total_awd)
+            _c2.metric("Sowing Date",   _sowing_str)
+            _c3.metric("Harvest Date",  _harvest_str)
+            _c4.metric("Season Length", _season_len_str)
+
+        # Chart — full width
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=_sig_df["date"], y=_sig_df["vv"],
+            mode="markers", name="Raw VV",
+            marker=dict(color="rgba(255,255,255,0.25)", size=5),
+        ))
+        fig.add_trace(go.Scatter(
+            x=_sig_df["date"], y=_sig_df["vv_smoothed"],
+            mode="lines+markers", name="VV Smoothed (flooding proxy)",
+            line=dict(color="#00ffcc", width=2.5),
+        ))
+        if "vh_smoothed" in _sig_df.columns:
+            fig.add_trace(go.Scatter(
+                x=_sig_df["date"], y=_sig_df["vh_smoothed"],
+                mode="lines", name="VH Smoothed (phenology proxy)",
+                line=dict(color="#ff66cc", width=2, dash="dash"),
+            ))
+
+        _sowing_rows  = _sig_df[_sig_df["is_sowing"]  == 1]
+        _harvest_rows = _sig_df[_sig_df["is_harvest"] == 1]
+        if not _sowing_rows.empty and "vh_smoothed" in _sig_df.columns:
+            fig.add_trace(go.Scatter(
+                x=_sowing_rows["date"], y=_sowing_rows["vh_smoothed"],
+                mode="markers", name="Sowing",
+                marker=dict(color="#00ff00", size=14, symbol="triangle-up",
+                            line=dict(width=2, color="white")),
+            ))
+        if not _harvest_rows.empty and "vh_smoothed" in _sig_df.columns:
+            fig.add_trace(go.Scatter(
+                x=_harvest_rows["date"], y=_harvest_rows["vh_smoothed"],
+                mode="markers", name="Harvest",
+                marker=dict(color="#ff4444", size=14, symbol="triangle-down",
+                            line=dict(width=2, color="white")),
+            ))
+
+        # Vertical dashed lines for each AWD event — easier to read than point markers
+        _events = _sig_df[_sig_df["drydown_event"] == 1]
+        for _i, (_, _ev) in enumerate(_events.iterrows(), 1):
+            fig.add_vline(
+                x=_ev["date"],
+                line_dash="dash",
+                line_color="#ffcc00",
+                line_width=1.5,
+                annotation_text=f"AWD {_i}",
+                annotation_position="top left",
+                annotation_font_color="#ffcc00",
+                annotation_font_size=10,
+            )
+
+        fig.update_layout(
+            template="plotly_dark",
+            height=450,
+            xaxis_title="Sentinel-1 Overpass Date",
+            yaxis_title="Backscatter (dB)",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02),
+            margin=dict(t=60),
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+        # Audit trail table
+        _audit_cols = ["date", "vv_smoothed", "vv_zscore",
+                       "is_flooded", "drydown_event", "is_sowing", "is_harvest"]
+        if "vh_smoothed" in _sig_df.columns:
+            _audit_cols.insert(2, "vh_smoothed")
+        st.markdown("#### Compliance Audit Trail Ledger")
+        st.caption(f"{len(_sig_df)} observations · scroll to see all rows")
+        st.dataframe(
+            _sig_df[_audit_cols],
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "date":          st.column_config.TextColumn("Date"),
+                "vv_smoothed":   st.column_config.NumberColumn("VV (dB)",  format="%.4f"),
+                "vh_smoothed":   st.column_config.NumberColumn("VH (dB)",  format="%.4f"),
+                "vv_zscore":     st.column_config.NumberColumn("Z-Score",  format="%.3f"),
+                "is_flooded":    st.column_config.CheckboxColumn("Flooded"),
+                "drydown_event": st.column_config.CheckboxColumn("AWD Event"),
+                "is_sowing":     st.column_config.CheckboxColumn("Sowing"),
+                "is_harvest":    st.column_config.CheckboxColumn("Harvest"),
+            },
+        )
+
+    elif not trigger:
+        with col_pipeline:
+            st.markdown("<br><br>", unsafe_allow_html=True)
+            st.info(
+                "Select a season and click **Run Analytics Engine** to fetch "
+                "Sentinel-1 SAR data and detect AWD events for the selected field."
+            )
 
 # ===========================================================================
 # TAB 3 — CARBON ASSET LEDGER
@@ -687,15 +767,12 @@ with tab_carbon:
     if not selected_id:
         st.info("Draw and save a field in the **Spatial Asset Inspection** tab first.")
         st.stop()
-    st.markdown("### 💰 Carbon Compliance Ledger (VM0051)")
-    st.write(
-        "Parameters are auto-populated from the Signal Analytics engine after you run it. "
-        "You can also override them manually and click **Calculate Carbon Credits**."
+    st.markdown("#### 💰 Carbon Compliance Ledger — VM0051 Tier 2")
+    st.caption(
+        "Parameters auto-fill from Signal Analytics. Override as needed, "
+        "then click **Calculate Carbon Credits**."
     )
     st.markdown("---")
-
-    st.markdown("#### ⚙️ Calculation Parameters")
-    st.caption("Auto-filled from signal engine. Override as needed.")
 
     default_season  = int(st.session_state.get("carbon_season_length", 120))
     default_awd     = int(st.session_state.get("carbon_total_awd", 0))
@@ -728,6 +805,11 @@ with tab_carbon:
             area_ha=carbon_area,
             ai_accuracy=carbon_accuracy,
         )
+        st.session_state["export_cr"]           = cr
+        st.session_state["export_confidence"]   = carbon_accuracy
+        st.session_state["export_carbon_area"]  = carbon_area
+        st.session_state["export_carbon_season"]= carbon_season
+        st.session_state["export_carbon_awd"]   = carbon_awd
 
         st.markdown("---")
 
@@ -783,9 +865,9 @@ with tab_carbon:
 
         # Step 5
         st.markdown(f"**Step 5: Conservativeness Penalty** — Confidence: {carbon_accuracy:.1f}%")
-        st.info(
-            f"Penalty applied: **{int(cr['p_uncertainty'] * 100)}%** "
-            f"→ retention multiplier = {1 - cr['p_uncertainty']:.2f}"
+        st.markdown(
+            f"Penalty: **{int(cr['p_uncertainty'] * 100)}%**"
+            f"  →  retention multiplier = **{1 - cr['p_uncertainty']:.2f}**"
         )
         st.latex(
             r"\text{Final Credits} = \Delta E_{\text{CO}_2\text{e}} \times (1 - P_{\text{uncertainty}})"
@@ -812,6 +894,91 @@ with tab_carbon:
                 f"🎉 **{cr['final_issuance']:.3f} tCO₂e** in Verified Carbon Credits — "
                 "ready for registry submission."
             )
+
+        # ---- Export Evidence Package ----------------------------------------
+        if st.session_state.get("export_df") is not None:
+            st.markdown("---")
+            st.markdown("#### 📦 Export Evidence Package")
+            st.caption(
+                "All three files together form a complete, auditor-ready evidence package."
+            )
+
+            _fi = {
+                "field_id": selected_id,
+                "name":     field_display[selected_id]["name"],
+                "district": field_display[selected_id]["district"],
+                "area_ha":  carbon_area,
+            }
+            _win = {
+                "season_label": st.session_state.get("export_season_label", "Custom"),
+                "start":        st.session_state.get("export_window_start", "N/A"),
+                "end":          st.session_state.get("export_window_end",   "N/A"),
+            }
+            _sig = {
+                "n_observations":     st.session_state.get("export_n_obs", 0),
+                "vv_mean":            st.session_state.get("export_vv_mean", 0.0),
+                "vv_std":             st.session_state.get("export_vv_std",  0.0),
+                "awd_events":         carbon_awd,
+                "awd_dates":          st.session_state.get("export_awd_dates", []),
+                "sowing_date":        st.session_state.get("export_sowing",  "N/A"),
+                "harvest_date":       st.session_state.get("export_harvest", "N/A"),
+                "season_length_days": carbon_season,
+                "from_phenology":     st.session_state.get("export_from_phenology", False),
+            }
+            _car = {
+                "sf_w_project":   cr["sf_w_project"],
+                "p_uncertainty":  cr["p_uncertainty"],
+                "e_baseline":     cr["e_baseline"],
+                "e_project":      cr["e_project"],
+                "delta_e_ch4":    cr["delta_e_ch4"],
+                "delta_e_co2e":   cr["delta_e_co2e"],
+                "final_issuance": cr["final_issuance"],
+                "confidence_pct": carbon_accuracy,
+            }
+            _df_exp    = st.session_state["export_df"]
+            _fid_slug  = selected_id.replace("-", "").lower()
+            _win_slug  = _win["start"][:7] if _win["start"] != "N/A" else "custom"
+
+            col_pdf, col_json, col_csv = st.columns(3)
+
+            with col_pdf:
+                try:
+                    pdf_bytes = generate_pdf(_fi, _win, _sig, _car)
+                    st.download_button(
+                        "⬇️ Audit Report (PDF)",
+                        data=pdf_bytes,
+                        file_name=f"terra_audit_{_fid_slug}_{_win_slug}.pdf",
+                        mime="application/pdf",
+                        use_container_width=True,
+                        type="primary",
+                    )
+                except Exception as _err:
+                    st.error(f"PDF error: {_err}")
+
+            with col_json:
+                st.download_button(
+                    "⬇️ Audit Package (JSON)",
+                    data=generate_audit_json(_fi, _win, _sig, _car, _df_exp),
+                    file_name=f"audit_{_fid_slug}_{_win_slug}.json",
+                    mime="application/json",
+                    use_container_width=True,
+                )
+
+            with col_csv:
+                st.download_button(
+                    "⬇️ Timeseries (CSV)",
+                    data=generate_timeseries_csv(_df_exp),
+                    file_name=f"timeseries_{_fid_slug}_{_win_slug}.csv",
+                    mime="text/csv",
+                    use_container_width=True,
+                )
+        else:
+            st.markdown("---")
+            st.info(
+                "💡 Run the **Signal Analytics** engine first to unlock the full "
+                "evidence export (PDF + JSON + CSV)."
+            )
+
     else:
         st.info(
             "ℹ️ Run the **Analytics Engine** (Signal tab) to auto-populate fields, "

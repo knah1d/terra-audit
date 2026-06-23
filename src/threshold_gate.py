@@ -97,12 +97,12 @@ class AdaptiveAWDGate:
         Returns the original df unchanged if VH data is unavailable or the
         series is too short (<3 rows after sowing) to reliably detect harvest.
         """
-        if df.empty or "vh_smoothed" not in df.columns:
-            return df
-
         df = df.copy()
         df["is_sowing"] = 0
         df["is_harvest"] = 0
+
+        if df.empty or "vh_smoothed" not in df.columns:
+            return df
 
         # Step 1 — Sowing: global minimum of smoothed VH
         sowing_idx = df["vh_smoothed"].idxmin()
