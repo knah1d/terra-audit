@@ -3,8 +3,6 @@ os.environ["USE_FOLIUM"] = "1"
 
 import datetime
 import json
-import math
-import xml.etree.ElementTree as ET
 
 import pandas as pd
 import streamlit as st
@@ -13,97 +11,13 @@ from folium.plugins import Draw
 import plotly.graph_objects as go
 from streamlit_folium import st_folium
 
+from src.geo_utils import (
+    compute_area_ha,
+    parse_geojson_upload,
+    parse_kml_upload,
+    parse_coordinate_text,
+)
 
-def compute_area_ha(geojson_feature: dict) -> float:
-    coords = geojson_feature["geometry"]["coordinates"][0]
-    lat_c = sum(c[1] for c in coords) / len(coords)
-    m_per_lat = 111_320.0
-    m_per_lon = 111_320.0 * math.cos(math.radians(lat_c))
-    area_m2 = 0.0
-    n = len(coords)
-    for i in range(n - 1):
-        x1, y1 = coords[i][0] * m_per_lon,   coords[i][1] * m_per_lat
-        x2, y2 = coords[i+1][0] * m_per_lon, coords[i+1][1] * m_per_lat
-        area_m2 += x1 * y2 - x2 * y1
-    return round(abs(area_m2) / 2 / 10_000, 4)
-
-
-def parse_geojson_upload(content: str):
-    try:
-        data = json.loads(content)
-    except json.JSONDecodeError as e:
-        return None, f"Invalid JSON: {e}"
-    t = data.get("type")
-    if t == "FeatureCollection":
-        features = data.get("features", [])
-        if not features:
-            return None, "FeatureCollection contains no features."
-        feat = features[0]
-    elif t == "Feature":
-        feat = data
-    elif t in ("Polygon", "MultiPolygon"):
-        feat = {"type": "Feature", "properties": {}, "geometry": data}
-    else:
-        return None, f"Unsupported GeoJSON type: '{t}'"
-    geom_type = feat.get("geometry", {}).get("type", "")
-    if geom_type not in ("Polygon", "MultiPolygon"):
-        return None, f"Geometry must be Polygon or MultiPolygon, got '{geom_type}'."
-    return feat, None
-
-
-def parse_kml_upload(content: str):
-    try:
-        root = ET.fromstring(content)
-    except ET.ParseError as e:
-        return None, f"Invalid KML: {e}"
-    kml_ns = "http://www.opengis.net/kml/2.2"
-    tags = [f"{{{kml_ns}}}coordinates", "coordinates"]
-    for tag in tags:
-        for elem in root.iter(tag):
-            text = (elem.text or "").strip()
-            coords = []
-            for point in text.split():
-                parts = point.split(",")
-                if len(parts) >= 2:
-                    try:
-                        coords.append([float(parts[0]), float(parts[1])])
-                    except ValueError:
-                        continue
-            if len(coords) >= 3:
-                if coords[0] != coords[-1]:
-                    coords.append(coords[0])
-                return {
-                    "type": "Feature", "properties": {},
-                    "geometry": {"type": "Polygon", "coordinates": [coords]},
-                }, None
-    return None, "No valid polygon coordinates found in KML."
-
-
-def parse_coordinate_text(text: str):
-    lines = [l.strip() for l in text.strip().splitlines() if l.strip()]
-    coords, bad = [], []
-    for line in lines:
-        parts = line.replace(",", " ").replace("\t", " ").split()
-        if len(parts) < 2:
-            continue
-        try:
-            lat, lon = float(parts[0]), float(parts[1])
-        except ValueError:
-            bad.append(line)
-            continue
-        if not (-90 <= lat <= 90 and -180 <= lon <= 180):
-            bad.append(f"{line}  ← out of range")
-            continue
-        coords.append([lon, lat])
-    if len(coords) < 3:
-        detail = f" Unparseable lines: {bad}" if bad else ""
-        return None, f"Need at least 3 valid points, got {len(coords)}.{detail}"
-    if coords[0] != coords[-1]:
-        coords.append(coords[0])
-    return {
-        "type": "Feature", "properties": {},
-        "geometry": {"type": "Polygon", "coordinates": [coords]},
-    }, None
 
 
 def render_preview_map(feature: dict, key: str, height: int = 400):
@@ -325,6 +239,44 @@ with st.sidebar:
         </div>
         """, unsafe_allow_html=True)
         st.markdown("")
+
+        # ---- Remove field -----------------------------------------------
+        _confirm_key = f"confirm_delete_{selected_id}"
+        if st.session_state.get(_confirm_key):
+            st.warning(
+                f"Delete **{sf['name']}** ({sf['field_id']})? "
+                "This cannot be undone."
+            )
+            _col_yes, _col_no = st.columns(2)
+            if _col_yes.button("Yes, delete", type="primary", use_container_width=True):
+                with get_db_connection() as conn:
+                    conn.execute("DELETE FROM fields WHERE field_id = ?", (selected_id,))
+                    conn.execute(
+                        "DELETE FROM timeseries_cache WHERE field_id = ?", (selected_id,)
+                    )
+                    conn.commit()
+                for _k in [
+                    "signal_df", "signal_field_id", "signal_cache_source",
+                    "signal_total_awd", "signal_sowing_date", "signal_harvest_date",
+                    "signal_season_length", "signal_from_phenology",
+                    "carbon_ready", "carbon_total_awd", "carbon_season_length",
+                    "carbon_area_ha", "season_from_phenology",
+                    "export_df", "export_cr", _confirm_key,
+                ]:
+                    st.session_state.pop(_k, None)
+                st.session_state["map_version"] = st.session_state.get("map_version", 0) + 1
+                st.rerun()
+            if _col_no.button("Cancel", use_container_width=True):
+                st.session_state.pop(_confirm_key, None)
+                st.rerun()
+        else:
+            if st.button(
+                "🗑️ Remove this field",
+                use_container_width=True,
+                help="Permanently delete this field and its cached timeseries data.",
+            ):
+                st.session_state[_confirm_key] = True
+                st.rerun()
 
     if not pending_sidebar and selected_id:
         _s2 = st.session_state.get("signal_field_id") == selected_id
@@ -794,7 +746,13 @@ with tab_carbon:
     with c3:
         carbon_awd      = st.number_input("AWD Events (verified)", 0, 20, default_awd, step=1)
     with c4:
-        carbon_accuracy = st.slider("Model Confidence (%)", 70.0, 100.0, 92.0, step=0.5)
+        q_n_kg_per_ha   = st.number_input(
+            "N Input (kg N/ha)",
+            min_value=0.0, max_value=300.0, value=100.0, step=5.0,
+            help="Nitrogen fertilizer applied in project scenario (kg N/ha). "
+                 "Used in VM0051 §8.3.2 Eq. 25 N₂O correction. "
+                 "Bangladesh boro rice default ≈ 100 kg N/ha.",
+        )
 
     run_carbon = st.button("⚡ Calculate Carbon Credits", type="primary")
 
@@ -803,13 +761,13 @@ with tab_carbon:
             awd_events=carbon_awd,
             season_length_days=carbon_season,
             area_ha=carbon_area,
-            ai_accuracy=carbon_accuracy,
+            q_n_kg_per_ha=q_n_kg_per_ha,
         )
-        st.session_state["export_cr"]           = cr
-        st.session_state["export_confidence"]   = carbon_accuracy
-        st.session_state["export_carbon_area"]  = carbon_area
-        st.session_state["export_carbon_season"]= carbon_season
-        st.session_state["export_carbon_awd"]   = carbon_awd
+        st.session_state["export_cr"]            = cr
+        st.session_state["export_q_n"]           = q_n_kg_per_ha
+        st.session_state["export_carbon_area"]   = carbon_area
+        st.session_state["export_carbon_season"] = carbon_season
+        st.session_state["export_carbon_awd"]    = carbon_awd
 
         st.markdown("---")
 
@@ -863,35 +821,77 @@ with tab_carbon:
             f" = {cr['delta_e_co2e']:.3f}\\text{{ tCO}}_2\\text{{e}}"
         )
 
-        # Step 5
-        st.markdown(f"**Step 5: Conservativeness Penalty** — Confidence: {carbon_accuracy:.1f}%")
+        # Step 5 — QA3 flat uncertainty deduction (VM0051 §8.6.3)
         st.markdown(
-            f"Penalty: **{int(cr['p_uncertainty'] * 100)}%**"
-            f"  →  retention multiplier = **{1 - cr['p_uncertainty']:.2f}**"
+            "**Step 5: QA3 Uncertainty Deduction** — VM0051 §8.6.3, flat 15% for "
+            "projects < 60,000 tCO₂e/yr"
         )
         st.latex(
-            r"\text{Final Credits} = \Delta E_{\text{CO}_2\text{e}} \times (1 - P_{\text{uncertainty}})"
+            r"\Delta E_{\text{after UNC}} = \Delta E_{\text{CO}_2\text{e}} "
+            r"\times (1 - UNC_{\text{QA3}})"
         )
         st.latex(
-            f"\\text{{Final Issuance}} = {cr['delta_e_co2e']:.3f}"
-            f" \\times (1 - {cr['p_uncertainty']:.2f})"
-            f" = \\mathbf{{{cr['final_issuance']:.3f}\\text{{ tCO}}_2\\text{{e}}}}"
+            f"\\Delta E_{{\\text{{after UNC}}}} = {cr['delta_e_co2e']:.4f}"
+            f" \\times 0.85 = {cr['ch4_after_unc']:.4f}\\text{{ tCO}}_2\\text{{e}}"
+        )
+
+        # Step 6 — N2O irrigation correction (VM0051 §8.3.2, Eq. 25)
+        st.markdown(
+            "**Step 6: N₂O Irrigation Correction** — VM0051 §8.3.2, Eq. 25"
+        )
+        if carbon_awd == 0:
+            st.info("No irrigation regime change — N₂O correction is zero (Eq. 25 not triggered).")
+        else:
+            st.latex(
+                r"PE_{\text{Red-Irri}} = Q_N \times A \times CF_{N_2O} "
+                r"\times 10^{-3} \times GWP_{N_2O}"
+            )
+            st.latex(
+                f"PE_{{\\text{{Red-Irri}}}} = {q_n_kg_per_ha:.0f} \\times {carbon_area:.2f}"
+                f" \\times 0.00314 \\times 10^{{-3}} \\times 265"
+                f" = {cr['pe_n2o_tco2e']:.4f}\\text{{ tCO}}_2\\text{{e}}"
+            )
+
+        # Step 7 — Leakage de minimis screen (VM0051 §8.4)
+        st.markdown("**Step 7: Leakage De Minimis Screen** — VM0051 §8.4")
+        if cr["leakage_de_minimis"]:
+            st.success(
+                f"N₂O penalty is **{cr['leakage_pct']:.1f}%** of gross CH₄ reduction "
+                f"(< 5% threshold) → **de minimis**, no leakage deduction required."
+            )
+        else:
+            st.warning(
+                f"N₂O penalty is **{cr['leakage_pct']:.1f}%** of gross CH₄ reduction "
+                f"(≥ 5% threshold) → **not de minimis**, full N₂O deduction applied."
+            )
+
+        # Step 8 — Net reductions (VM0051 Eq. 29, simplified)
+        st.markdown(
+            "**Step 8: Net Reductions** — VM0051 Eq. 29 "
+            "(CH₄ soil term, simplified: no straw burning, no fossil fuel change)"
+        )
+        st.latex(
+            r"ER = \Delta CH4_{\text{soil}} \times (1 - UNC_{CH4}) - PE_{\text{Red-Irri}}"
+        )
+        st.latex(
+            f"ER = {cr['ch4_after_unc']:.4f} - {cr['pe_n2o_tco2e']:.4f}"
+            f" = \\mathbf{{{cr['final_issuance']:.4f}\\text{{ tCO}}_2\\text{{e}}}}"
         )
 
         # Outcome banner
-        if cr["p_uncertainty"] == 1.0:
-            st.error(
-                "🚫 **Audit Failure** — Model confidence below 85 %. "
-                "Zero credits issued. Requires manual field verification before resubmission."
-            )
-        elif cr["final_issuance"] == 0.0:
+        if cr["final_issuance"] == 0.0 and carbon_awd == 0:
             st.info(
                 "ℹ️ No AWD events verified — project emissions equal baseline. "
                 "Zero carbon credits issued (no methane reduction demonstrated)."
             )
+        elif cr["final_issuance"] == 0.0:
+            st.warning(
+                "⚠️ N₂O correction fully offsets CH₄ reduction after uncertainty deduction. "
+                "Zero net credits issued."
+            )
         else:
             st.success(
-                f"🎉 **{cr['final_issuance']:.3f} tCO₂e** in Verified Carbon Credits — "
+                f"✅ **{cr['final_issuance']:.4f} tCO₂e** net verified credits — "
                 "ready for registry submission."
             )
 
@@ -926,14 +926,20 @@ with tab_carbon:
                 "from_phenology":     st.session_state.get("export_from_phenology", False),
             }
             _car = {
-                "sf_w_project":   cr["sf_w_project"],
-                "p_uncertainty":  cr["p_uncertainty"],
-                "e_baseline":     cr["e_baseline"],
-                "e_project":      cr["e_project"],
-                "delta_e_ch4":    cr["delta_e_ch4"],
-                "delta_e_co2e":   cr["delta_e_co2e"],
-                "final_issuance": cr["final_issuance"],
-                "confidence_pct": carbon_accuracy,
+                "sf_w_project":       cr["sf_w_project"],
+                "p_uncertainty":      cr["p_uncertainty"],
+                "e_baseline":         cr["e_baseline"],
+                "e_project":          cr["e_project"],
+                "delta_e_ch4":        cr["delta_e_ch4"],
+                "delta_e_co2e":       cr["delta_e_co2e"],
+                "unc_tco2e":          cr["unc_tco2e"],
+                "ch4_after_unc":      cr["ch4_after_unc"],
+                "pe_n2o_tco2e":       cr["pe_n2o_tco2e"],
+                "q_n_kg_per_ha":      cr["q_n_kg_per_ha"],
+                "leakage_pct":        cr["leakage_pct"],
+                "leakage_de_minimis": cr["leakage_de_minimis"],
+                "final_issuance":     cr["final_issuance"],
+                "confidence_pct":     None,
             }
             _df_exp    = st.session_state["export_df"]
             _fid_slug  = selected_id.replace("-", "").lower()

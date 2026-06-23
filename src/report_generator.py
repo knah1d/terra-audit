@@ -17,6 +17,15 @@ from fpdf import FPDF
 # Helpers
 # ---------------------------------------------------------------------------
 
+def _awd_label(sf_w: float) -> str:
+    if sf_w == 1.00:
+        return "0 drydowns"
+    elif sf_w == 0.71:
+        return "1 drydown"
+    else:
+        return ">=2 drydowns"
+
+
 def _s(text: str) -> str:
     """Sanitize text to Latin-1 for fpdf core font compatibility."""
     replacements = {
@@ -192,37 +201,44 @@ def generate_pdf(
             "Manual agronomist verification is required."
         )
 
-    # ---- 5. Carbon Estimation ---------------------------------------------
-    pdf.section("5. Carbon Estimation  (Verra VM0051 Tier 2)")
-    pdf.kv("Emission Factor EF_c", "1.4 kg CH4/ha/day  (IPCC South Asia default)")
-    pdf.kv("GWP CH4 (AR5)",        "28  (100-year horizon)")
-    pdf.kv("Baseline SF_w",        "1.00  (continuous flooding scenario)")
-    pdf.kv("Project SF_w",         str(carbon["sf_w_project"]))
+    # ---- 5. Carbon Estimation (VM0051 v1.0, QA3 pathway) ------------------
+    pdf.section("5. Carbon Estimation  (Verra VM0051 v1.0, QA3 - Default Emission Factors)")
+    pdf.kv("Quantification Approach", "QA3 - Default Emission Factors (§8.2.3)")
+    pdf.kv("Emission Factor EF_c",    "1.4 kg CH4/ha/day  (IPCC 2019 South Asia Tier 2)")
+    pdf.kv("GWP CH4 (AR5 100yr)",     "28")
+    pdf.kv("GWP N2O (AR5 100yr)",     "265")
+    pdf.kv("Baseline SF_w",           "1.00  (continuous flooding, Eq. 8)")
+    pdf.kv("Project SF_w",            f"{carbon['sf_w_project']}  (Eq. 8, {_awd_label(carbon['sf_w_project'])})")
     pdf.ln(2)
-    pdf.kv("Baseline Emissions",   f"{carbon['e_baseline']:.4f} kg CH4")
-    pdf.kv("Project Emissions",    f"{carbon['e_project']:.4f} kg CH4")
-    pdf.kv("CH4 Avoided",          f"{carbon['delta_e_ch4']:.4f} kg CH4")
-    pdf.kv("CO2e Avoided",         f"{carbon['delta_e_co2e']:.6f} tCO2e")
+    pdf.kv("Baseline CH4 Emissions",  f"{carbon['e_baseline']:.4f} kg CH4  (Eq. 8)")
+    pdf.kv("Project CH4 Emissions",   f"{carbon['e_project']:.4f} kg CH4  (Eq. 8)")
+    pdf.kv("Gross CH4 Avoided",       f"{carbon['delta_e_ch4']:.4f} kg CH4  (Eq. 31)")
+    pdf.kv("Gross tCO2e (before UNC)", f"{carbon['delta_e_co2e']:.6f} tCO2e")
     pdf.ln(2)
-    pdf.kv("Model Confidence",     f"{carbon['confidence_pct']:.1f}%")
-    pdf.kv("Uncertainty Penalty",  f"{int(carbon['p_uncertainty'] * 100)}%")
-    pdf.kv("FINAL ISSUANCE",       f"{carbon['final_issuance']:.6f} tCO2e")
+    pdf.kv("Uncertainty Deduction",   f"15.0%  (QA3 flat rate, §8.6.3, <60,000 tCO2e/yr)")
+    pdf.kv("UNC Deduction Amount",    f"{carbon['unc_tco2e']:.6f} tCO2e")
+    pdf.kv("CH4 After Uncertainty",   f"{carbon['ch4_after_unc']:.6f} tCO2e")
+    pdf.ln(2)
+    pdf.kv("N Fertilizer Input (Q_N)", f"{carbon['q_n_kg_per_ha']:.1f} kg N/ha")
+    pdf.kv("N2O Correction (Eq. 25)", f"{carbon['pe_n2o_tco2e']:.6f} tCO2e  (PE_Red-Irri, CF_N2O=0.00314)")
+    leakage_status = (
+        f"{carbon['leakage_pct']:.1f}% of gross reduction - DE MINIMIS (SS8.4, <5% threshold)"
+        if carbon["leakage_de_minimis"]
+        else f"{carbon['leakage_pct']:.1f}% of gross reduction - APPLIED IN FULL (>=5% threshold)"
+    )
+    pdf.kv("Leakage Screen (§8.4)",   leakage_status)
+    pdf.ln(2)
+    pdf.kv("NET ISSUANCE (Eq. 29)",   f"{carbon['final_issuance']:.6f} tCO2e")
 
-    if carbon["p_uncertainty"] == 1.0:
+    if carbon["final_issuance"] == 0.0:
         pdf.banner(
-            "AUDIT FAILURE: Model confidence below 85%. "
-            "Zero credits issued. Manual field verification required before resubmission.",
-            ok=False,
-        )
-    elif carbon["final_issuance"] == 0.0:
-        pdf.banner(
-            "No AWD events detected - project emissions equal baseline. "
-            "Zero credits issued.",
+            "No net credits issued. Either no AWD events detected or N2O correction "
+            "fully offsets CH4 reduction after uncertainty deduction.",
             ok=False,
         )
     else:
         pdf.banner(
-            f"VERIFIED: {carbon['final_issuance']:.4f} tCO2e in Verified Carbon Credits"
+            f"VERIFIED: {carbon['final_issuance']:.4f} tCO2e net verified credits"
             " - ready for registry submission.",
             ok=True,
         )
@@ -230,16 +246,18 @@ def generate_pdf(
     # ---- 6. Methodology ---------------------------------------------------
     pdf.section("6. Methodology")
     pdf.body(
-        "Terra-Audit implements the Verra VM0051 Tier 2 methodology for Alternate Wetting "
-        "and Drying (AWD) rice irrigation monitoring using Sentinel-1 Synthetic Aperture "
-        "Radar (SAR) satellite data. VV backscatter is used as the primary flood-state "
-        "indicator. Z-score anomaly detection (field-adaptive baseline) identifies flooded "
-        "periods. Sharp positive VV transitions immediately following flooded periods are "
-        "classified as drydown (AWD) events. The VM0051 water scaling factor (SF_w) is "
-        "assigned based on verified AWD cycle count: 1.00 (0 events), 0.71 (1 event), "
-        "0.52 (2+ events). A conservativeness deduction is applied to gross tCO2e based "
-        "on model confidence: >=95% -> 0%, 90-94% -> 10%, 85-89% -> 30%, <85% -> full "
-        "disqualification."
+        "Terra-Audit implements the Verra VM0051 v1.0 Quantification Approach 3 (QA3 - "
+        "Default Emission Factors) for Alternate Wetting and Drying (AWD) rice irrigation "
+        "monitoring using Sentinel-1 SAR satellite data. VV backscatter is used as the "
+        "primary flood-state indicator via z-score anomaly detection (field-adaptive "
+        "baseline, threshold z < -0.8). Sharp positive VV transitions (> 1.2 sigma) "
+        "following flooded periods are classified as drydown events. The VM0051 water "
+        "scaling factor (SF_w) is assigned per Eq. 8: 1.00 (0 events), 0.71 (1 event), "
+        "0.52 (>=2 events). Gross CH4 reductions are reduced by the QA3 flat 15% "
+        "uncertainty deduction (§8.6.3) and by the N2O irrigation correction (PE_Red-Irri, "
+        "§8.3.2 Eq. 25, CF_N2O=0.00314 kg N2O/kg N). Net reductions follow Eq. 29 "
+        "(simplified: CH4 soil term only). Leakage sources not applicable to this project "
+        "scope are screened per §8.4 and treated as de minimis where <5% of gross reductions."
     )
 
     # ---- 7. Assumptions ---------------------------------------------------
@@ -313,17 +331,24 @@ def generate_audit_json(
             "from_phenology_detection": signal["from_phenology"],
         },
         "carbon_calculation": {
+            "methodology":                        "VM0051 v1.0, QA3 Default Emission Factors",
             "emission_factor_ef_c_kg_ch4_per_ha_per_day": 1.4,
-            "gwp_ch4_ar5_100yr":      28,
-            "sf_w_baseline":          1.0,
-            "sf_w_project":           carbon["sf_w_project"],
-            "e_baseline_kg_ch4":      round(carbon["e_baseline"], 6),
-            "e_project_kg_ch4":       round(carbon["e_project"], 6),
-            "delta_e_ch4_kg":         round(carbon["delta_e_ch4"], 6),
-            "delta_e_tco2e":          round(carbon["delta_e_co2e"], 6),
-            "model_confidence_pct":   carbon["confidence_pct"],
-            "uncertainty_penalty_pct": int(carbon["p_uncertainty"] * 100),
-            "final_issuance_tco2e":   round(carbon["final_issuance"], 6),
+            "gwp_ch4_ar5_100yr":                  28,
+            "gwp_n2o_ar5_100yr":                  265,
+            "sf_w_baseline":                      1.0,
+            "sf_w_project":                       carbon["sf_w_project"],
+            "e_baseline_kg_ch4":                  round(carbon["e_baseline"], 6),
+            "e_project_kg_ch4":                   round(carbon["e_project"], 6),
+            "delta_e_ch4_kg":                     round(carbon["delta_e_ch4"], 6),
+            "gross_delta_e_tco2e":                round(carbon["delta_e_co2e"], 6),
+            "uncertainty_deduction_pct":          15.0,
+            "uncertainty_deduction_tco2e":        round(carbon["unc_tco2e"], 6),
+            "ch4_after_uncertainty_tco2e":        round(carbon["ch4_after_unc"], 6),
+            "q_n_kg_per_ha":                      carbon["q_n_kg_per_ha"],
+            "pe_n2o_irrigation_tco2e":            round(carbon["pe_n2o_tco2e"], 6),
+            "leakage_pct_of_gross":               carbon["leakage_pct"],
+            "leakage_de_minimis":                 carbon["leakage_de_minimis"],
+            "final_issuance_tco2e":               round(carbon["final_issuance"], 6),
         },
         "timeseries": df.to_dict(orient="records"),
     }
