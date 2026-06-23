@@ -21,4 +21,5 @@ __pycache__/
 .config/earthengine/
 
 CLAUDE.md
-data/project_store.db
+data/
+.streamlit/
