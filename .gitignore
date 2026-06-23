@@ -19,3 +19,7 @@ __pycache__/
 
 # Google Earth Engine
 .config/earthengine/
+
+CLAUDE.md
+data/
+.streamlit/

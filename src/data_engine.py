@@ -1,13 +1,22 @@
 import ee
+import os
 import pandas as pd
 from datetime import datetime, timezone
+from pathlib import Path
+from dotenv import load_dotenv
 from scipy.signal import savgol_filter
+
+load_dotenv(Path(__file__).parent.parent / ".env")
 
 
 class SpatialDataEngine:
     def __init__(self):
         try:
-            ee.Initialize()
+            project = os.environ.get("EE_PROJECT")
+            if project:
+                ee.Initialize(project=project)
+            else:
+                ee.Initialize()  # falls back to earthengine CLI config
         except Exception as e:
             raise RuntimeError(f"Earth Engine Initialization Failed: {e}")
 
