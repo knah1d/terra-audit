@@ -31,9 +31,15 @@ def initialize_database():
                 name             TEXT NOT NULL,
                 district         TEXT NOT NULL,
                 geojson_geometry TEXT NOT NULL,
+                area_ha          REAL,
                 created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        # Migration: add area_ha to existing DBs that predate this column
+        try:
+            conn.execute("ALTER TABLE fields ADD COLUMN area_ha REAL")
+        except Exception:
+            pass
         # PK covers field + observation date + the exact analysis window.
         # This prevents a 2024-01-15 observation overwriting a 2025-01-15
         # observation that shares the same calendar date string.
