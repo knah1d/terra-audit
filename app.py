@@ -17,6 +17,7 @@ from src.geo_utils import (
     parse_kml_upload,
     parse_coordinate_text,
 )
+from src.ui_theme import inject_theme, get_theme_mode, render_theme_toggle
 
 
 
@@ -42,21 +43,16 @@ from src.report_generator import generate_pdf, generate_audit_json, generate_tim
 # ---------------------------------------------------------------------------
 st.set_page_config(layout="wide", page_title="terra-audit Platform")
 
-st.markdown("""
-    <style>
-    .block-container { padding-top: 1.2rem !important; }
-    [data-testid="metric-container"] {
-        background-color: #1e222b;
-        border: 1px solid #3e4451;
-        border-radius: 8px;
-        padding: 12px 16px !important;
-    }
-    .stTabs [data-baseweb="tab"] { font-size: 0.83rem; font-weight: 600; }
-    </style>
-""", unsafe_allow_html=True)
+_theme_mode = get_theme_mode()
+inject_theme(_theme_mode)
 
-st.title("🛰️ terra-audit // High-Fidelity Processing Pipeline")
-st.caption("Verra VM0051 Digital Compliance Sandbox // Phase 2 Engine Core")
+st.markdown("""
+    <div class="ta-hero">
+        <span class="ta-hero-badge">🛰️ Live Pipeline</span>
+        <h1 class="ta-hero-title">terra-audit // High-Fidelity Processing Pipeline</h1>
+        <p class="ta-hero-subtitle">Verra VM0051 Digital Compliance Sandbox — Phase 2 Engine Core</p>
+    </div>
+""", unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
 # Module initialisation (cached for the lifetime of the Streamlit process)
@@ -152,6 +148,9 @@ field_display = {f["field_id"]: f for f in fields}
 # Sidebar — Field Selector or Registration Form
 # ---------------------------------------------------------------------------
 with st.sidebar:
+    render_theme_toggle()
+    st.markdown("---")
+
     pending_sidebar = st.session_state.get("pending_field_geom")
 
     if pending_sidebar:
@@ -231,11 +230,11 @@ with st.sidebar:
         sf = field_display[selected_id]
         st.markdown("---")
         st.markdown(f"""
-        <div style="background:#1e222b;border-radius:8px;padding:12px 14px;border:1px solid #3e4451;">
-            <div style="color:#aaa;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Selected Parcel</div>
-            <div style="color:#00ffcc;font-size:17px;font-weight:700;margin:4px 0">{sf['field_id']}</div>
-            <div style="color:#eee;font-size:13px;">{sf['name']}</div>
-            <div style="color:#888;font-size:12px;margin-top:6px;">📍 {sf['district']} District</div>
+        <div class="ta-card">
+            <div class="ta-card-eyebrow">Selected Parcel</div>
+            <div class="ta-card-title">{sf['field_id']}</div>
+            <div class="ta-card-body">{sf['name']}</div>
+            <div class="ta-card-meta">📍 {sf['district']} District</div>
         </div>
         """, unsafe_allow_html=True)
         st.markdown("")
@@ -282,12 +281,17 @@ with st.sidebar:
         _s2 = st.session_state.get("signal_field_id") == selected_id
         _s3 = (st.session_state.get("export_cr") is not None) and _s2
         st.markdown("---")
-        st.markdown(
-            f"{'✅' if True else '⬜'}&nbsp; Field registered  \n"
-            f"{'✅' if _s2 else '⬜'}&nbsp; Analytics complete  \n"
-            f"{'✅' if _s3 else '⬜'}&nbsp; Credits calculated",
-            unsafe_allow_html=True,
+        _steps = [
+            (True, "Field registered"),
+            (_s2, "Analytics complete"),
+            (_s3, "Credits calculated"),
+        ]
+        _items = "".join(
+            f'<div class="ta-progress-item{" done" if done else ""}">'
+            f'{"✅" if done else "⬜"}&nbsp; {label}</div>'
+            for done, label in _steps
         )
+        st.markdown(f'<div class="ta-progress-list">{_items}</div>', unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
 # Load geometry for selected field
@@ -623,11 +627,14 @@ with tab_signal:
             _c4.metric("Season Length", _season_len_str)
 
         # Chart — full width
+        _raw_marker_color = (
+            "rgba(255,255,255,0.30)" if _theme_mode == "dark" else "rgba(20,20,20,0.30)"
+        )
         fig = go.Figure()
         fig.add_trace(go.Scatter(
             x=_sig_df["date"], y=_sig_df["vv"],
             mode="markers", name="Raw VV",
-            marker=dict(color="rgba(255,255,255,0.25)", size=5),
+            marker=dict(color=_raw_marker_color, size=5),
         ))
         fig.add_trace(go.Scatter(
             x=_sig_df["date"], y=_sig_df["vv_smoothed"],
@@ -673,7 +680,7 @@ with tab_signal:
             )
 
         fig.update_layout(
-            template="plotly_dark",
+            template="plotly_dark" if _theme_mode == "dark" else "plotly_white",
             height=450,
             xaxis_title="Sentinel-1 Overpass Date",
             yaxis_title="Backscatter (dB)",
