@@ -58,7 +58,9 @@ def build_features(df: pd.DataFrame, include_area_ha: bool = False) -> tuple[pd.
     district_dummies = pd.get_dummies(df["district"], prefix="district", drop_first=True)
     X = pd.concat([X, district_dummies], axis=1)
 
-    y = df["label"]
+    # Absent at inference time (predictor.py has no ground truth to attach) —
+    # present at training time (dataset_builder.py's build_dataset output).
+    y = df["label"] if "label" in df.columns else None
     return X, y
 
 

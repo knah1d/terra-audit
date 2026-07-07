@@ -37,6 +37,7 @@ from src.data_engine import SpatialDataEngine
 from src.threshold_gate import AdaptiveAWDGate
 from src.carbon_calculator import CarbonAssetEngine
 from src.report_generator import generate_pdf, generate_audit_json, generate_timeseries_csv
+from src.ai.predictor import predict_awd_states
 
 # ---------------------------------------------------------------------------
 # Page config
@@ -558,6 +559,21 @@ with tab_signal:
             step=0.1,
             help="Auto-computed from your drawn polygon. Override if needed.",
         )
+
+        DETECTOR_OPTIONS = {
+            "Threshold Gate (rule-based)": "threshold",
+            "Random Forest (AI baseline)": "random_forest",
+            "XGBoost (AI baseline)": "xgboost",
+        }
+        detector_label = st.selectbox(
+            "Detection Model",
+            options=list(DETECTOR_OPTIONS.keys()),
+            help="AI baselines are trained on the Threshold Gate's own output "
+                 "(no independent ground truth exists yet) — treat them as "
+                 "proof-of-concept, not a validated alternative.",
+        )
+        detector_key = DETECTOR_OPTIONS[detector_label]
+
         force_refresh = st.checkbox("Bypass Local Database Cache")
         date_valid    = (start_date < end_date) if preset_dates is None else True
         trigger       = st.button(
@@ -584,6 +600,23 @@ with tab_signal:
         if not df_processed.empty:
             df_final             = gate.analyze_irrigation_behavior(df_processed)
             df_final             = gate.extract_phenology(df_final)
+
+            model_fallback_msg = None
+            if detector_key != "threshold":
+                try:
+                    district = field_display[selected_id]["district"]
+                    df_final = predict_awd_states(
+                        df_final, detector_key, selected_id, district,
+                        field_area_ha, sd_str, ed_str,
+                    )
+                except FileNotFoundError:
+                    model_fallback_msg = (
+                        f"{detector_label} has not been trained yet — showing "
+                        f"Threshold Gate results instead. Run "
+                        f"`python -m src.ai.train_{detector_key}` to train it."
+                    )
+                    detector_label = "Threshold Gate (rule-based)"
+
             total_awd            = int(df_final["drydown_event"].sum())
             sowing_row           = df_final[df_final["is_sowing"]  == 1]
             harvest_row          = df_final[df_final["is_harvest"] == 1]
@@ -608,6 +641,8 @@ with tab_signal:
             st.session_state["signal_harvest_date"]   = harvest_date_str
             st.session_state["signal_season_length"]  = season_length_val
             st.session_state["signal_from_phenology"] = season_from_phenology
+            st.session_state["signal_detector_used"]  = detector_label
+            st.session_state["signal_model_fallback_msg"] = model_fallback_msg
 
             st.session_state["carbon_ready"]          = True
             st.session_state["carbon_total_awd"]      = total_awd
@@ -657,6 +692,9 @@ with tab_signal:
         _season_len      = st.session_state["signal_season_length"]
         _from_phenology  = st.session_state["signal_from_phenology"]
         _season_len_str  = f"{_season_len} days" if _from_phenology else "120 days (fallback)"
+        _detector_used   = st.session_state.get("signal_detector_used", "Threshold Gate (rule-based)")
+        _model_fallback  = st.session_state.get("signal_model_fallback_msg")
+        _avg_confidence  = _sig_df["confidence"].mean() if "confidence" in _sig_df.columns else None
 
         with col_pipeline:
             st.caption(f"Data source: `{_cache_src}`")
@@ -665,11 +703,18 @@ with tab_signal:
                     "⚠️ Phenology markers not detected — season length uses the 120-day fallback. "
                     "Verify manually before carbon submission."
                 )
-            _c1, _c2, _c3, _c4 = st.columns(4)
+            if _model_fallback:
+                st.warning(f"⚠️ {_model_fallback}")
+            _c1, _c2, _c3, _c4, _c5 = st.columns(5)
             _c1.metric("AWD Events",    _total_awd)
             _c2.metric("Sowing Date",   _sowing_str)
             _c3.metric("Harvest Date",  _harvest_str)
             _c4.metric("Season Length", _season_len_str)
+            _c5.metric(
+                "Detector Used", _detector_used,
+                delta=f"{_avg_confidence:.0%} avg confidence" if _avg_confidence is not None else None,
+                delta_color="off",
+            )
 
         # Chart — full width
         _raw_marker_color = (
@@ -739,6 +784,10 @@ with tab_signal:
                        "is_flooded", "drydown_event", "is_sowing", "is_harvest"]
         if "vh_smoothed" in _sig_df.columns:
             _audit_cols.insert(2, "vh_smoothed")
+        if "predicted_label" in _sig_df.columns:
+            _audit_cols.append("predicted_label")
+        if "confidence" in _sig_df.columns:
+            _audit_cols.append("confidence")
         st.markdown("#### Compliance Audit Trail Ledger")
         st.caption(f"{len(_sig_df)} observations · scroll to see all rows")
         st.dataframe(
@@ -746,14 +795,16 @@ with tab_signal:
             use_container_width=True,
             hide_index=True,
             column_config={
-                "date":          st.column_config.TextColumn("Date"),
-                "vv_smoothed":   st.column_config.NumberColumn("VV (dB)",  format="%.4f"),
-                "vh_smoothed":   st.column_config.NumberColumn("VH (dB)",  format="%.4f"),
-                "vv_zscore":     st.column_config.NumberColumn("Z-Score",  format="%.3f"),
-                "is_flooded":    st.column_config.CheckboxColumn("Flooded"),
-                "drydown_event": st.column_config.CheckboxColumn("AWD Event"),
-                "is_sowing":     st.column_config.CheckboxColumn("Sowing"),
-                "is_harvest":    st.column_config.CheckboxColumn("Harvest"),
+                "date":            st.column_config.TextColumn("Date"),
+                "vv_smoothed":     st.column_config.NumberColumn("VV (dB)",  format="%.4f"),
+                "vh_smoothed":     st.column_config.NumberColumn("VH (dB)",  format="%.4f"),
+                "vv_zscore":       st.column_config.NumberColumn("Z-Score",  format="%.3f"),
+                "is_flooded":      st.column_config.CheckboxColumn("Flooded"),
+                "drydown_event":   st.column_config.CheckboxColumn("AWD Event"),
+                "is_sowing":       st.column_config.CheckboxColumn("Sowing"),
+                "is_harvest":      st.column_config.CheckboxColumn("Harvest"),
+                "predicted_label": st.column_config.TextColumn("Model Label"),
+                "confidence":      st.column_config.NumberColumn("Confidence", format="percent"),
             },
         )
 
