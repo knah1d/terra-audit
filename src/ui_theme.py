@@ -35,16 +35,17 @@ _PALETTES = {
         "glass": "rgba(255, 255, 255, 0.055)",
         "glass_strong": "rgba(255, 255, 255, 0.10)",
         "glass_solid": "#161b26",
-        "border": "rgba(255, 255, 255, 0.14)",
-        "border_strong": "rgba(255, 255, 255, 0.24)",
-        "shadow": "0 10px 34px rgba(0, 0, 0, 0.45)",
-        "shadow_sm": "0 4px 14px rgba(0, 0, 0, 0.35)",
+        "border": "rgba(255, 255, 255, 0.08)",
+        "border_strong": "rgba(255, 255, 255, 0.18)",
+        "shadow": "0 1px 2px rgba(0, 0, 0, 0.30), 0 16px 40px rgba(0, 0, 0, 0.40)",
+        "shadow_sm": "0 1px 2px rgba(0, 0, 0, 0.25), 0 6px 16px rgba(0, 0, 0, 0.30)",
+        "inset": "inset 0 1px 0 rgba(255, 255, 255, 0.05)",
         "success": "#30d158",
         "warning": "#ffb020",
         "error": "#ff5c5c",
         "info": "#0a84ff",
-        "blob_1": "rgba(0, 230, 184, 0.14)",
-        "blob_2": "rgba(124, 108, 240, 0.12)",
+        "blob_1": "rgba(0, 230, 184, 0.20)",
+        "blob_2": "rgba(124, 108, 240, 0.18)",
     },
     "light": {
         "bg": "#f5f6f8",
@@ -58,16 +59,17 @@ _PALETTES = {
         "glass": "rgba(255, 255, 255, 0.55)",
         "glass_strong": "rgba(255, 255, 255, 0.80)",
         "glass_solid": "#ffffff",
-        "border": "rgba(15, 23, 42, 0.10)",
-        "border_strong": "rgba(15, 23, 42, 0.20)",
-        "shadow": "0 10px 30px rgba(15, 23, 42, 0.12)",
-        "shadow_sm": "0 4px 12px rgba(15, 23, 42, 0.08)",
+        "border": "rgba(15, 23, 42, 0.06)",
+        "border_strong": "rgba(15, 23, 42, 0.14)",
+        "shadow": "0 1px 2px rgba(15, 23, 42, 0.05), 0 16px 36px rgba(15, 23, 42, 0.12)",
+        "shadow_sm": "0 1px 2px rgba(15, 23, 42, 0.04), 0 6px 14px rgba(15, 23, 42, 0.08)",
+        "inset": "inset 0 1px 0 rgba(255, 255, 255, 0.55)",
         "success": "#1f9d55",
         "warning": "#b45309",
         "error": "#dc2626",
         "info": "#0a66c2",
-        "blob_1": "rgba(5, 150, 105, 0.10)",
-        "blob_2": "rgba(99, 91, 255, 0.08)",
+        "blob_1": "rgba(5, 150, 105, 0.14)",
+        "blob_2": "rgba(99, 91, 255, 0.12)",
     },
 }
 
@@ -114,6 +116,7 @@ def _build_css(mode: str) -> str:
         --ta-border-strong: {p['border_strong']};
         --ta-shadow: {p['shadow']};
         --ta-shadow-sm: {p['shadow_sm']};
+        --ta-inset: {p['inset']};
 
         --ta-success: {p['success']};
         --ta-warning: {p['warning']};
@@ -150,8 +153,13 @@ def _build_css(mode: str) -> str:
     }}
 
     .block-container {{
-        padding: 1.6rem clamp(1rem, 3vw, 3rem) 4rem !important;
+        padding: 1rem clamp(1rem, 3vw, 3rem) 4rem !important;
         max-width: 1400px;
+    }}
+
+    hr {{
+        margin: 0.75rem 0 !important;
+        opacity: 0.5;
     }}
 
     ::selection {{
@@ -194,21 +202,36 @@ def _build_css(mode: str) -> str:
         color: var(--ta-text) !important;
     }}
 
+    /* Typography scale — sizes app.py's existing heading levels so the
+       page reads as a clear hierarchy instead of one repeated weight. */
+    [data-testid="stMarkdownContainer"] h2 {{ font-size: 1.3rem !important;  font-weight: 700 !important; }}
+    [data-testid="stMarkdownContainer"] h3 {{ font-size: 1.5rem !important;  font-weight: 700 !important; }}
+    [data-testid="stMarkdownContainer"] h4 {{ font-size: 1.15rem !important; font-weight: 600 !important; }}
+    [data-testid="stMarkdownContainer"] h5 {{
+        font-size: 1rem !important;
+        font-weight: 600 !important;
+        color: var(--ta-text-secondary) !important;
+    }}
+
+    [data-testid="stCaptionContainer"] {{
+        font-size: 0.8rem !important;
+        color: var(--ta-text-tertiary) !important;
+    }}
+
     /* =====================================================================
        4. HERO HEADER
        ===================================================================== */
     .ta-hero {{
         display: flex;
         flex-direction: column;
-        gap: 0.35rem;
-        padding: 1.4rem 1.8rem;
-        margin-bottom: 1.4rem;
+        gap: 0.5rem;
+        padding: 1.35rem 1.75rem;
+        margin-bottom: 1rem;
         border-radius: var(--ta-radius-xl);
         background: var(--ta-glass);
-        border: 1px solid var(--ta-border);
         backdrop-filter: blur(24px) saturate(180%);
         -webkit-backdrop-filter: blur(24px) saturate(180%);
-        box-shadow: var(--ta-shadow);
+        box-shadow: var(--ta-shadow), var(--ta-inset);
     }}
 
     .ta-hero .ta-hero-badge {{
@@ -227,18 +250,56 @@ def _build_css(mode: str) -> str:
         border-radius: var(--ta-radius-pill);
     }}
 
+    .ta-hero .ta-hero-badge.warn {{
+        color: var(--ta-error) !important;
+        background: color-mix(in srgb, var(--ta-error) 14%, transparent);
+        border: 1px solid color-mix(in srgb, var(--ta-error) 35%, transparent);
+    }}
+
     .ta-hero .ta-hero-title {{
         margin: 0;
-        font-size: clamp(1.6rem, 2.6vw, 2.2rem);
-        font-weight: 700;
-        letter-spacing: -0.01em;
+        font-size: clamp(2rem, 3.6vw, 3rem);
+        font-weight: 800;
+        letter-spacing: -0.025em;
+        line-height: 1.1;
         color: var(--ta-text) !important;
     }}
 
     .ta-hero .ta-hero-subtitle {{
         margin: 0;
-        font-size: 0.92rem;
+        max-width: 680px;
+        font-size: 1rem;
+        line-height: 1.5;
         color: var(--ta-text-secondary) !important;
+    }}
+
+    .ta-hero .ta-hero-stats {{
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1.75rem;
+        margin-top: 0.6rem;
+        padding-top: 0.75rem;
+        border-top: 1px solid var(--ta-border);
+    }}
+
+    .ta-hero .ta-stat-value {{
+        font-size: 1.3rem;
+        font-weight: 700;
+        color: var(--ta-text) !important;
+        line-height: 1.2;
+    }}
+
+    .ta-hero .ta-stat-value.accent {{
+        color: var(--ta-accent-strong) !important;
+    }}
+
+    .ta-hero .ta-stat-label {{
+        font-size: 0.7rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--ta-text-tertiary) !important;
+        margin-top: 0.15rem;
     }}
 
     /* =====================================================================
@@ -262,11 +323,11 @@ def _build_css(mode: str) -> str:
 
     .ta-card {{
         background: var(--ta-glass);
-        border: 1px solid var(--ta-border);
         border-radius: var(--ta-radius-md);
         padding: 0.9rem 1rem;
         backdrop-filter: blur(16px);
         -webkit-backdrop-filter: blur(16px);
+        box-shadow: var(--ta-shadow-sm), var(--ta-inset);
     }}
 
     .ta-card .ta-card-eyebrow {{
@@ -308,23 +369,27 @@ def _build_css(mode: str) -> str:
         font-size: 0.82rem;
         color: var(--ta-text-secondary) !important;
         background: var(--ta-glass);
-        border: 1px solid var(--ta-border);
         border-radius: var(--ta-radius-sm);
         padding: 0.45rem 0.7rem;
+        box-shadow: var(--ta-shadow-sm);
     }}
 
     .ta-progress-list .ta-progress-item.done {{
         color: var(--ta-text) !important;
-        border-color: color-mix(in srgb, var(--ta-success) 45%, transparent);
+        border: 1px solid color-mix(in srgb, var(--ta-success) 45%, transparent);
         background: color-mix(in srgb, var(--ta-success) 12%, transparent);
     }}
 
     /* =====================================================================
        6. BUTTONS
+       Streamlit nests the real <button> several levels below .stButton (a
+       tooltip-target span sits in between), so a ">" child combinator never
+       matches. The button itself carries a stable data-testid keyed on its
+       "kind" ("primary" / "secondary" / "tertiary") — target that directly.
        ===================================================================== */
-    .stButton > button,
-    .stDownloadButton > button,
-    .stFormSubmitButton > button {{
+    [data-testid="stBaseButton-primary"],
+    [data-testid="stBaseButton-secondary"],
+    [data-testid="stBaseButton-tertiary"] {{
         border-radius: var(--ta-radius-sm) !important;
         border: 1px solid var(--ta-border-strong) !important;
         background: var(--ta-glass-strong) !important;
@@ -340,31 +405,27 @@ def _build_css(mode: str) -> str:
                     border-color var(--ta-fast) var(--ta-ease);
     }}
 
-    .stButton > button:hover,
-    .stDownloadButton > button:hover,
-    .stFormSubmitButton > button:hover {{
+    [data-testid="stBaseButton-primary"]:hover,
+    [data-testid="stBaseButton-secondary"]:hover,
+    [data-testid="stBaseButton-tertiary"]:hover {{
         transform: translateY(-1px);
         border-color: color-mix(in srgb, var(--ta-accent) 55%, transparent);
         box-shadow: var(--ta-shadow);
     }}
 
-    .stButton > button:active,
-    .stDownloadButton > button:active,
-    .stFormSubmitButton > button:active {{
+    [data-testid="stBaseButton-primary"]:active,
+    [data-testid="stBaseButton-secondary"]:active,
+    [data-testid="stBaseButton-tertiary"]:active {{
         transform: translateY(0);
     }}
 
-    .stButton > button[kind="primary"],
-    .stDownloadButton > button[kind="primary"],
-    .stFormSubmitButton > button[kind="primary"] {{
+    [data-testid="stBaseButton-primary"] {{
         background: linear-gradient(135deg, var(--ta-accent) 0%, var(--ta-accent-strong) 100%) !important;
         color: var(--ta-accent-contrast) !important;
         border: 1px solid color-mix(in srgb, var(--ta-accent) 60%, transparent) !important;
     }}
 
-    .stButton > button[kind="primary"]:hover,
-    .stDownloadButton > button[kind="primary"]:hover,
-    .stFormSubmitButton > button[kind="primary"]:hover {{
+    [data-testid="stBaseButton-primary"]:hover {{
         box-shadow: 0 10px 28px color-mix(in srgb, var(--ta-accent) 45%, transparent);
     }}
 
@@ -435,44 +496,45 @@ def _build_css(mode: str) -> str:
     /* =====================================================================
        9. RADIO & CHECKBOX
        ===================================================================== */
-    .stRadio [role="radiogroup"][style*="row"] {{
-        display: flex;
-        flex-wrap: wrap;
+    /* Streamlit sets horizontal vs vertical layout via its own internal
+       classes, not an inline style — there's no reliable way to select on
+       orientation, so this styling is written to work for BOTH: a "row"
+       radiogroup reads as a segmented pill bar, a "column" one (e.g. the
+       sidebar field selector) reads as a rounded glass nav list. Streamlit's
+       own flex-direction (already row or column) decides which it becomes. */
+    .stRadio [role="radiogroup"] {{
         gap: 0.35rem;
         background: var(--ta-glass);
-        border: 1px solid var(--ta-border);
-        border-radius: var(--ta-radius-pill);
+        border-radius: var(--ta-radius-md);
         padding: 0.3rem;
-        width: fit-content;
+        box-shadow: var(--ta-shadow-sm), var(--ta-inset);
     }}
 
-    .stRadio [role="radiogroup"][style*="row"] label {{
+    .stRadio [role="radiogroup"] label {{
         margin: 0 !important;
         padding: 0.45rem 1rem;
         border-radius: var(--ta-radius-pill);
         transition: background var(--ta-fast) var(--ta-ease), color var(--ta-fast) var(--ta-ease);
     }}
 
-    .stRadio [role="radiogroup"][style*="row"] label:hover {{
+    .stRadio [role="radiogroup"] label:hover {{
         background: var(--ta-glass-strong);
     }}
 
-    .stRadio [role="radiogroup"][style*="row"] label:has(input:checked) {{
+    .stRadio [role="radiogroup"] label:has(input:checked) {{
         background: linear-gradient(135deg, var(--ta-accent) 0%, var(--ta-accent-strong) 100%);
     }}
 
-    .stRadio [role="radiogroup"][style*="row"] label:has(input:checked) div {{
+    .stRadio [role="radiogroup"] label:has(input:checked) [data-testid="stMarkdownContainer"] p {{
         color: var(--ta-accent-contrast) !important;
     }}
 
-    .stRadio [role="radiogroup"]:not([style*="row"]) label {{
-        border-radius: var(--ta-radius-sm);
-        padding: 0.4rem 0.6rem;
-        transition: background var(--ta-fast) var(--ta-ease);
-    }}
-
-    .stRadio [role="radiogroup"]:not([style*="row"]) label:hover {{
-        background: var(--ta-glass);
+    /* The pill background communicates selection state — the radio dot
+       (BaseWeb renders it as a styled div, not the native input) is
+       redundant for a segmented look, so it's hidden. */
+    .stRadio [role="radiogroup"] label input[type="radio"],
+    .stRadio [role="radiogroup"] label > div:first-child {{
+        display: none;
     }}
 
     .stCheckbox [data-baseweb="checkbox"] span:first-child {{
@@ -500,10 +562,10 @@ def _build_css(mode: str) -> str:
        ===================================================================== */
     .stTabs [data-baseweb="tab-list"] {{
         background: var(--ta-glass);
-        border: 1px solid var(--ta-border);
         border-radius: var(--ta-radius-pill);
         padding: 0.3rem;
         gap: 0.2rem;
+        box-shadow: var(--ta-shadow-sm), var(--ta-inset);
     }}
 
     .stTabs [data-baseweb="tab"] {{
@@ -511,18 +573,22 @@ def _build_css(mode: str) -> str:
         font-size: 0.85rem;
         font-weight: 600;
         padding: 0.5rem 1.1rem;
-        color: var(--ta-text-secondary) !important;
-        transition: background var(--ta-fast) var(--ta-ease), color var(--ta-fast) var(--ta-ease);
+        color: var(--ta-text-tertiary) !important;
+        transition: background var(--ta-fast) var(--ta-ease),
+                    color var(--ta-fast) var(--ta-ease),
+                    box-shadow var(--ta-fast) var(--ta-ease);
     }}
 
     .stTabs [data-baseweb="tab"]:hover {{
         background: var(--ta-glass-strong);
         color: var(--ta-text) !important;
+        box-shadow: 0 0 0 1px color-mix(in srgb, var(--ta-accent) 30%, transparent);
     }}
 
     .stTabs [aria-selected="true"] {{
         background: linear-gradient(135deg, var(--ta-accent) 0%, var(--ta-accent-strong) 100%) !important;
         color: var(--ta-accent-contrast) !important;
+        box-shadow: 0 6px 18px color-mix(in srgb, var(--ta-accent) 40%, transparent) !important;
     }}
 
     .stTabs [data-baseweb="tab-highlight"],
@@ -535,18 +601,17 @@ def _build_css(mode: str) -> str:
        ===================================================================== */
     [data-testid="stMetric"] {{
         background: var(--ta-glass);
-        border: 1px solid var(--ta-border);
         border-radius: var(--ta-radius-md);
         padding: 0.9rem 1.1rem !important;
         backdrop-filter: blur(16px);
         -webkit-backdrop-filter: blur(16px);
-        box-shadow: var(--ta-shadow-sm);
+        box-shadow: var(--ta-shadow-sm), var(--ta-inset);
         transition: transform var(--ta-med) var(--ta-ease), box-shadow var(--ta-med) var(--ta-ease);
     }}
 
     [data-testid="stMetric"]:hover {{
-        transform: translateY(-2px);
-        box-shadow: var(--ta-shadow);
+        transform: translateY(-2px) scale(1.01);
+        box-shadow: var(--ta-shadow), var(--ta-inset);
     }}
 
     [data-testid="stMetricLabel"] {{
@@ -564,10 +629,11 @@ def _build_css(mode: str) -> str:
        ===================================================================== */
     [data-testid="stExpander"] {{
         background: var(--ta-glass);
-        border: 1px solid var(--ta-border) !important;
+        border: none !important;
         border-radius: var(--ta-radius-md) !important;
         backdrop-filter: blur(16px);
         -webkit-backdrop-filter: blur(16px);
+        box-shadow: var(--ta-shadow-sm), var(--ta-inset);
         overflow: hidden;
     }}
 
@@ -683,16 +749,19 @@ def get_theme_mode(default: str = "dark") -> str:
     choice = st.session_state.get("ta_theme_choice")
     if choice is None:
         return default
-    return "dark" if "Dark" in choice else "light"
+    return "dark" if choice == "🌙" else "light"
 
 
 def render_theme_toggle() -> str:
-    """Renders the sidebar Appearance toggle and returns the active mode."""
+    """Renders a compact icon-only Appearance toggle and returns the active
+    mode. Deliberately narrow (emoji-only, no text) so it fits beside the
+    hero card in a slim column instead of needing dedicated sidebar space.
+    """
     choice = st.radio(
         "Appearance",
-        options=["🌙 Dark", "☀️ Light"],
+        options=["🌙", "☀️"],
         horizontal=True,
         label_visibility="collapsed",
         key="ta_theme_choice",
     )
-    return "dark" if "Dark" in choice else "light"
+    return "dark" if choice == "🌙" else "light"
