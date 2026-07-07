@@ -41,21 +41,14 @@ from src.report_generator import generate_pdf, generate_audit_json, generate_tim
 # ---------------------------------------------------------------------------
 # Page config
 # ---------------------------------------------------------------------------
-st.set_page_config(layout="wide", page_title="terra-audit Platform")
+st.set_page_config(layout="wide", page_title="Terra Audit Platform")
 
 _theme_mode = get_theme_mode()
 inject_theme(_theme_mode)
 
-st.markdown("""
-    <div class="ta-hero">
-        <span class="ta-hero-badge">🛰️ Live Pipeline</span>
-        <h1 class="ta-hero-title">terra-audit // High-Fidelity Processing Pipeline</h1>
-        <p class="ta-hero-subtitle">Verra VM0051 Digital Compliance Sandbox — Phase 2 Engine Core</p>
-    </div>
-""", unsafe_allow_html=True)
-
 # ---------------------------------------------------------------------------
 # Module initialisation (cached for the lifetime of the Streamlit process)
+# Moved above the hero so the hero can show real engine status on first paint.
 # ---------------------------------------------------------------------------
 @st.cache_resource
 def init_modules():
@@ -65,6 +58,60 @@ def init_modules():
         return None, None, None, str(exc)
 
 engine, gate, carbon_engine, init_error = init_modules()
+
+# ---------------------------------------------------------------------------
+# Load field list
+# Moved above the hero so the hero can show a real field count on first paint.
+# ---------------------------------------------------------------------------
+with get_db_connection() as conn:
+    fields = conn.execute(
+        "SELECT field_id, name, district FROM fields ORDER BY field_id"
+    ).fetchall()
+
+field_display = {f["field_id"]: f for f in fields}
+
+# ---------------------------------------------------------------------------
+# Hero — real KPIs only, no fabricated placeholders
+# ---------------------------------------------------------------------------
+_engine_ok = init_error is None
+_badge_class = "ta-hero-badge" if _engine_ok else "ta-hero-badge warn"
+_badge_text = "🛰️ Engine Connected" if _engine_ok else "⚠️ Engine Offline"
+
+_last_run_at = st.session_state.get("signal_last_run_at")
+if _last_run_at:
+    _mins_ago = int((datetime.datetime.now() - _last_run_at).total_seconds() // 60)
+    _last_run_label = "just now" if _mins_ago < 1 else f"{_mins_ago} min ago"
+else:
+    _last_run_label = "Not run yet"
+
+_export_cr = st.session_state.get("export_cr")
+_credits_label = f"{_export_cr['final_issuance']:.2f} tCO2e" if _export_cr else "—"
+
+_col_hero, _col_theme_toggle = st.columns([12, 1], vertical_alignment="top")
+with _col_hero:
+    st.markdown(f"""
+        <div class="ta-hero">
+            <span class="{_badge_class}">{_badge_text}</span>
+            <h1 class="ta-hero-title">Terra Audit</h1>
+            <p class="ta-hero-subtitle">AWD irrigation detection via Sentinel-1 SAR and Verra VM0051 Tier 2 carbon verification for rice paddies in Bangladesh / South Asia</p>
+            <div class="ta-hero-stats">
+                <div class="ta-stat">
+                    <div class="ta-stat-value">{len(fields)}</div>
+                    <div class="ta-stat-label">Fields</div>
+                </div>
+                <div class="ta-stat">
+                    <div class="ta-stat-value">{_last_run_label}</div>
+                    <div class="ta-stat-label">Last Analysis</div>
+                </div>
+                <div class="ta-stat">
+                    <div class="ta-stat-value accent">{_credits_label}</div>
+                    <div class="ta-stat-label">Credits Issued</div>
+                </div>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+with _col_theme_toggle:
+    render_theme_toggle()
 
 if init_error:
     st.error(f"Failed to start: {init_error}")
@@ -148,9 +195,6 @@ field_display = {f["field_id"]: f for f in fields}
 # Sidebar — Field Selector or Registration Form
 # ---------------------------------------------------------------------------
 with st.sidebar:
-    render_theme_toggle()
-    st.markdown("---")
-
     pending_sidebar = st.session_state.get("pending_field_geom")
 
     if pending_sidebar:
@@ -555,6 +599,7 @@ with tab_signal:
                 season_from_phenology = True
 
             # Persist signal results so the chart/table survive tab switches
+            st.session_state["signal_last_run_at"]    = datetime.datetime.now()
             st.session_state["signal_df"]             = df_final
             st.session_state["signal_field_id"]       = selected_id
             st.session_state["signal_cache_source"]   = cache_source
