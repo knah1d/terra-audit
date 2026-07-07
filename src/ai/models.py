@@ -77,6 +77,9 @@ def train_and_evaluate(model_name: str, X, y, k: int = 3) -> dict:
     splitter, k_used, stratified = _make_cv_splitter(y_encoded, k)
 
     y_pred = cross_val_predict(model_factory(), X, y_encoded, cv=splitter)
+    y_proba = cross_val_predict(
+        model_factory(), X, y_encoded, cv=splitter, method="predict_proba"
+    )
 
     final_model = model_factory()
     final_model.fit(X, y_encoded)
@@ -87,6 +90,7 @@ def train_and_evaluate(model_name: str, X, y, k: int = 3) -> dict:
         "stratified": stratified,
         "y_true": y_encoded,
         "y_pred": y_pred,
+        "y_proba": y_proba,
         "classes": LABEL_CLASSES,
         "model": final_model,
         "feature_names": list(X.columns),

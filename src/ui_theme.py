@@ -622,6 +622,25 @@ def _build_css(mode: str) -> str:
 
     [data-testid="stMetricValue"] {{
         font-weight: 700 !important;
+        /* Shrinks slightly so typical values (e.g. "2026-01-09") fit on one
+           line within a quarter-width column; wrap rule below still catches
+           anything longer instead of letting it get cut off. */
+        font-size: clamp(1rem, 2.1vw, 1.5rem) !important;
+    }}
+
+    /* Streamlit truncates an overflowing metric value with an ellipsis on
+       an inner child node, not on stMetricValue itself — target both the
+       node and every descendant so the override actually reaches whichever
+       element carries the truncation styles across Streamlit versions. */
+    [data-testid="stMetricValue"],
+    [data-testid="stMetricValue"] * {{
+        white-space: normal !important;
+        overflow: visible !important;
+        text-overflow: unset !important;
+        overflow-wrap: break-word !important;
+        word-break: break-word !important;
+        line-height: 1.25 !important;
+        max-width: none !important;
     }}
 
     /* =====================================================================

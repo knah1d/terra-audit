@@ -38,6 +38,10 @@ from src.threshold_gate import AdaptiveAWDGate
 from src.carbon_calculator import CarbonAssetEngine
 from src.report_generator import generate_pdf, generate_audit_json, generate_timeseries_csv
 from src.ai.predictor import predict_awd_states
+from src.ai.dataset_builder import load_dataset
+from src.ai.feature_engineering import build_features
+from src.ai.models import train_and_evaluate
+from src.ai import evaluate as ai_evaluate
 
 # ---------------------------------------------------------------------------
 # Page config
@@ -356,10 +360,11 @@ else:
 # ---------------------------------------------------------------------------
 # Tab layout
 # ---------------------------------------------------------------------------
-tab_map, tab_signal, tab_carbon = st.tabs([
+tab_map, tab_signal, tab_carbon, tab_validation = st.tabs([
     "🌍 Spatial Asset Inspection",
     "📈 Statistical Signal Analytics",
     "💰 Carbon Asset Ledger",
+    "🤖 AI Validation",
 ])
 
 # ===========================================================================
@@ -687,14 +692,28 @@ with tab_signal:
     if _sig_df is not None and _sig_field == selected_id:
         _cache_src       = st.session_state["signal_cache_source"]
         _total_awd       = st.session_state["signal_total_awd"]
-        _sowing_str      = st.session_state["signal_sowing_date"]
-        _harvest_str     = st.session_state["signal_harvest_date"]
+        def _fmt_ddmmyyyy(date_str):
+            try:
+                return datetime.datetime.strptime(date_str, "%Y-%m-%d").strftime("%d-%m-%Y")
+            except (ValueError, TypeError):
+                return date_str
+
+        _sowing_str      = _fmt_ddmmyyyy(st.session_state["signal_sowing_date"])
+        _harvest_str     = _fmt_ddmmyyyy(st.session_state["signal_harvest_date"])
         _season_len      = st.session_state["signal_season_length"]
         _from_phenology  = st.session_state["signal_from_phenology"]
         _season_len_str  = f"{_season_len} days" if _from_phenology else "120 days (fallback)"
         _detector_used   = st.session_state.get("signal_detector_used", "Threshold Gate (rule-based)")
         _model_fallback  = st.session_state.get("signal_model_fallback_msg")
         _avg_confidence  = _sig_df["confidence"].mean() if "confidence" in _sig_df.columns else None
+        # st.metric truncates with an ellipsis once the value overflows its
+        # card — the full descriptive labels ("... (AI baseline)") are too
+        # long for a 1/5-width column, so show a short form here only.
+        _DETECTOR_SHORT_LABEL = {
+            "Threshold Gate (rule-based)": "Threshold Gate",
+            "Random Forest (AI baseline)": "Random Forest",
+            "XGBoost (AI baseline)": "XGBoost",
+        }
 
         with col_pipeline:
             st.caption(f"Data source: `{_cache_src}`")
@@ -705,13 +724,13 @@ with tab_signal:
                 )
             if _model_fallback:
                 st.warning(f"⚠️ {_model_fallback}")
-            _c1, _c2, _c3, _c4, _c5 = st.columns(5)
+            _c1, _c2, _c3, _c4 = st.columns(4)
             _c1.metric("AWD Events",    _total_awd)
             _c2.metric("Sowing Date",   _sowing_str)
             _c3.metric("Harvest Date",  _harvest_str)
             _c4.metric("Season Length", _season_len_str)
-            _c5.metric(
-                "Detector Used", _detector_used,
+            st.metric(
+                "Detector Used", _DETECTOR_SHORT_LABEL.get(_detector_used, _detector_used),
                 delta=f"{_avg_confidence:.0%} avg confidence" if _avg_confidence is not None else None,
                 delta_color="off",
             )
@@ -1093,4 +1112,150 @@ with tab_carbon:
         st.info(
             "ℹ️ Run the **Analytics Engine** (Signal tab) to auto-populate fields, "
             "or enter parameters manually above and click **Calculate Carbon Credits**."
+        )
+
+# ===========================================================================
+# TAB 4 — AI VALIDATION
+# ===========================================================================
+with tab_validation:
+    st.markdown("#### 🤖 AI Baseline Validation")
+    st.caption(
+        "Cross-validated performance of the Random Forest and XGBoost "
+        "baselines trained in `src/ai/`."
+    )
+    st.info(
+        "⚠️ **Labels come from the Threshold Gate itself** — there is no "
+        "independently verified AWD ground truth in this project yet. The "
+        "metrics below measure how well each ML model reproduces the "
+        "Threshold Gate's own decisions on held-out folds, not accuracy "
+        "against real-world irrigation truth. Threshold Gate is not listed "
+        "as a row below for that reason — comparing it to the labels it "
+        "defines would trivially score 100%."
+    )
+
+    run_validation = st.button("Run Validation", type="primary")
+
+    if run_validation:
+        _val_dataset = load_dataset()
+        if _val_dataset.empty:
+            st.warning(
+                "No training dataset found. Run `python -m src.ai.dataset_builder` "
+                "first, then return here."
+            )
+        else:
+            _val_X, _val_y = build_features(_val_dataset)
+            _val_results = {}
+            for _mname in ["random_forest", "xgboost"]:
+                _val_result = train_and_evaluate(_mname, _val_X, _val_y)
+                _val_results[_mname] = {
+                    "result": _val_result,
+                    "summary": ai_evaluate.summarize_fold_predictions(_val_result),
+                }
+            st.session_state["validation_results"] = _val_results
+
+    _val_results = st.session_state.get("validation_results")
+
+    if _val_results:
+        _MODEL_LABELS = {"random_forest": "Random Forest", "xgboost": "XGBoost"}
+
+        _comparison_rows = {}
+        _any_unstratified = False
+        for _mname, _bundle in _val_results.items():
+            _s = _bundle["summary"]
+            _comparison_rows[_MODEL_LABELS[_mname]] = {
+                "Threshold Agreement": f"{_s['threshold_agreement_score']:.1%}",
+                "Precision (macro)": f"{_s['macro_avg']['precision']:.2f}",
+                "Recall (macro)": f"{_s['macro_avg']['recall']:.2f}",
+                "F1 (macro)": f"{_s['macro_avg']['f1']:.2f}",
+                "CV Folds": _s["k_used"],
+                "Stratified": "Yes" if _s["stratified"] else "No",
+            }
+            _any_unstratified = _any_unstratified or not _s["stratified"]
+
+        st.markdown("##### Model Comparison")
+        st.dataframe(pd.DataFrame(_comparison_rows).T, use_container_width=True)
+
+        if _any_unstratified:
+            st.warning(
+                "⚠️ One or more models used unstratified CV folds (a class has "
+                "too few samples to stratify) — minority-class metrics below "
+                "are provisional until more labeled data accumulates."
+            )
+
+        for _mname, _bundle in _val_results.items():
+            _result  = _bundle["result"]
+            _summary = _bundle["summary"]
+            _label   = _MODEL_LABELS[_mname]
+
+            with st.expander(f"{_label} — Detailed Metrics", expanded=False):
+                st.markdown("**Per-Class Metrics**")
+                st.dataframe(
+                    pd.DataFrame(_summary["per_class"]).T, use_container_width=True
+                )
+
+                _cm = _summary["confusion_matrix"]
+                _fig_cm = go.Figure(data=go.Heatmap(
+                    z=_cm["matrix"],
+                    x=_cm["labels"],
+                    y=_cm["labels"],
+                    colorscale="Teal",
+                    texttemplate="%{z}",
+                    showscale=False,
+                ))
+                _fig_cm.update_layout(
+                    template="plotly_dark" if _theme_mode == "dark" else "plotly_white",
+                    title="Confusion Matrix (predicted vs. threshold-gate label)",
+                    xaxis_title="Predicted",
+                    yaxis_title="Threshold-Gate Label",
+                    height=380,
+                    margin=dict(t=50),
+                )
+                st.plotly_chart(_fig_cm, use_container_width=True)
+
+                _fi = ai_evaluate.feature_importance(_result)
+                _fig_fi = go.Figure(go.Bar(
+                    x=list(_fi.values())[::-1],
+                    y=list(_fi.keys())[::-1],
+                    orientation="h",
+                    marker=dict(color="#00ffcc"),
+                ))
+                _fig_fi.update_layout(
+                    template="plotly_dark" if _theme_mode == "dark" else "plotly_white",
+                    title="Feature Importance",
+                    height=380,
+                    margin=dict(t=50, l=140),
+                )
+                st.plotly_chart(_fig_fi, use_container_width=True)
+
+                _roc = ai_evaluate.roc_curve_data(_result)
+                _fig_roc = go.Figure()
+                for _cls, _curve in _roc.items():
+                    _auc_label = f"{_curve['auc']:.2f}" if _curve["auc"] is not None else "N/A"
+                    _fig_roc.add_trace(go.Scatter(
+                        x=_curve["fpr"], y=_curve["tpr"],
+                        mode="lines", name=f"{_cls} (AUC={_auc_label})",
+                    ))
+                _fig_roc.add_trace(go.Scatter(
+                    x=[0, 1], y=[0, 1], mode="lines", name="Chance",
+                    line=dict(dash="dash", color="gray"),
+                ))
+                _fig_roc.update_layout(
+                    template="plotly_dark" if _theme_mode == "dark" else "plotly_white",
+                    title="ROC Curve (one-vs-rest)",
+                    xaxis_title="False Positive Rate",
+                    yaxis_title="True Positive Rate",
+                    height=380,
+                    margin=dict(t=50),
+                )
+                st.plotly_chart(_fig_roc, use_container_width=True)
+                st.caption(
+                    "⚠️ Curves for classes with very few samples today (e.g. "
+                    "`drydown`) are numerically valid but not statistically "
+                    "meaningful — read them as illustrative, not conclusive."
+                )
+    elif not run_validation:
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.info(
+            "Click **Run Validation** to cross-validate the Random Forest and "
+            "XGBoost baselines against the current AI training dataset."
         )
