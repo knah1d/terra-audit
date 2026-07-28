@@ -32,12 +32,19 @@ def initialize_database():
                 district         TEXT NOT NULL,
                 geojson_geometry TEXT NOT NULL,
                 area_ha          REAL,
+                field_type       TEXT NOT NULL DEFAULT 'rice_awd',
                 created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        # Migration: add area_ha to existing DBs that predate this column
+        # Migration: add area_ha/field_type to existing DBs that predate these columns
         try:
             conn.execute("ALTER TABLE fields ADD COLUMN area_ha REAL")
+        except Exception:
+            pass
+        try:
+            conn.execute(
+                "ALTER TABLE fields ADD COLUMN field_type TEXT NOT NULL DEFAULT 'rice_awd'"
+            )
         except Exception:
             pass
         # PK covers field + observation date + the exact analysis window.
