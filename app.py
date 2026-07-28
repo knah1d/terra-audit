@@ -34,8 +34,7 @@ def render_preview_map(feature: dict, key: str, height: int = 400):
 
 from src.database import get_db_connection, check_cache, save_cache
 from src.data_engine import SpatialDataEngine
-from src.threshold_gate import AdaptiveAWDGate
-from src.carbon_calculator import CarbonAssetEngine
+from src.field_types import build_detector, build_methodology
 from src.report_generator import generate_pdf, generate_audit_json, generate_timeseries_csv
 from src.ai.predictor import predict_awd_states
 from src.ai.dataset_builder import load_dataset
@@ -58,11 +57,11 @@ inject_theme(_theme_mode)
 @st.cache_resource
 def init_modules():
     try:
-        return SpatialDataEngine(), AdaptiveAWDGate(), CarbonAssetEngine(), None
+        return SpatialDataEngine(), None
     except Exception as exc:
-        return None, None, None, str(exc)
+        return None, str(exc)
 
-engine, gate, carbon_engine, init_error = init_modules()
+engine, init_error = init_modules()
 
 # ---------------------------------------------------------------------------
 # Load field list
@@ -70,7 +69,7 @@ engine, gate, carbon_engine, init_error = init_modules()
 # ---------------------------------------------------------------------------
 with get_db_connection() as conn:
     fields = conn.execute(
-        "SELECT field_id, name, district FROM fields ORDER BY field_id"
+        "SELECT field_id, name, district, field_type FROM fields ORDER BY field_id"
     ).fetchall()
 
 field_display = {f["field_id"]: f for f in fields}
@@ -191,7 +190,7 @@ if init_error:
 # ---------------------------------------------------------------------------
 with get_db_connection() as conn:
     fields = conn.execute(
-        "SELECT field_id, name, district FROM fields ORDER BY field_id"
+        "SELECT field_id, name, district, field_type FROM fields ORDER BY field_id"
     ).fetchall()
 
 field_display = {f["field_id"]: f for f in fields}
@@ -240,10 +239,10 @@ with st.sidebar:
                 with get_db_connection() as conn:
                     conn.execute(
                         "INSERT INTO fields "
-                        "(field_id, name, district, geojson_geometry, area_ha) "
-                        "VALUES (?,?,?,?,?)",
+                        "(field_id, name, district, geojson_geometry, area_ha, field_type) "
+                        "VALUES (?,?,?,?,?,?)",
                         (new_fid, new_fname.strip(), new_district.strip(),
-                         json.dumps(fc), computed_ha),
+                         json.dumps(fc), computed_ha, "rice_awd"),
                     )
                     conn.commit()
                 st.session_state["map_version"] = st.session_state.get("map_version", 0) + 1
@@ -356,6 +355,16 @@ if selected_id:
 else:
     geom       = None
     field_area = 1.0
+
+# ---------------------------------------------------------------------------
+# Resolve detector/methodology engine for the selected field's type.
+# Only "rice_awd" is registered today (src/field_types/rice_awd.py); this
+# dispatch is what lets a future field type plug in without touching the
+# tabs below.
+# ---------------------------------------------------------------------------
+selected_field_type = field_display[selected_id]["field_type"] if selected_id else "rice_awd"
+gate          = build_detector(selected_field_type)
+carbon_engine = build_methodology(selected_field_type)
 
 # ---------------------------------------------------------------------------
 # Tab layout
