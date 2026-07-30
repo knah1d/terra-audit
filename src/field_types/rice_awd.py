@@ -11,4 +11,5 @@ register_field_type(
     label="Rice — Alternate Wetting & Drying (VM0051)",
     detector_factory=AdaptiveAWDGate,
     methodology_factory=CarbonAssetEngine,
+    uses_sar=True,
 )

@@ -1,10 +1,16 @@
+::: {custom-style="Title"}
+TERRA-AUDIT
+:::
+
+::: {custom-style="Subtitle"}
+AI-ASSISTED DIGITAL MRV PLATFORM FOR AWD RICE IRRIGATION CARBON CREDITS
+:::
+
+::: {custom-style="Subtitle"}
+**SOFTWARE REQUIREMENTS SPECIFICATION & ANALYSIS**
+:::
+
 <div align="center">
-
-# TERRA-AUDIT
-
-## AI-ASSISTED DIGITAL MRV PLATFORM FOR AWD RICE IRRIGATION CARBON CREDITS
-
-### SOFTWARE REQUIREMENTS SPECIFICATION & ANALYSIS
 
 <br>
 
@@ -35,44 +41,44 @@ University of Dhaka
 # Table of Contents
 
 - [1. Introduction](#1-introduction)
-  - 1.1 Purpose
-  - 1.2 Intended Audience
-  - 1.3 Usage Scenarios
-  - 1.4 Conclusion
+  - [1.1 Purpose](#11-purpose)
+  - [1.2 Intended Audience](#12-intended-audience)
+  - [1.3 Usage Scenarios](#13-usage-scenarios)
+  - [1.4 Conclusion](#14-conclusion)
 - [2. Inception](#2-inception)
-  - 2.1 Understanding the Problem
-  - 2.2 Icebreaking
-  - 2.3 Identifying the Stakeholders
-  - 2.4 Stakeholder Viewpoints
-  - 2.5 Working Towards Collaboration
-  - 2.6 Elicitation of Terra-Audit
+  - [2.1 Understanding the Problem](#21-understanding-the-problem)
+  - [2.2 Icebreaking](#22-icebreaking)
+  - [2.3 Identifying the Stakeholders](#23-identifying-the-stakeholders)
+  - [2.4 Stakeholder Viewpoints](#24-stakeholder-viewpoints)
+  - [2.5 Working Towards Collaboration](#25-working-towards-collaboration)
+  - [2.6 Elicitation of Terra-Audit](#26-elicitation-of-terra-audit)
 - [3. Quality Function Deployment](#3-quality-function-deployment)
-  - 3.1 Normal Requirements
-  - 3.2 Exciting Requirements
+  - [3.1 Normal Requirements](#31-normal-requirements)
+  - [3.2 Exciting Requirements](#32-exciting-requirements)
 - [4. User Story](#4-user-story)
 - [5. Scenario Based Modeling](#5-scenario-based-modeling)
-  - 5.1 Use Case Diagram (Level 0, 1, 1.1, 1.1.1, 1.1.2, 1.2 – 1.6)
-  - 5.2 Activity Diagram (Level 1, 1.1, 1.1.1, 1.2 – 1.6)
+  - [5.1 Use Case Diagram](#51-use-case-diagram)
+  - [5.2 Activity Diagram](#52-activity-diagram)
 - [6. Data Based Modeling](#6-data-based-modeling)
-  - 6.1 Noun Identification
-  - 6.2 Final Data Objects
-  - 6.3 Relations
-  - 6.4 ER Diagram
-  - 6.5 Schema Diagram
+  - [6.1 Noun Identification](#61-noun-identification)
+  - [6.2 Final Data Objects](#62-final-data-objects)
+  - [6.3 Relations](#63-relations)
+  - [6.4 ER Diagram](#64-er-diagram)
+  - [6.5 Schema Diagram](#65-schema-diagram)
 - [7. Class Based Diagram](#7-class-based-diagram)
-  - 7.1 Identified Nouns
-  - 7.2 Identified Verbs
-  - 7.3 General Classification
-  - 7.4 Selection Criteria
-  - 7.5 Class Card
-  - 7.8 CRC Diagram
+  - [7.1 Identified Nouns](#71-identified-nouns)
+  - [7.2 Identified Verbs](#72-identified-verbs)
+  - [7.3 General Classification](#73-general-classification)
+  - [7.4 Selection Criteria](#74-selection-criteria)
+  - [7.5 Class Card](#75-class-card)
+  - [7.6 CRC Diagram](#76-crc-diagram)
 - [8. Behavioral Diagram](#8-behavioral-diagram)
-  - 8.1 Event Table
-  - 8.2 State Transition Diagram
-  - 8.3 Sequence Diagram
+  - [8.1 Event Table](#81-event-table)
+  - [8.2 State Transition Diagram](#82-state-transition-diagram)
+  - [8.3 Sequence Diagram](#83-sequence-diagram)
 - [9. Data Flow Diagram](#9-data-flow-diagram)
-  - 9.1 Level 0: Terra-Audit
-  - 9.2 Level 1: Terra-Audit
+  - [9.1 Level 0: Terra-Audit](#91-level-0-terra-audit)
+  - [9.2 Level 1: Terra-Audit](#92-level-1-terra-audit)
 - [10. References](#10-references)
 
 ---
@@ -748,7 +754,7 @@ information that must be understood by the software. A data object can
 be an external entity, a thing, an occurrence, a role, an organizational
 unit, a place or a structure.
 
-## 6.1 Noun Identification:
+## 6.1 Noun Identification
 
 | Serial | Nouns | Problem/Solution space | Attributes |
 |---|---|---|---|
@@ -803,7 +809,7 @@ unit, a place or a structure.
 | 49 | Leakage screen | S | |
 | 50 | Final issuance | S | |
 
-## 6.2 Final Data Objects:
+## 6.2 Final Data Objects
 
 1. Field
 2. MonitoringWindow
@@ -815,13 +821,13 @@ unit, a place or a structure.
 8. AIModelArtifact
 9. EvidencePackage
 
-## 6.3 Relations:
+## 6.3 Relations
 
 ![Fig 19](diagrams/fig19.png)
 
 **Fig 19:** Entity Relation
 
-## 6.4 ER DIAGRAM:
+## 6.4 ER Diagram
 
 The persisted entities live in SQLite (`data/project_store.db`); model
 artifacts are persisted as `joblib` files under `data/ai_models/`.
@@ -832,7 +838,7 @@ on demand and are not stored as tables.
 
 **Fig 20:** ER Diagram
 
-## 6.5 Schema Diagram:
+## 6.5 Schema Diagram
 
 | Data Object | Attribute | Type |
 |---|---|---|
@@ -919,7 +925,7 @@ manipulate, the operations that will be applied to the objects,
 relationships between the objects and the collaborations that occur
 between the classes that are defined.
 
-## 7.1 Identified Nouns:
+## 7.1 Identified Nouns
 
 | Serial | Noun |
 |---|---|
@@ -969,7 +975,7 @@ between the classes that are defined.
 | 44 | JSON audit record |
 | 45 | CSV export |
 
-## 7.2 Identified Verbs:
+## 7.2 Identified Verbs
 
 | Serial | Verbs |
 |---|---|
@@ -1017,7 +1023,7 @@ between the classes that are defined.
 | 42 | summarize |
 | 43 | visualize |
 
-## 7.3 General Classification:
+## 7.3 General Classification
 
 Candidate classes are categorized based on the seven general
 classification. The analysis classes manifest themselves in one of the
@@ -1075,7 +1081,7 @@ two or more characteristics.
 | 37 | SQLite project store | 1, 6 |
 | 38 | Interactive map | 2, 6 |
 
-## 7.4 Selection Criteria:
+## 7.4 Selection Criteria
 
 The candidate classes are then selected as classes by six Selection
 Criteria. A candidate class generally becomes a class when it fulfills
@@ -1117,7 +1123,7 @@ Additional classes required:
 | 10 | AWDPredictor |
 | 11 | ModelEvaluator |
 
-## 7.5 Class Card:
+## 7.5 Class Card
 
 ### SpatialDataEngine
 
@@ -1229,7 +1235,7 @@ Additional classes required:
 |---|---|
 | Compute per-class precision / recall / F1 and confusion matrix from out-of-fold predictions; Report threshold-agreement score (explicitly not ground-truth accuracy); Provide feature importance and one-vs-rest ROC data | ModelRegistry, Streamlit UI |
 
-## 7.8 CRC Diagram:
+## 7.6 CRC Diagram
 
 **Diagram Id: 1**
 
@@ -1251,7 +1257,7 @@ Additional classes required:
 
 # 8. Behavioral Diagram
 
-## 8.1 Event Table:
+## 8.1 Event Table
 
 | Serial | Event | Initiator | Associated Methods |
 |---|---|---|---|
