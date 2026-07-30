@@ -32,10 +32,17 @@ def render_preview_map(feature: dict, key: str, height: int = 400):
     ).add_to(m)
     st_folium(m, height=height, use_container_width=True, key=key, returned_objects=[])
 
-from src.database import get_db_connection, check_cache, save_cache
+from src.database import (
+    get_db_connection, check_cache, save_cache,
+    save_alm_practice_schedule, get_alm_practice_schedule,
+    save_soc_measurements, get_soc_measurements, ALM_PRACTICE_COLUMNS,
+)
 from src.data_engine import SpatialDataEngine
-from src.field_types import build_detector, build_methodology
-from src.report_generator import generate_pdf, generate_audit_json, generate_timeseries_csv
+from src.field_types import build_detector, build_methodology, field_uses_sar
+from src.report_generator import (
+    generate_pdf, generate_audit_json, generate_timeseries_csv,
+    generate_pdf_alm, generate_audit_json_alm, generate_alm_data_csv,
+)
 from src.ai.predictor import predict_awd_states
 from src.ai.dataset_builder import load_dataset
 from src.ai.feature_engineering import build_features
@@ -227,6 +234,19 @@ with st.sidebar:
         new_fid      = st.text_input("Field ID",   value=f"F-{next_num}", key="nf_id")
         new_fname    = st.text_input("Field Name",                          key="nf_name")
         new_district = st.text_input("District",                            key="nf_district")
+        FIELD_TYPE_CHOICES = {
+            "🌾 Rice — Alternate Wetting & Drying (VM0051)": "rice_awd",
+            "🌱 Cropland — Improved Agricultural Land Management (VM0042)": "cropland_alm_vm0042",
+        }
+        new_ftype_label = st.selectbox(
+            "Field Type / Methodology",
+            options=list(FIELD_TYPE_CHOICES.keys()),
+            key="nf_ftype",
+            help="Determines which detector and carbon methodology this field "
+                 "uses. VM0042 fields must be non-wetland cropland — not "
+                 "applicable to flooded rice paddies.",
+        )
+        new_ftype = FIELD_TYPE_CHOICES[new_ftype_label]
         st.markdown("")
 
         if st.button("💾 Save Field", type="primary", use_container_width=True):
@@ -242,7 +262,7 @@ with st.sidebar:
                         "(field_id, name, district, geojson_geometry, area_ha, field_type) "
                         "VALUES (?,?,?,?,?,?)",
                         (new_fid, new_fname.strip(), new_district.strip(),
-                         json.dumps(fc), computed_ha, "rice_awd"),
+                         json.dumps(fc), computed_ha, new_ftype),
                     )
                     conn.commit()
                 st.session_state["map_version"] = st.session_state.get("map_version", 0) + 1
@@ -326,12 +346,18 @@ with st.sidebar:
                 st.rerun()
 
     if not pending_sidebar and selected_id:
-        _s2 = st.session_state.get("signal_field_id") == selected_id
+        _sidebar_uses_sar = field_uses_sar(field_display[selected_id]["field_type"])
+        if _sidebar_uses_sar:
+            _s2 = st.session_state.get("signal_field_id") == selected_id
+            _s2_label = "Analytics complete"
+        else:
+            _s2 = st.session_state.get("alm_data_field_id") == selected_id
+            _s2_label = "Practice & soil data saved"
         _s3 = (st.session_state.get("export_cr") is not None) and _s2
         st.markdown("---")
         _steps = [
             (True, "Field registered"),
-            (_s2, "Analytics complete"),
+            (_s2, _s2_label),
             (_s3, "Credits calculated"),
         ]
         _items = "".join(
@@ -358,20 +384,22 @@ else:
 
 # ---------------------------------------------------------------------------
 # Resolve detector/methodology engine for the selected field's type.
-# Only "rice_awd" is registered today (src/field_types/rice_awd.py); this
-# dispatch is what lets a future field type plug in without touching the
-# tabs below.
+# "rice_awd" (SAR-driven) and "cropland_alm_vm0042" (manual practice/soil
+# data — no satellite signal) are registered in src/field_types/. uses_sar
+# is what lets app.py branch the UI between the two without a big if/else
+# sprawled through every section.
 # ---------------------------------------------------------------------------
 selected_field_type = field_display[selected_id]["field_type"] if selected_id else "rice_awd"
+selected_uses_sar    = field_uses_sar(selected_field_type)
 gate          = build_detector(selected_field_type)
 carbon_engine = build_methodology(selected_field_type)
 
 # ---------------------------------------------------------------------------
 # Tab layout
 # ---------------------------------------------------------------------------
-tab_map, tab_signal, tab_carbon, tab_validation = st.tabs([
+tab_map, tab_2, tab_carbon, tab_validation = st.tabs([
     "🌍 Spatial Asset Inspection",
-    "📈 Statistical Signal Analytics",
+    "📈 Statistical Signal Analytics" if selected_uses_sar else "🧪 Practice & Soil Data",
     "💰 Carbon Asset Ledger",
     "🤖 AI Validation",
 ])
@@ -511,9 +539,9 @@ with tab_map:
                 st.info("Parse coordinates to preview the boundary here.")
 
 # ===========================================================================
-# TAB 2 — SIGNAL ANALYTICS
+# TAB 2 — SIGNAL ANALYTICS (rice_awd) / PRACTICE & SOIL DATA (cropland_alm_vm0042)
 # ===========================================================================
-with tab_signal:
+def render_signal_analytics_tab():
     if not selected_id:
         st.info("Draw and save a field in the **Spatial Asset Inspection** tab first.")
         st.stop()
@@ -844,10 +872,210 @@ with tab_signal:
                 "Sentinel-1 SAR data and detect AWD events for the selected field."
             )
 
+
+def _alm_practice_form(scenario_label: str, existing: dict, key_prefix: str) -> dict:
+    """Renders one baseline/project ALM practice-schedule form (Table 4 subset)."""
+    existing = existing or {}
+    st.markdown(f"##### {scenario_label}")
+    crop_type = st.text_input(
+        "Crop type(s)", value=existing.get("crop_type") or "", key=f"{key_prefix}_crop_type"
+    )
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        crop_rotation = st.checkbox(
+            "Crop rotation", value=bool(existing.get("crop_rotation")), key=f"{key_prefix}_rotation"
+        )
+    with c2:
+        cover_crops = st.checkbox(
+            "Cover crops", value=bool(existing.get("cover_crops")), key=f"{key_prefix}_cover"
+        )
+    with c3:
+        intercropping = st.checkbox(
+            "Intercropping", value=bool(existing.get("intercropping")), key=f"{key_prefix}_intercrop"
+        )
+
+    t1, t2 = st.columns(2)
+    with t1:
+        tillage = st.checkbox(
+            "Tillage practiced", value=bool(existing.get("tillage")), key=f"{key_prefix}_tillage"
+        )
+        tillage_depth_cm = st.number_input(
+            "Tillage depth (cm)", min_value=0.0, max_value=60.0,
+            value=float(existing.get("tillage_depth_cm") or 0.0), step=1.0,
+            key=f"{key_prefix}_tillage_depth",
+        )
+    with t2:
+        residue_removed = st.checkbox(
+            "Crop residue removed", value=bool(existing.get("residue_removed")), key=f"{key_prefix}_residue_removed"
+        )
+        residue_burned_kg_ha = st.number_input(
+            "Residue burned (kg/ha)", min_value=0.0, max_value=15000.0,
+            value=float(existing.get("residue_burned_kg_ha") or 0.0), step=100.0,
+            key=f"{key_prefix}_residue_burned",
+            help="Mass of crop residue burned in-field per hectare — drives "
+                 "Eqs. 14/32 (CH4/N2O from biomass burning).",
+        )
+
+    n1, n2 = st.columns(2)
+    with n1:
+        synthetic_n_rate_kg_ha = st.number_input(
+            "Synthetic N fertilizer (kg N/ha)", min_value=0.0, max_value=400.0,
+            value=float(existing.get("synthetic_n_rate_kg_ha") or 0.0), step=5.0,
+            key=f"{key_prefix}_synthetic_n",
+        )
+    with n2:
+        organic_n_rate_kg_ha = st.number_input(
+            "Organic N fertilizer (kg N/ha)", min_value=0.0, max_value=400.0,
+            value=float(existing.get("organic_n_rate_kg_ha") or 0.0), step=5.0,
+            key=f"{key_prefix}_organic_n",
+        )
+
+    f1, f2 = st.columns(2)
+    with f1:
+        n_fixing_species = st.checkbox(
+            "N-fixing cover crop (e.g. legume)", value=bool(existing.get("n_fixing_species")),
+            key=f"{key_prefix}_nfix",
+        )
+        n_fixing_dry_matter_kg_ha = st.number_input(
+            "N-fixing residue dry matter (kg/ha)", min_value=0.0, max_value=10000.0,
+            value=float(existing.get("n_fixing_dry_matter_kg_ha") or 0.0), step=100.0,
+            key=f"{key_prefix}_nfix_dm", disabled=not n_fixing_species,
+        )
+    with f2:
+        fuel_use_l_ha = st.number_input(
+            "Fossil fuel use (L/ha)", min_value=0.0, max_value=200.0,
+            value=float(existing.get("fuel_use_l_ha") or 0.0), step=1.0,
+            key=f"{key_prefix}_fuel",
+            help="Diesel/gasoline consumed per hectare for this scenario's "
+                 "field operations — drives Eqs. 6-7 (fossil fuel CO2).",
+        )
+
+    return {
+        "crop_type": crop_type.strip() or None,
+        "crop_rotation": crop_rotation,
+        "cover_crops": cover_crops,
+        "intercropping": intercropping,
+        "tillage": tillage,
+        "tillage_depth_cm": tillage_depth_cm,
+        "residue_removed": residue_removed,
+        "residue_burned_kg_ha": residue_burned_kg_ha,
+        "synthetic_n_rate_kg_ha": synthetic_n_rate_kg_ha,
+        "organic_n_rate_kg_ha": organic_n_rate_kg_ha,
+        "n_fixing_species": n_fixing_species,
+        "n_fixing_dry_matter_kg_ha": n_fixing_dry_matter_kg_ha,
+        "fuel_use_l_ha": fuel_use_l_ha,
+    }
+
+
+def _parse_soc_values(text: str) -> list:
+    values = []
+    for token in text.replace(",", "\n").splitlines():
+        token = token.strip()
+        if token:
+            try:
+                values.append(float(token))
+            except ValueError:
+                pass
+    return values
+
+
+def render_practice_tab():
+    if not selected_id:
+        st.info("Draw and save a field in the **Spatial Asset Inspection** tab first.")
+        st.stop()
+
+    st.markdown("#### 🧪 Practice & Soil Data — VM0042 Improved Agricultural Land Management")
+    st.caption(
+        "VM0042 credits practice changes on non-wetland cropland/grassland — "
+        "**not applicable to flooded rice paddies** (VM0042 §4, condition 8). "
+        "Enter the baseline and project practice schedule (Table 4 subset) and "
+        "lab-measured soil organic carbon (SOC) samples for this field."
+    )
+    st.markdown("---")
+
+    existing_practices = get_alm_practice_schedule(selected_id)
+
+    st.markdown("### 📋 Practice Schedule")
+    col_bsl, col_wp = st.columns(2)
+    with col_bsl:
+        bsl_practices = _alm_practice_form(
+            "Baseline scenario", existing_practices.get("baseline"), key_prefix="bsl"
+        )
+    with col_wp:
+        wp_practices = _alm_practice_form(
+            "Project scenario", existing_practices.get("project"), key_prefix="wp"
+        )
+
+    if st.button("💾 Save Practice Schedule", type="primary"):
+        save_alm_practice_schedule(selected_id, "baseline", bsl_practices)
+        save_alm_practice_schedule(selected_id, "project", wp_practices)
+        st.success("Practice schedule saved.")
+        st.rerun()
+
+    st.markdown("---")
+    st.markdown("### 🧫 Soil Organic Carbon Samples (Quantification Approach 2)")
+    st.caption(
+        "Paired lab measurements (tCO₂e/ha) at the project site and a linked "
+        "baseline control site, at the start and end of the verification "
+        "period. At least 3 samples per cell are required (Eqs. 46-47, 70-71)."
+    )
+
+    existing_soc = get_soc_measurements(selected_id)
+    soc_inputs = {}
+    soc_labels = {
+        ("project", "t_start"): "Project site — start of period",
+        ("project", "t_final"): "Project site — end of period",
+        ("control", "t_start"): "Baseline control site — start of period",
+        ("control", "t_final"): "Baseline control site — end of period",
+    }
+    soc_cols = st.columns(2)
+    for i, (key, label) in enumerate(soc_labels.items()):
+        with soc_cols[i % 2]:
+            existing_values = existing_soc.get(key, [])
+            default_text = "\n".join(str(v) for v in existing_values)
+            text = st.text_area(
+                label, value=default_text, height=100,
+                placeholder="One value per line, e.g.\n40.2\n41.8\n39.5",
+                key=f"soc_{key[0]}_{key[1]}",
+            )
+            values = _parse_soc_values(text)
+            soc_inputs[key] = values
+            st.caption(f"{len(values)} sample(s)" + (" — need ≥ 3" if len(values) < 3 else " ✓"))
+
+    if st.button("💾 Save SOC Measurements", type="primary"):
+        for (site_type, timepoint), values in soc_inputs.items():
+            save_soc_measurements(selected_id, site_type, timepoint, values)
+        st.success("SOC measurements saved.")
+        st.rerun()
+
+    st.markdown("---")
+    practice_schedule = {"baseline": bsl_practices, "project": wp_practices}
+    problems = gate.check_completeness(practice_schedule, soc_inputs)
+    if problems:
+        st.warning(
+            "Not ready for credit calculation yet:\n\n" + "\n".join(f"- {p}" for p in problems)
+        )
+    else:
+        st.success("Practice schedule and SOC data are complete — proceed to the Carbon Asset Ledger tab.")
+        st.session_state["alm_data_field_id"]     = selected_id
+        st.session_state["alm_practice_schedule"] = practice_schedule
+        st.session_state["alm_soc_measurements"]  = soc_inputs
+        st.session_state["alm_area_ha"]           = field_area
+
+
+# ===========================================================================
+# TAB 2 dispatcher
+# ===========================================================================
+with tab_2:
+    if selected_uses_sar:
+        render_signal_analytics_tab()
+    else:
+        render_practice_tab()
+
 # ===========================================================================
 # TAB 3 — CARBON ASSET LEDGER
 # ===========================================================================
-with tab_carbon:
+def render_carbon_tab_rice_awd():
     if not selected_id:
         st.info("Draw and save a field in the **Spatial Asset Inspection** tab first.")
         st.stop()
@@ -1122,6 +1350,206 @@ with tab_carbon:
             "ℹ️ Run the **Analytics Engine** (Signal tab) to auto-populate fields, "
             "or enter parameters manually above and click **Calculate Carbon Credits**."
         )
+
+
+def render_carbon_tab_alm():
+    if not selected_id:
+        st.info("Draw and save a field in the **Spatial Asset Inspection** tab first.")
+        st.stop()
+
+    st.markdown("#### 💰 Carbon Compliance Ledger — VM0042 Improved ALM")
+    st.caption(
+        "Reads the practice schedule and SOC samples saved in the "
+        "**Practice & Soil Data** tab. Covers tillage/residue, fertilizer, "
+        "and crop planting/harvesting practice changes only — grazing, "
+        "liming, and leakage are out of scope (see Methodology in the "
+        "exported report)."
+    )
+    st.markdown("---")
+
+    practice_schedule = st.session_state.get("alm_practice_schedule")
+    soc_measurements   = st.session_state.get("alm_soc_measurements")
+    default_area       = st.session_state.get("alm_area_ha", field_area)
+
+    if practice_schedule is None or soc_measurements is None or \
+            st.session_state.get("alm_data_field_id") != selected_id:
+        st.info(
+            "ℹ️ Complete the **Practice & Soil Data** tab for this field first "
+            "— the practice schedule and SOC samples must be saved and complete "
+            "before credits can be calculated."
+        )
+        return
+
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        carbon_area = st.number_input(
+            "Field Area (ha)", 0.1, 500.0, float(default_area), step=0.1, key="alm_area_input"
+        )
+    with c2:
+        verification_years = st.number_input(
+            "Verification period (years)", 1.0, 10.0, 1.0, step=1.0,
+            help="Length of the verification period, x in Eqs. 46-47.",
+            key="alm_verif_years",
+        )
+    with c3:
+        non_permanence_risk_pct = st.number_input(
+            "Non-permanence risk rating (%)", 0.0, 100.0, 20.0, step=1.0,
+            help="AFOLU buffer-pool risk rating from the VCS Standard's risk "
+                 "tool — a project-specific value, not computed by this app.",
+            key="alm_npr",
+        )
+
+    run_carbon = st.button("⚡ Calculate Carbon Credits", type="primary", key="alm_run_carbon")
+
+    if run_carbon or st.session_state.get("alm_carbon_ready"):
+        cr = carbon_engine.calculate_credits(
+            practice_schedule=practice_schedule,
+            soc_measurements=soc_measurements,
+            area_ha=carbon_area,
+            verification_years=verification_years,
+            non_permanence_risk_pct=non_permanence_risk_pct,
+        )
+        st.session_state["alm_carbon_ready"] = True
+        st.session_state["export_cr"]        = cr
+
+        st.markdown("---")
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Net Reductions (ER)",  f"{cr['er_t']:.3f} tCO₂e")
+        m2.metric("Net Removals (CR)",    f"{cr['cr_t']:.3f} tCO₂e")
+        m3.metric("SOC Uncertainty",      f"{cr['unc_co2_pct']:.1f}%")
+        m4.metric("Final Credits Issued", f"{cr['final_issuance']:.3f} tCO₂e")
+
+        st.markdown("---")
+        st.markdown("#### 📐 Step-by-Step Audit Trail")
+
+        st.markdown("**Step 1: N₂O from fertilizer** — Eqs. 17-23")
+        st.caption(
+            f"EF_Ndirect used: {cr['ef_ndirect_used']} (conservative direction "
+            "per §8.6.3 — low value when the project reduces the N source, "
+            "high value when it increases it)"
+        )
+        st.latex(
+            f"N_2O_{{\\text{{fert,bsl}}}} = {cr['n2o_fert_bsl']:.4f}\\text{{ tCO}}_2\\text{{e}}"
+            f" \\qquad N_2O_{{\\text{{fert,wp}}}} = {cr['n2o_fert_wp']:.4f}\\text{{ tCO}}_2\\text{{e}}"
+        )
+
+        st.markdown("**Step 2: N₂O from N-fixing cover-crop residues** — Eqs. 24-25")
+        st.latex(
+            f"N_2O_{{\\text{{Nfix,bsl}}}} = {cr['n2o_nfix_bsl']:.4f}\\text{{ tCO}}_2\\text{{e}}"
+            f" \\qquad N_2O_{{\\text{{Nfix,wp}}}} = {cr['n2o_nfix_wp']:.4f}\\text{{ tCO}}_2\\text{{e}}"
+        )
+
+        st.markdown("**Step 3: CH₄ and N₂O from residue burning** — Eqs. 14, 32")
+        st.latex(
+            f"CH_{{4,bb}}: {cr['ch4_bb_bsl']:.4f} \\to {cr['ch4_bb_wp']:.4f}"
+            f"\\qquad N_2O_{{bb}}: {cr['n2o_bb_bsl']:.4f} \\to {cr['n2o_bb_wp']:.4f}\\text{{ tCO}}_2\\text{{e}}"
+        )
+
+        st.markdown("**Step 4: CO₂ from fossil fuel combustion** — Eqs. 6-7")
+        st.latex(
+            f"CO_{{2,ff}}: {cr['co2_ff_bsl']:.4f} \\to {cr['co2_ff_wp']:.4f}\\text{{ tCO}}_2\\text{{e}}"
+        )
+
+        st.markdown("**Step 5: SOC stock change (Quantification Approach 2)** — Eqs. 46-47")
+        if not cr["soc_ready"]:
+            st.warning(
+                "Fewer than 3 SOC samples in one or more cells — SOC term "
+                "treated as zero with a 100% uncertainty deduction."
+            )
+        st.latex(
+            f"\\Delta CO_{{2,soil,bsl}} = {cr['delta_co2_soil_bsl']:.4f}\\text{{ tCO}}_2\\text{{e}}"
+            f" \\qquad \\Delta CO_{{2,soil,wp}} = {cr['delta_co2_soil_wp']:.4f}\\text{{ tCO}}_2\\text{{e}}"
+        )
+
+        st.markdown("**Step 6: SOC uncertainty deduction** — Eqs. 70-71, 74 (probability of exceedance)")
+        st.latex(f"UNC_{{CO_2}} = {cr['unc_co2_pct']:.1f}\\%")
+        st.caption(
+            "Approach-3 (default-factor) terms above carry no separate "
+            "deduction, per §8.6.3, contingent on full activity-data coverage."
+        )
+
+        st.markdown("**Step 7: Net reductions and removals** — Eqs. 37, 40, 43")
+        st.latex(
+            f"ER_t = {cr['er_t']:.4f}\\text{{ tCO}}_2\\text{{e}} \\qquad"
+            f" CR_t = {cr['cr_t']:.4f}\\text{{ tCO}}_2\\text{{e}} \\qquad"
+            f" ERR_{{NET,t}} = {cr['err_net']:.4f}\\text{{ tCO}}_2\\text{{e}}"
+        )
+        st.caption("Leakage (organic amendment import, displacement, production decline) is out of scope — treated as zero.")
+
+        st.markdown(
+            f"**Step 8: Buffer deduction & VCU issuance** — Eqs. 75-79, "
+            f"non-permanence risk rating = {non_permanence_risk_pct:.0f}%"
+        )
+        st.latex(
+            f"Bu_{{ER}} = {cr['bu_er']:.4f}\\text{{ tCO}}_2\\text{{e}} \\qquad"
+            f" Bu_{{CR}} = {cr['bu_cr']:.4f}\\text{{ tCO}}_2\\text{{e}}"
+        )
+        st.latex(
+            f"VCU_t = ({cr['err_net']:.4f} - {cr['bu_er']+cr['bu_cr']:.4f})"
+            f" = \\mathbf{{{cr['final_issuance']:.4f}\\text{{ tCO}}_2\\text{{e}}}}"
+        )
+
+        if cr["final_issuance"] == 0.0:
+            st.warning("⚠️ No net credits issued after uncertainty and buffer deductions.")
+        else:
+            st.success(
+                f"✅ **{cr['final_issuance']:.4f} tCO₂e** net verified credits — "
+                "ready for registry submission."
+            )
+
+        # ---- Export Evidence Package ----------------------------------------
+        st.markdown("---")
+        st.markdown("#### 📦 Export Evidence Package")
+
+        _fi = {
+            "field_id": selected_id,
+            "name":     field_display[selected_id]["name"],
+            "district": field_display[selected_id]["district"],
+            "area_ha":  carbon_area,
+        }
+        _meta = {
+            "verification_years": verification_years,
+            "non_permanence_risk_pct": non_permanence_risk_pct,
+        }
+        _fid_slug = selected_id.replace("-", "").lower()
+
+        col_pdf, col_json, col_csv = st.columns(3)
+        with col_pdf:
+            try:
+                pdf_bytes = generate_pdf_alm(_fi, _meta, practice_schedule, cr)
+                st.download_button(
+                    "⬇️ Audit Report (PDF)", data=pdf_bytes,
+                    file_name=f"terra_audit_alm_{_fid_slug}.pdf",
+                    mime="application/pdf", use_container_width=True, type="primary",
+                )
+            except Exception as _err:
+                st.error(f"PDF error: {_err}")
+        with col_json:
+            st.download_button(
+                "⬇️ Audit Package (JSON)",
+                data=generate_audit_json_alm(_fi, _meta, practice_schedule, soc_measurements, cr),
+                file_name=f"audit_alm_{_fid_slug}.json",
+                mime="application/json", use_container_width=True,
+            )
+        with col_csv:
+            st.download_button(
+                "⬇️ Practice & SOC Data (CSV)",
+                data=generate_alm_data_csv(practice_schedule, soc_measurements),
+                file_name=f"alm_data_{_fid_slug}.csv",
+                mime="text/csv", use_container_width=True,
+            )
+    else:
+        st.info("Click **Calculate Carbon Credits** to run the VM0042 quantification chain.")
+
+
+# ===========================================================================
+# TAB 3 dispatcher
+# ===========================================================================
+with tab_carbon:
+    if selected_uses_sar:
+        render_carbon_tab_rice_awd()
+    else:
+        render_carbon_tab_alm()
 
 # ===========================================================================
 # TAB 4 — AI VALIDATION

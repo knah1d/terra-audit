@@ -69,6 +69,46 @@ def initialize_database():
                 conn.execute(f"ALTER TABLE timeseries_cache ADD COLUMN {col}")
             except Exception:
                 pass  # Column already exists
+
+        # VM0042 ALM field type — baseline vs project practice schedule
+        # (Table 4 subset: crop planting/harvesting, fertilizer, tillage/residue).
+        # One row per (field_id, scenario); columns left NULL where not applicable.
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS alm_practice_schedule (
+                field_id                TEXT NOT NULL,
+                scenario                TEXT NOT NULL CHECK (scenario IN ('baseline', 'project')),
+                crop_type               TEXT,
+                crop_rotation           INTEGER,
+                cover_crops             INTEGER,
+                intercropping           INTEGER,
+                tillage                 INTEGER,
+                tillage_depth_cm        REAL,
+                residue_removed         INTEGER,
+                residue_burned_kg_ha    REAL,
+                synthetic_n_rate_kg_ha  REAL,
+                organic_n_rate_kg_ha    REAL,
+                n_fixing_species        INTEGER,
+                n_fixing_dry_matter_kg_ha REAL,
+                fuel_use_l_ha           REAL,
+                updated_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (field_id, scenario)
+            )
+        """)
+
+        # VM0042 ALM field type — SOC lab measurements (Quantification Approach 2).
+        # Paired project-site vs baseline-control-site samples at two timepoints,
+        # feeding Eqs 3-5/46-47 (stock change) and Eqs 70-71/74 (uncertainty).
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS soc_measurements (
+                field_id            TEXT NOT NULL,
+                site_type           TEXT NOT NULL CHECK (site_type IN ('project', 'control')),
+                timepoint           TEXT NOT NULL CHECK (timepoint IN ('t_start', 't_final')),
+                sample_index        INTEGER NOT NULL,
+                soc_value_tco2e_ha  REAL NOT NULL,
+                measured_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (field_id, site_type, timepoint, sample_index)
+            )
+        """)
         conn.commit()
     _DB_INITIALIZED = True
 
@@ -124,6 +164,81 @@ def save_cache(
             rows,
         )
         conn.commit()
+
+
+ALM_PRACTICE_COLUMNS = [
+    "crop_type", "crop_rotation", "cover_crops", "intercropping",
+    "tillage", "tillage_depth_cm", "residue_removed", "residue_burned_kg_ha",
+    "synthetic_n_rate_kg_ha", "organic_n_rate_kg_ha",
+    "n_fixing_species", "n_fixing_dry_matter_kg_ha", "fuel_use_l_ha",
+]
+
+
+def save_alm_practice_schedule(field_id: str, scenario: str, practices: dict):
+    """Upserts one baseline/project practice-schedule row for a field."""
+    cols = ALM_PRACTICE_COLUMNS
+    values = [practices.get(c) for c in cols]
+    with get_db_connection() as conn:
+        conn.execute(
+            f"""
+            INSERT INTO alm_practice_schedule (field_id, scenario, {", ".join(cols)})
+            VALUES (?, ?, {", ".join("?" for _ in cols)})
+            ON CONFLICT (field_id, scenario) DO UPDATE SET
+                {", ".join(f"{c} = excluded.{c}" for c in cols)},
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (field_id, scenario, *values),
+        )
+        conn.commit()
+
+
+def get_alm_practice_schedule(field_id: str) -> dict:
+    """Returns {'baseline': {...} | None, 'project': {...} | None} for a field."""
+    with get_db_connection() as conn:
+        rows = conn.execute(
+            "SELECT * FROM alm_practice_schedule WHERE field_id = ?", (field_id,)
+        ).fetchall()
+    result = {"baseline": None, "project": None}
+    for row in rows:
+        result[row["scenario"]] = {k: row[k] for k in ALM_PRACTICE_COLUMNS}
+    return result
+
+
+def save_soc_measurements(field_id: str, site_type: str, timepoint: str, values: list):
+    """Replaces all sample rows for a (field, site_type, timepoint) triple."""
+    with get_db_connection() as conn:
+        conn.execute(
+            "DELETE FROM soc_measurements WHERE field_id = ? AND site_type = ? AND timepoint = ?",
+            (field_id, site_type, timepoint),
+        )
+        conn.executemany(
+            """
+            INSERT INTO soc_measurements
+                (field_id, site_type, timepoint, sample_index, soc_value_tco2e_ha)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            [(field_id, site_type, timepoint, i, v) for i, v in enumerate(values)],
+        )
+        conn.commit()
+
+
+def get_soc_measurements(field_id: str) -> dict:
+    """Returns {(site_type, timepoint): [values...]} for a field."""
+    with get_db_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT site_type, timepoint, soc_value_tco2e_ha
+            FROM soc_measurements
+            WHERE field_id = ?
+            ORDER BY site_type, timepoint, sample_index
+            """,
+            (field_id,),
+        ).fetchall()
+    result = {}
+    for row in rows:
+        key = (row["site_type"], row["timepoint"])
+        result.setdefault(key, []).append(row["soc_value_tco2e_ha"])
+    return result
 
 
 initialize_database()

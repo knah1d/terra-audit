@@ -47,6 +47,8 @@ def _s(text: str) -> str:
 # ---------------------------------------------------------------------------
 
 class _PDF(FPDF):
+    methodology_label = "Verra VM0051 Tier 2"
+
     def header(self):
         self.set_fill_color(18, 24, 38)
         self.rect(0, 0, 210, 16, "F")
@@ -64,7 +66,7 @@ class _PDF(FPDF):
         self.cell(
             0, 6,
             f"Page {self.page_no()}  |  Terra-Audit v1.0  |  "
-            f"Verra VM0051 Tier 2  |  "
+            f"{self.methodology_label}  |  "
             f"Generated {datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}",
             align="C",
         )
@@ -357,3 +359,173 @@ def generate_audit_json(
 
 def generate_timeseries_csv(df) -> str:
     return df.to_csv(index=False)
+
+
+# ---------------------------------------------------------------------------
+# VM0042 Improved Agricultural Land Management (ALM) — cropland field type
+# ---------------------------------------------------------------------------
+
+def generate_pdf_alm(
+    field_info: dict,
+    meta: dict,
+    practice_schedule: dict,
+    carbon: dict,
+) -> bytes:
+    """
+    field_info : {field_id, name, district, area_ha}
+    meta       : {verification_years, non_permanence_risk_pct}
+    practice_schedule : {'baseline': {...}, 'project': {...}} — see
+                 src.database.ALM_PRACTICE_COLUMNS for keys
+    carbon     : return dict of AlmCarbonEngine.calculate_credits()
+    """
+    pdf = _PDF(orientation="P", unit="mm", format="A4")
+    pdf.methodology_label = "Verra VM0042 v2.2"
+    pdf.set_margins(left=18, top=20, right=18)
+    pdf.set_auto_page_break(auto=True, margin=16)
+    pdf.add_page()
+
+    pdf.set_font("Helvetica", "B", 15)
+    pdf.set_text_color(20, 40, 80)
+    pdf.ln(2)
+    pdf.cell(
+        0, 10, "Verra VM0042 v2.2 - Improved ALM Monitoring Report",
+        align="C", new_x="LMARGIN", new_y="NEXT",
+    )
+    pdf.set_font("Helvetica", "", 8)
+    pdf.set_text_color(120, 120, 120)
+    pdf.cell(
+        0, 6,
+        f"Generated: {datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}"
+        "  |  Platform: Terra-Audit v1.0",
+        align="C", new_x="LMARGIN", new_y="NEXT",
+    )
+    pdf.set_text_color(0, 0, 0)
+
+    pdf.section("1. Field Information")
+    pdf.kv("Field ID",   field_info["field_id"])
+    pdf.kv("Field Name", field_info["name"])
+    pdf.kv("District",   field_info["district"])
+    pdf.kv("Area",       f"{field_info['area_ha']:.4f} ha")
+    pdf.kv("Verification Period", f"{meta['verification_years']:.0f} year(s)")
+    pdf.kv("Non-Permanence Risk Rating", f"{meta['non_permanence_risk_pct']:.0f}%  (user-supplied, not computed by this app)")
+
+    pdf.section("2. Practice Schedule (Table 4 subset)")
+    for scenario_label, key in [("Baseline", "baseline"), ("Project", "project")]:
+        p = practice_schedule.get(key) or {}
+        pdf.kv(f"{scenario_label} — Crop type", p.get("crop_type") or "N/A")
+        pdf.kv(f"{scenario_label} — Tillage / residue burned",
+               f"{'Yes' if p.get('tillage') else 'No'} / {p.get('residue_burned_kg_ha') or 0:.0f} kg/ha")
+        pdf.kv(f"{scenario_label} — Synthetic / organic N rate",
+               f"{p.get('synthetic_n_rate_kg_ha') or 0:.1f} / {p.get('organic_n_rate_kg_ha') or 0:.1f} kg N/ha")
+        pdf.kv(f"{scenario_label} — N-fixing cover crop",
+               "Yes" if p.get("n_fixing_species") else "No")
+        pdf.ln(1)
+
+    pdf.section("3. Carbon Estimation (Verra VM0042 v2.2)")
+    pdf.kv("EF_Ndirect used (conservative, Eqs. 17-25)", f"{carbon['ef_ndirect_used']}")
+    pdf.kv("N2O fertilizer (baseline -> project)", f"{carbon['n2o_fert_bsl']:.4f} -> {carbon['n2o_fert_wp']:.4f} tCO2e")
+    pdf.kv("N2O N-fixing residues (baseline -> project)", f"{carbon['n2o_nfix_bsl']:.4f} -> {carbon['n2o_nfix_wp']:.4f} tCO2e")
+    pdf.kv("CH4 / N2O biomass burning (baseline -> project)",
+           f"{carbon['ch4_bb_bsl']:.4f}->{carbon['ch4_bb_wp']:.4f} / {carbon['n2o_bb_bsl']:.4f}->{carbon['n2o_bb_wp']:.4f} tCO2e")
+    pdf.kv("CO2 fossil fuel (baseline -> project)", f"{carbon['co2_ff_bsl']:.4f} -> {carbon['co2_ff_wp']:.4f} tCO2e")
+    pdf.ln(2)
+    pdf.kv("SOC stock change (baseline, Approach 2)", f"{carbon['delta_co2_soil_bsl']:.4f} tCO2e (Eqs. 46-47)")
+    pdf.kv("SOC stock change (project, Approach 2)", f"{carbon['delta_co2_soil_wp']:.4f} tCO2e (Eqs. 46-47)")
+    pdf.kv("SOC uncertainty deduction", f"{carbon['unc_co2_pct']:.1f}%  (Eqs. 70-71, 74)")
+    pdf.ln(2)
+    pdf.kv("Net Emission Reductions (ER_t)", f"{carbon['er_t']:.4f} tCO2e  (Eq. 37)")
+    pdf.kv("Net Removals (CR_t)", f"{carbon['cr_t']:.4f} tCO2e  (Eq. 40)")
+    pdf.kv("Net Reductions + Removals (ERR_NET,t)", f"{carbon['err_net']:.4f} tCO2e  (Eq. 43)")
+    pdf.kv("Buffer deduction (ER / CR)", f"{carbon['bu_er']:.4f} / {carbon['bu_cr']:.4f} tCO2e  (Eqs. 75-76)")
+    pdf.ln(2)
+    pdf.kv("NET ISSUANCE (VCU_t)", f"{carbon['final_issuance']:.4f} tCO2e  (Eqs. 77-79)")
+
+    if carbon["final_issuance"] == 0.0:
+        pdf.banner(
+            "No net credits issued after uncertainty and buffer deductions.",
+            ok=False,
+        )
+    else:
+        pdf.banner(
+            f"VERIFIED: {carbon['final_issuance']:.4f} tCO2e net verified credits"
+            " - ready for registry submission.",
+            ok=True,
+        )
+
+    pdf.section("4. Methodology")
+    pdf.body(
+        "Terra-Audit implements a scoped subset of the Verra VM0042 v2.2 Improved "
+        "Agricultural Land Management methodology, covering tillage/residue "
+        "management, fertilizer management, and crop planting/harvesting "
+        "(rotations, cover crops) practice changes. N2O from fertilizer and "
+        "N-fixing residues, CH4/N2O from biomass burning, and CO2 from fossil "
+        "fuel combustion are quantified via Quantification Approach 3 default "
+        "emission factors (IPCC 2019 Refinement), using the most conservative "
+        "EF within the cited uncertainty range per §8.6.3. Soil organic carbon "
+        "(SOC) - the mandatory, non-de-minimis carbon pool - is quantified via "
+        "Quantification Approach 2 (measure and remeasure), from lab-measured "
+        "paired samples at the project site and a baseline control site. Net "
+        "reductions and removals follow Eqs. 37/40/43, with a buffer deduction "
+        "against the user-supplied non-permanence risk rating per Eqs. 75-79."
+    )
+
+    pdf.section("5. Assumptions and Limitations")
+    for i, a in enumerate([
+        "Grazing practices, liming, and Quantification Approach 1 (external "
+        "biogeochemical model) are out of scope - not modeled",
+        "Leakage from organic amendment import, livestock/production "
+        "displacement, and production declines (§8.4) is assumed de minimis "
+        "and not verified",
+        "The entire field is treated as a single quantification unit / "
+        "stratum (permitted per §8.1); no sub-field stratification",
+        "SOC uncertainty (Eqs. 70-71) conservatively assumes zero covariance "
+        "between start/end-of-period samples",
+        "Approach-3 (default-factor) terms carry no separate uncertainty "
+        "deduction per §8.6.3, contingent on full activity-data coverage",
+        "VM0042 excludes wetlands (§4, condition 8) - this field type must "
+        "not be used for flooded rice paddies",
+        "This report is generated by an AI-assisted analytical platform and "
+        "requires expert agronomist / soil scientist review before formal "
+        "registry submission",
+    ], 1):
+        pdf.set_x(pdf.l_margin + 8)
+        pdf.set_font("Helvetica", "", 9)
+        pdf.multi_cell(0, 6, f"{i}. {_s(a)}", new_x="LMARGIN", new_y="NEXT")
+
+    return bytes(pdf.output())
+
+
+def generate_audit_json_alm(
+    field_info: dict,
+    meta: dict,
+    practice_schedule: dict,
+    soc_measurements: dict,
+    carbon: dict,
+) -> str:
+    record = {
+        "generated_at": datetime.datetime.utcnow().isoformat() + "Z",
+        "platform": "Terra-Audit v1.0",
+        "methodology": "Verra VM0042 v2.2 (scoped subset)",
+        "field": field_info,
+        "verification_period_years": meta["verification_years"],
+        "non_permanence_risk_pct": meta["non_permanence_risk_pct"],
+        "practice_schedule": practice_schedule,
+        "soc_measurements": {
+            f"{site_type}_{timepoint}": values
+            for (site_type, timepoint), values in soc_measurements.items()
+        },
+        "carbon_calculation": {k: v for k, v in carbon.items()},
+    }
+    return json.dumps(record, indent=2, default=str)
+
+
+def generate_alm_data_csv(practice_schedule: dict, soc_measurements: dict) -> str:
+    """Flat CSV of the practice schedule and SOC sample rows for auditors."""
+    lines = ["section,scenario_or_site,field,value"]
+    for scenario, practices in (practice_schedule or {}).items():
+        for field, value in (practices or {}).items():
+            lines.append(f"practice_schedule,{scenario},{field},{value}")
+    for (site_type, timepoint), values in (soc_measurements or {}).items():
+        for i, v in enumerate(values):
+            lines.append(f"soc_measurement,{site_type}_{timepoint},sample_{i},{v}")
+    return "\n".join(lines) + "\n"
