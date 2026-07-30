@@ -17,6 +17,29 @@ instead (Practice & Soil Data tab).
 
 Factories are zero-arg callables invoked fresh per lookup rather than cached
 here — today's implementations are cheap to construct (no I/O).
+
+Scalability note (2 field types today): app.py dispatches per-methodology at
+the UI layer (render_carbon_tab_rice_awd vs render_carbon_tab_alm, each
+calling its engine's differently-shaped calculate_credits() —
+awd_events/season_length_days/area_ha vs
+practice_schedule/soc_measurements/area_ha/verification_years). This is NOT
+a problem at this scale: the two field types have irreducibly different raw
+inputs (SAR-derived events vs. manually entered practice/lab data), so a
+shared generic signature would just be a lowest-common-denominator dict
+wrapper adding indirection without removing real duplication — not worth
+building now.
+
+What WOULD start to hurt at a 3rd field type, if one is ever added:
+  - report_generator.py's per-methodology PDF functions (generate_pdf vs
+    generate_pdf_alm) duplicate header/footer/banner boilerplate — worth
+    factoring shared section helpers into _PDF before a 3rd report variant.
+  - app.py's binary `if selected_uses_sar: ... else: ...` tab dispatch would
+    need to become a proper per-field-type render-function lookup here in
+    the registry (a render_practice_tab_factory/render_carbon_tab_factory
+    entry, mirroring detector_factory/methodology_factory) once there are
+    3+ UI shapes to dispatch, rather than a growing elif chain in app.py.
+This is deferred until a 3rd methodology is actually being added, not
+scoped as current work.
 """
 
 FIELD_TYPES = {}
