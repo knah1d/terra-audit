@@ -25,7 +25,11 @@ Explicitly excluded / assumed zero (documented limitations, not verified):
   - Quantification Approach 1 (external biogeochemical model) — SOC is
     Approach 2 only in this implementation
   - Leakage from organic amendment import, livestock displacement, or
-    production declines (§8.4) — assumed de minimis, not verified
+    production declines (§8.4) — NOT screened or computed (VM0042 §8.4.3
+    makes production-decline leakage accounting mandatory via VMD0054, which
+    this engine does not implement). `calculate_credits()` reports
+    `leakage_screened=False` with a `leakage_gap_note` so every caller can
+    detect and surface this rather than it living only in this docstring.
   - Multi-stratum sampling — the whole field is treated as a single
     quantification unit / stratum (permitted per §8.1)
   - Covariance between t_start and t_final SOC samples in the uncertainty
@@ -63,8 +67,9 @@ class AlmCarbonEngine:
     EF_RESIDUE_CH4  = 2.7     # g CH4 / kg dry matter burnt
     EF_RESIDUE_N2O  = 0.07    # g N2O / kg dry matter burnt
 
-    # Fossil fuel CO2 (IPCC 2019 Refinement Vol 2 Ch 3, diesel default)
-    EF_CO2_DIESEL_T_PER_L = 0.00268
+    # Fossil fuel CO2 — VM0042 v2.2 parameter table (p.102) quotes this directly:
+    # diesel = 0.002886 t CO2e/L (source: IPCC 2019 Refinement Vol 2 Ch 3 Table 3.3.1)
+    EF_CO2_DIESEL_T_PER_L = 0.002886
 
     GWP_CH4 = 28    # IPCC AR5 GWP100
     GWP_N2O = 265   # IPCC AR5 GWP100
@@ -73,6 +78,21 @@ class AlmCarbonEngine:
     T_0667 = 0.4307
 
     MIN_SOC_SAMPLES = 3
+
+    # VM0042 monitoring tables (p.92/p.128) + June 2026 Corrections & Clarifications
+    # (Clarification 8) — SOC remeasurement in both baseline control sites and the
+    # project area must occur at least every 5 years, or before each verification
+    # event where verification occurs more frequently.
+    MAX_VERIFICATION_YEARS = 5
+
+    # VM0042 §8.4.3 (p.52, mandatory language) + June 2026 Corrections Eq. 39/42 —
+    # production-decline leakage (LK_disp,t via VMD0054) is a required leakage
+    # category this engine does not implement (VMD0054 is not in this repo).
+    LEAKAGE_GAP_NOTE = (
+        "VM0042 §8.4.3 requires LK_disp,t (via VMD0054) for production-decline "
+        "leakage; this engine does not implement VMD0054 and reports er_net/cr_net "
+        "unscreened for this mandatory leakage category."
+    )
 
     # -----------------------------------------------------------------
     # Default-factor (Approach 3) emission terms — mirrored baseline/project
@@ -186,6 +206,7 @@ class AlmCarbonEngine:
         area_ha: float,
         verification_years: float = 1.0,
         non_permanence_risk_pct: float = 20.0,
+        prior_cumulative_delta_co2_wp_t: float = 0.0,
     ) -> dict:
         """
         practice_schedule  : {'baseline': {...}, 'project': {...}} — see
@@ -194,10 +215,24 @@ class AlmCarbonEngine:
                               site_type in {'project','control'},
                               timepoint in {'t_start','t_final'}
         area_ha            : field area (single quantification unit)
-        verification_years : length of the verification period (x in Eqs. 46-47)
+        verification_years : length of the verification period (x in Eqs. 46-47).
+                              Must be <= MAX_VERIFICATION_YEARS (5) per VM0042's
+                              mandatory SOC remeasurement cadence — a value above
+                              that is flagged via `cadence_compliant=False` in the
+                              return dict, not rejected outright (the caller
+                              decides whether to block on it).
         non_permanence_risk_pct : AFOLU buffer-pool risk rating (%) — a
                               project-specific value from the standard's risk
                               tool; NOT computed by this engine
+        prior_cumulative_delta_co2_wp_t : cumulative project SOC change (t CO2)
+                              summed across all prior verification periods
+                              since project start. VM0042's ER/CR classification
+                              indicator I(ΔCO2wp) (Eqs. 37/40) is defined on this
+                              cumulative total, not the current period alone —
+                              callers persisting state across verifications must
+                              pass this in (see src.database.get_alm_cumulative_delta)
+                              or the classification will only reflect the current
+                              period, which VM0042 does not permit.
         """
         bsl = practice_schedule.get("baseline") or {}
         wp  = practice_schedule.get("project") or {}
@@ -241,8 +276,10 @@ class AlmCarbonEngine:
         delta_co2_bsl_t = delta_co2_soil_bsl * (1 - unc_co2 * i_soil)
         delta_co2_wp_t  = delta_co2_soil_wp  * (1 - unc_co2 * i_soil)
 
-        # Eq. 37 — net emission reductions (leakage = 0; no tree/shrub/CH4-soil terms)
-        i_wp = 1 if delta_co2_wp_t > 0 else 0
+        # Eqs. 37/40 — I(ΔCO2wp) is defined on the CUMULATIVE SOC change since
+        # project start (Σ from year 1 to t), not the current period alone.
+        cumulative_delta_co2_wp = prior_cumulative_delta_co2_wp_t + delta_co2_wp_t
+        i_wp = 1 if cumulative_delta_co2_wp > 0 else 0
         non_soc_terms = delta_co2_ff + delta_ch4_bb + delta_n2o_soil + delta_n2o_bb
         min_diff = min(0.0, delta_co2_wp_t) - min(0.0, delta_co2_bsl_t)
         max_diff = max(0.0, delta_co2_wp_t) - max(0.0, delta_co2_bsl_t)
@@ -288,6 +325,10 @@ class AlmCarbonEngine:
             "er_t":                er_t,
             "cr_t":                cr_t,
             "err_net":             err_net,
+            "cumulative_delta_co2_wp": cumulative_delta_co2_wp,
+            "leakage_screened":    False,
+            "leakage_gap_note":    self.LEAKAGE_GAP_NOTE,
+            "cadence_compliant":   verification_years <= self.MAX_VERIFICATION_YEARS,
             "non_permanence_risk_pct": non_permanence_risk_pct,
             "bu_er":               bu_er,
             "bu_cr":               bu_cr,

@@ -134,8 +134,11 @@ def generate_pdf(
     window     : {season_label, start, end}
     signal     : {n_observations, vv_mean, vv_std, awd_events, awd_dates,
                   sowing_date, harvest_date, season_length_days, from_phenology}
-    carbon     : {sf_w_project, p_uncertainty, e_baseline, e_project,
-                  delta_e_ch4, delta_e_co2e, final_issuance, confidence_pct}
+    carbon     : {sf_w_project, sc_preseason, sc_organic_bsl, sc_organic_wp,
+                  p_uncertainty, e_baseline, e_project, delta_e_ch4,
+                  delta_e_co2e, unc_tco2e, ch4_after_unc, pe_n2o_tco2e,
+                  q_n_kg_per_ha, n2o_penalty_pct_of_gross, final_issuance,
+                  confidence_pct}
     """
     pdf = _PDF(orientation="P", unit="mm", format="A4")
     pdf.set_margins(left=18, top=20, right=18)
@@ -205,30 +208,39 @@ def generate_pdf(
 
     # ---- 5. Carbon Estimation (VM0051 v1.0, QA3 pathway) ------------------
     pdf.section("5. Carbon Estimation  (Verra VM0051 v1.0, QA3 - Default Emission Factors)")
+
+    if not carbon.get("qa3_pathway_valid", True):
+        pdf.banner(
+            "QA3 PATHWAY NOT VALID: " + carbon.get("qa3_block_reason", "project exceeds "
+            "the 60,000 tCO2e/yr QA3 flat-deduction gate (§8.6.3) - the full Eq. 38 "
+            "probability-of-exceedance uncertainty calculation is required instead."),
+            ok=False,
+        )
+        return bytes(pdf.output())
+
     pdf.kv("Quantification Approach", "QA3 - Default Emission Factors (§8.2.3)")
     pdf.kv("Emission Factor EF_c",    "1.4 kg CH4/ha/day  (IPCC 2019 South Asia Tier 2)")
     pdf.kv("GWP CH4 (AR5 100yr)",     "28")
     pdf.kv("GWP N2O (AR5 100yr)",     "265")
-    pdf.kv("Baseline SF_w",           "1.00  (continuous flooding, Eq. 8)")
-    pdf.kv("Project SF_w",            f"{carbon['sf_w_project']}  (Eq. 8, {_awd_label(carbon['sf_w_project'])})")
+    pdf.kv("Baseline SF_w",           "1.00  (continuous flooding, Eq. 6)")
+    pdf.kv("Project SF_w",            f"{carbon['sf_w_project']}  (Eq. 6, {_awd_label(carbon['sf_w_project'])})")
+    pdf.kv("Pre-season SC_p",         f"{carbon['sc_preseason']}  (Eq. 6, Table 5.13)")
+    pdf.kv("Organic amendment SC_o (baseline)", f"{carbon['sc_organic_bsl']:.4f}  (Eq. 7, Table 5.14)")
+    pdf.kv("Organic amendment SC_o (project)",  f"{carbon['sc_organic_wp']:.4f}  (Eq. 7, Table 5.14)")
     pdf.ln(2)
-    pdf.kv("Baseline CH4 Emissions",  f"{carbon['e_baseline']:.4f} kg CH4  (Eq. 8)")
-    pdf.kv("Project CH4 Emissions",   f"{carbon['e_project']:.4f} kg CH4  (Eq. 8)")
-    pdf.kv("Gross CH4 Avoided",       f"{carbon['delta_e_ch4']:.4f} kg CH4  (Eq. 31)")
+    pdf.kv("Baseline CH4 Emissions",  f"{carbon['e_baseline']:.4f} kg CH4  (Eq. 6/8)")
+    pdf.kv("Project CH4 Emissions",   f"{carbon['e_project']:.4f} kg CH4  (Eq. 6/8)")
+    pdf.kv("Gross CH4 Avoided",       f"{carbon['delta_e_ch4']:.4f} kg CH4")
     pdf.kv("Gross tCO2e (before UNC)", f"{carbon['delta_e_co2e']:.6f} tCO2e")
     pdf.ln(2)
-    pdf.kv("Uncertainty Deduction",   f"15.0%  (QA3 flat rate, §8.6.3, <60,000 tCO2e/yr)")
+    pdf.kv("Uncertainty Deduction",   f"15.0%  (QA3 flat rate, §8.6.3, <=60,000 tCO2e/yr)")
     pdf.kv("UNC Deduction Amount",    f"{carbon['unc_tco2e']:.6f} tCO2e")
     pdf.kv("CH4 After Uncertainty",   f"{carbon['ch4_after_unc']:.6f} tCO2e")
     pdf.ln(2)
     pdf.kv("N Fertilizer Input (Q_N)", f"{carbon['q_n_kg_per_ha']:.1f} kg N/ha")
     pdf.kv("N2O Correction (Eq. 25)", f"{carbon['pe_n2o_tco2e']:.6f} tCO2e  (PE_Red-Irri, CF_N2O=0.00314)")
-    leakage_status = (
-        f"{carbon['leakage_pct']:.1f}% of gross reduction - DE MINIMIS (SS8.4, <5% threshold)"
-        if carbon["leakage_de_minimis"]
-        else f"{carbon['leakage_pct']:.1f}% of gross reduction - APPLIED IN FULL (>=5% threshold)"
-    )
-    pdf.kv("Leakage Screen (§8.4)",   leakage_status)
+    pdf.kv("N2O Penalty (% of gross, informational)",
+           f"{carbon['n2o_penalty_pct_of_gross']:.1f}%  (mandatory Eq. 29 term, not a §8.4 leakage screen)")
     pdf.ln(2)
     pdf.kv("NET ISSUANCE (Eq. 29)",   f"{carbon['final_issuance']:.6f} tCO2e")
 
@@ -254,12 +266,15 @@ def generate_pdf(
         "primary flood-state indicator via z-score anomaly detection (field-adaptive "
         "baseline, threshold z < -0.8). Sharp positive VV transitions (> 1.2 sigma) "
         "following flooded periods are classified as drydown events. The VM0051 water "
-        "scaling factor (SF_w) is assigned per Eq. 8: 1.00 (0 events), 0.71 (1 event), "
-        "0.52 (>=2 events). Gross CH4 reductions are reduced by the QA3 flat 15% "
-        "uncertainty deduction (§8.6.3) and by the N2O irrigation correction (PE_Red-Irri, "
-        "§8.3.2 Eq. 25, CF_N2O=0.00314 kg N2O/kg N). Net reductions follow Eq. 29 "
-        "(simplified: CH4 soil term only). Leakage sources not applicable to this project "
-        "scope are screened per §8.4 and treated as de minimis where <5% of gross reductions."
+        "scaling factor (SF_w) is assigned per Eq. 6/Table 5.12: 1.00 (0 events), 0.71 "
+        "(1 event), 0.55 (>=2 events), alongside a pre-season water-regime factor (SC_p, "
+        "Table 5.13) and an organic-amendment factor (SC_o, Eq. 7/Table 5.14). Gross CH4 "
+        "reductions are reduced by the QA3 flat 15% uncertainty deduction (§8.6.3, valid "
+        "only at or below the 60,000 tCO2e/yr project-size gate) and by the N2O irrigation "
+        "correction (PE_Red-Irri, §8.3.2 Eq. 25, CF_N2O=0.00314 kg N2O/kg N) — a mandatory "
+        "project emission subtracted in full, not a §8.4 leakage source. Net reductions "
+        "follow Eq. 29 (simplified: CH4 soil term only; §8.4 leakage sources such as "
+        "organic-amendment import and yield decline are not computed by this engine)."
     )
 
     # ---- 7. Assumptions ---------------------------------------------------
@@ -272,10 +287,11 @@ def generate_pdf(
         "Field area computed via Shoelace formula with spherical latitude "
         "correction (no external GIS dependency)",
         "Single cropping season assumed per analysis window",
-        "Organic amendment scaling factor (SFo) = 1.0 (no additional "
-        "organic inputs modeled)",
-        "Soil type scaling factor (SFs) = 1.0 (no site-specific soil "
-        "characterization data incorporated)",
+        "Pre-season water regime (SC_p) and organic-amendment (SC_o) factors "
+        "are user-entered (default: 5 t/ha straw, incorporated shortly before "
+        "cultivation, per §8.2.3 footnote 16) — verify against actual farm practice",
+        "Soil type / rice cultivar scaling (SFs/SFr) not modeled — no "
+        "site-specific soil characterization data incorporated",
     ], 1):
         pdf.set_x(pdf.l_margin + 8)
         pdf.set_font("Helvetica", "", 9)
@@ -332,26 +348,43 @@ def generate_audit_json(
             "season_length_days":       signal["season_length_days"],
             "from_phenology_detection": signal["from_phenology"],
         },
-        "carbon_calculation": {
-            "methodology":                        "VM0051 v1.0, QA3 Default Emission Factors",
-            "emission_factor_ef_c_kg_ch4_per_ha_per_day": 1.4,
-            "gwp_ch4_ar5_100yr":                  28,
-            "gwp_n2o_ar5_100yr":                  265,
-            "sf_w_baseline":                      1.0,
-            "sf_w_project":                       carbon["sf_w_project"],
-            "e_baseline_kg_ch4":                  round(carbon["e_baseline"], 6),
-            "e_project_kg_ch4":                   round(carbon["e_project"], 6),
-            "delta_e_ch4_kg":                     round(carbon["delta_e_ch4"], 6),
-            "gross_delta_e_tco2e":                round(carbon["delta_e_co2e"], 6),
-            "uncertainty_deduction_pct":          15.0,
-            "uncertainty_deduction_tco2e":        round(carbon["unc_tco2e"], 6),
-            "ch4_after_uncertainty_tco2e":        round(carbon["ch4_after_unc"], 6),
-            "q_n_kg_per_ha":                      carbon["q_n_kg_per_ha"],
-            "pe_n2o_irrigation_tco2e":            round(carbon["pe_n2o_tco2e"], 6),
-            "leakage_pct_of_gross":               carbon["leakage_pct"],
-            "leakage_de_minimis":                 carbon["leakage_de_minimis"],
-            "final_issuance_tco2e":               round(carbon["final_issuance"], 6),
-        },
+        "carbon_calculation": (
+            {
+                "methodology":         "VM0051 v1.0, QA3 Default Emission Factors",
+                "qa3_pathway_valid":   False,
+                "qa3_block_reason":    carbon.get("qa3_block_reason"),
+                "sf_w_project":        carbon.get("sf_w_project"),
+                "e_baseline_kg_ch4":   round(carbon["e_baseline"], 6) if carbon.get("e_baseline") is not None else None,
+                "e_project_kg_ch4":    round(carbon["e_project"], 6) if carbon.get("e_project") is not None else None,
+                "delta_e_ch4_kg":      round(carbon["delta_e_ch4"], 6) if carbon.get("delta_e_ch4") is not None else None,
+                "gross_delta_e_tco2e": round(carbon["delta_e_co2e"], 6) if carbon.get("delta_e_co2e") is not None else None,
+                "final_issuance_tco2e": None,
+            }
+            if not carbon.get("qa3_pathway_valid", True)
+            else {
+                "methodology":                        "VM0051 v1.0, QA3 Default Emission Factors",
+                "qa3_pathway_valid":                   True,
+                "emission_factor_ef_c_kg_ch4_per_ha_per_day": 1.4,
+                "gwp_ch4_ar5_100yr":                  28,
+                "gwp_n2o_ar5_100yr":                  265,
+                "sf_w_baseline":                      1.0,
+                "sf_w_project":                       carbon["sf_w_project"],
+                "sc_preseason":                       carbon["sc_preseason"],
+                "sc_organic_baseline":                carbon["sc_organic_bsl"],
+                "sc_organic_project":                 carbon["sc_organic_wp"],
+                "e_baseline_kg_ch4":                  round(carbon["e_baseline"], 6),
+                "e_project_kg_ch4":                   round(carbon["e_project"], 6),
+                "delta_e_ch4_kg":                     round(carbon["delta_e_ch4"], 6),
+                "gross_delta_e_tco2e":                round(carbon["delta_e_co2e"], 6),
+                "uncertainty_deduction_pct":          15.0,
+                "uncertainty_deduction_tco2e":        round(carbon["unc_tco2e"], 6),
+                "ch4_after_uncertainty_tco2e":        round(carbon["ch4_after_unc"], 6),
+                "q_n_kg_per_ha":                      carbon["q_n_kg_per_ha"],
+                "pe_n2o_irrigation_tco2e":            round(carbon["pe_n2o_tco2e"], 6),
+                "n2o_penalty_pct_of_gross_informational": carbon["n2o_penalty_pct_of_gross"],
+                "final_issuance_tco2e":               round(carbon["final_issuance"], 6),
+            }
+        ),
         "timeseries": df.to_dict(orient="records"),
     }
     return json.dumps(record, indent=2, default=str)
@@ -433,10 +466,19 @@ def generate_pdf_alm(
     pdf.kv("SOC stock change (project, Approach 2)", f"{carbon['delta_co2_soil_wp']:.4f} tCO2e (Eqs. 46-47)")
     pdf.kv("SOC uncertainty deduction", f"{carbon['unc_co2_pct']:.1f}%  (Eqs. 70-71, 74)")
     pdf.ln(2)
-    pdf.kv("Net Emission Reductions (ER_t)", f"{carbon['er_t']:.4f} tCO2e  (Eq. 37)")
-    pdf.kv("Net Removals (CR_t)", f"{carbon['cr_t']:.4f} tCO2e  (Eq. 40)")
+    if not carbon.get("leakage_screened", False):
+        pdf.banner(
+            "LEAKAGE NOT SCREENED: " + carbon.get("leakage_gap_note", "VM0042 §8.4.3 "
+            "requires production-decline leakage accounting (LK_disp,t via VMD0054), "
+            "not implemented by this engine."),
+            ok=False,
+        )
+    pdf.kv("Net Emission Reductions (ER_t)", f"{carbon['er_t']:.4f} tCO2e  (Eq. 37, leakage unscreened)")
+    pdf.kv("Net Removals (CR_t)", f"{carbon['cr_t']:.4f} tCO2e  (Eq. 40, leakage unscreened)")
     pdf.kv("Net Reductions + Removals (ERR_NET,t)", f"{carbon['err_net']:.4f} tCO2e  (Eq. 43)")
+    pdf.kv("Cumulative project SOC change (I(dCO2wp) basis)", f"{carbon['cumulative_delta_co2_wp']:.4f} tCO2e  (Eq. 37/40)")
     pdf.kv("Buffer deduction (ER / CR)", f"{carbon['bu_er']:.4f} / {carbon['bu_cr']:.4f} tCO2e  (Eqs. 75-76)")
+    pdf.kv("SOC remeasurement cadence", "Compliant (<=5 yr)" if carbon.get("cadence_compliant", True) else "NON-COMPLIANT (>5 yr)")
     pdf.ln(2)
     pdf.kv("NET ISSUANCE (VCU_t)", f"{carbon['final_issuance']:.4f} tCO2e  (Eqs. 77-79)")
 
@@ -474,8 +516,10 @@ def generate_pdf_alm(
         "Grazing practices, liming, and Quantification Approach 1 (external "
         "biogeochemical model) are out of scope - not modeled",
         "Leakage from organic amendment import, livestock/production "
-        "displacement, and production declines (§8.4) is assumed de minimis "
-        "and not verified",
+        "displacement, and production declines (§8.4.3) is NOT screened or "
+        "computed by this engine, though VM0042 makes production-decline "
+        "leakage accounting mandatory via VMD0054 - net reductions/removals "
+        "above are unscreened for this category",
         "The entire field is treated as a single quantification unit / "
         "stratum (permitted per §8.1); no sub-field stratification",
         "SOC uncertainty (Eqs. 70-71) conservatively assumes zero covariance "
