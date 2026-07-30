@@ -45,11 +45,19 @@ import math
 
 class AlmCarbonEngine:
     # IPCC 2019 Refinement to the 2006 IPCC Guidelines — Volume 4, Chapter 11
-    # Table 11.1 (direct N2O from N inputs, wet climate; conservative range)
+    # Table 11.1 (direct N2O from N inputs, wet climate; conservative range).
+    # EF_NDIRECT_LOW/HIGH confirmed verbatim against VM0042 v2.2 §8.6.3 (p.81),
+    # which quotes IPCC (2019)'s 0.013-0.019 wet-climate range directly.
     EF_NDIRECT_LOW  = 0.013
     EF_NDIRECT_HIGH = 0.019
     # Table 11.3 (indirect N2O — volatilization / leaching-runoff fractions
-    # and emission factors)
+    # and emission factors). STILL UNVERIFIED: Chapter 11 itself is not
+    # present in methodologies/ipcc/2019_refinement/ (only Ch.2 and Ch.5 are)
+    # and neither of those chapters reproduces Table 11.3's values — VM0042's
+    # own parameter tables (p.119-121, p.125) also just point to "Lookup Table
+    # 11.3" without quoting numbers. These five constants remain plausible
+    # (standard literature defaults) but not confirmed in-repo; sourcing
+    # Vol 4 Ch 11 would resolve this.
     FRAC_GASF  = 0.11
     FRAC_GASM  = 0.21
     EF_NVOLAT  = 0.014
@@ -61,16 +69,27 @@ class AlmCarbonEngine:
     # species-specific in this implementation
     N_CONTENT_NFIX = 0.025
 
-    # Biomass burning defaults, cereal residue (IPCC 2019 Refinement Vol 4
-    # Ch 2 Table 2.6 combustion factor; Table 2.5 emission factors)
-    CF_RESIDUE      = 0.90    # combustion factor (fraction of biomass consumed)
+    # EF_RESIDUE_CH4/N2O — CONFIRMED against IPCC 2019 Refinement Vol 4 Ch 2
+    # (methodologies/ipcc/2019_refinement/19R_V4_Ch02_Generic_Methodologies.pdf),
+    # Table 2.5 "Agricultural residues" row: CH4=2.7, N2O=0.07 g/kg dry matter
+    # burnt (exact match).
     EF_RESIDUE_CH4  = 2.7     # g CH4 / kg dry matter burnt
     EF_RESIDUE_N2O  = 0.07    # g N2O / kg dry matter burnt
+    # CF_RESIDUE — Table 2.6 gives crop-specific combustion factors, not one
+    # generic "agricultural residues" value: Wheat=0.90, Other Crops=0.85,
+    # Maize/Rice/Sugarcane=0.80. 0.90 (used here as a single default for all
+    # crop types) is the Wheat-specific value, not a universal default — an
+    # accurate per-crop table would need practice_schedule's crop_type to key
+    # into it, which this scoped implementation does not yet do.
+    CF_RESIDUE      = 0.90    # combustion factor (fraction of biomass consumed)
 
     # Fossil fuel CO2 — VM0042 v2.2 parameter table (p.102) quotes this directly:
     # diesel = 0.002886 t CO2e/L (source: IPCC 2019 Refinement Vol 2 Ch 3 Table 3.3.1)
     EF_CO2_DIESEL_T_PER_L = 0.002886
 
+    # Confirmed against VCS Standard v5.0 §3.14.4/Table 9
+    # (methodologies/verra/standards/VCS-Standard-v5.0.pdf): AR5 GWP100 is
+    # mandatory for reductions/removals on or after 1 Jan 2021.
     GWP_CH4 = 28    # IPCC AR5 GWP100
     GWP_N2O = 265   # IPCC AR5 GWP100
 
@@ -167,6 +186,19 @@ class AlmCarbonEngine:
         Eqs. 46-47 — SOC stock change (tCO2e) for baseline (control site) and
         project scenario, plus Eqs. 70-71/74 — the SOC-only uncertainty
         deduction. Requires >= MIN_SOC_SAMPLES samples per (site, timepoint).
+
+        VT0014 cross-check (methodologies/verra/vm0042/VT0014-v1.0.pdf):
+        VT0014 governs Digital Soil Mapping — spatial models predicting SOC at
+        unsampled locations across the project area. Its Applicability
+        Condition 1 (p.10) requires "a calibration dataset and validation
+        dataset...to calibrate and validate a model." This engine uses no
+        such model — it's a direct, single-stratum sample mean/variance
+        estimate (VM0042's plain "Measure and Re-Measure," permitted per
+        §8.1 for a single quantification unit). VT0014 is therefore not
+        applicable to this implementation; it would only become relevant if
+        this engine were extended to spatially interpolate SOC across a
+        multi-stratum project area instead of treating the whole field as
+        one unit.
         """
         means, variances = {}, {}
         for site_type in ("project", "control"):

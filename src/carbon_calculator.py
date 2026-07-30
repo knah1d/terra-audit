@@ -63,6 +63,10 @@ class CarbonAssetEngine:
     # VM0051 §8.3.2, Eq. 25 — N2O correction factor for AWD drying periods
     # CF_N2O derived from IPCC 2019 Table 11.1 (see VM0051 footnote 21)
     CF_N2O  = 0.00314  # kg N2O / kg N-input
+    # VM0051 defers GWP to "the most recent version of the VCS Standard"
+    # (p.47/49). Confirmed against VCS Standard v5.0 §3.14.4/Table 9
+    # (methodologies/verra/standards/VCS-Standard-v5.0.pdf): AR5 GWP100 is
+    # mandatory for reductions/removals on or after 1 Jan 2021 — CH4=28, N2O=265.
     GWP_N2O = 265      # IPCC AR5 GWP100 for N2O
 
     def __init__(self, ef_c: float = 1.4, gwp_ch4: int = 28):
