@@ -47,6 +47,15 @@ def initialize_database():
             )
         except Exception:
             pass
+        # Migration: cumulative ALM SOC indicator (VM0042 Eq. 37/40's I(deltaCO2wp)
+        # is defined on the cumulative change since project start, not a single
+        # verification period) — carbon_calculator_alm.AlmCarbonEngine.calculate_credits()
+        try:
+            conn.execute(
+                "ALTER TABLE fields ADD COLUMN alm_cumulative_delta_co2_wp REAL DEFAULT 0.0"
+            )
+        except Exception:
+            pass
         # PK covers field + observation date + the exact analysis window.
         # This prevents a 2024-01-15 observation overwriting a 2025-01-15
         # observation that shares the same calendar date string.
@@ -218,6 +227,27 @@ def save_soc_measurements(field_id: str, site_type: str, timepoint: str, values:
             VALUES (?, ?, ?, ?, ?)
             """,
             [(field_id, site_type, timepoint, i, v) for i, v in enumerate(values)],
+        )
+        conn.commit()
+
+
+def get_alm_cumulative_delta(field_id: str) -> float:
+    """Cumulative project SOC change (t CO2) since project start, used by
+    AlmCarbonEngine.calculate_credits()'s VM0042 Eq. 37/40 ER/CR classification
+    indicator. Returns 0.0 for a field with no prior verification recorded."""
+    with get_db_connection() as conn:
+        row = conn.execute(
+            "SELECT alm_cumulative_delta_co2_wp FROM fields WHERE field_id = ?", (field_id,)
+        ).fetchone()
+    return float(row["alm_cumulative_delta_co2_wp"]) if row and row["alm_cumulative_delta_co2_wp"] is not None else 0.0
+
+
+def update_alm_cumulative_delta(field_id: str, value: float):
+    """Persists the new cumulative total after a successful calculate_credits() call."""
+    with get_db_connection() as conn:
+        conn.execute(
+            "UPDATE fields SET alm_cumulative_delta_co2_wp = ? WHERE field_id = ?",
+            (value, field_id),
         )
         conn.commit()
 

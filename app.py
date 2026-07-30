@@ -36,6 +36,7 @@ from src.database import (
     get_db_connection, check_cache, save_cache,
     save_alm_practice_schedule, get_alm_practice_schedule,
     save_soc_measurements, get_soc_measurements, ALM_PRACTICE_COLUMNS,
+    get_alm_cumulative_delta, update_alm_cumulative_delta,
 )
 from src.data_engine import SpatialDataEngine
 from src.field_types import build_detector, build_methodology, field_uses_sar
@@ -1114,6 +1115,56 @@ def render_carbon_tab_rice_awd():
                  "Bangladesh boro rice default ≈ 100 kg N/ha.",
         )
 
+    with st.expander("⚙️ Advanced VM0051 Eq. 6/7 parameters (pre-season & organic amendments)"):
+        st.caption(
+            "These scaling factors are mandatory parts of VM0051's baseline/project CH₄ "
+            "formula (Eq. 6/7) — they are not optional extras. Defaults follow VM0051's "
+            "own stated baseline assumption (§8.2.3 footnote 16: 5 t/ha straw)."
+        )
+        pc1, pc2 = st.columns(2)
+        with pc1:
+            preseason_label = st.selectbox(
+                "Pre-season water regime (Table 5.13)",
+                options=[
+                    "Non-flooded pre-season < 180 days (double/multi-cropping)",
+                    "Non-flooded pre-season > 180 days (single cropping)",
+                ],
+                help="VM0051 Eq. 6, SC_p — applies identically to baseline and project.",
+            )
+            preseason_category = "short" if preseason_label.startswith("Non-flooded pre-season <") else "long"
+        with pc2:
+            st.markdown("&nbsp;", unsafe_allow_html=True)
+        oc1, oc2 = st.columns(2)
+        _CFOA_LABELS = {
+            "straw_shortly_before": "Straw, incorporated <30 days before cultivation",
+            "straw_long_before":    "Straw, incorporated >30 days before cultivation",
+            "compost":              "Compost",
+            "farmyard_manure":      "Farmyard manure",
+            "green_manure":         "Green manure",
+        }
+        with oc1:
+            st.markdown("**Baseline organic amendment** (§8.2.3 footnote 16)")
+            bsl_amendment_type = st.selectbox(
+                "Type", options=list(_CFOA_LABELS.keys()),
+                format_func=lambda k: _CFOA_LABELS[k], key="bsl_amendment_type",
+            )
+            bsl_amendment_rate = st.number_input(
+                "Rate (t/ha)", min_value=0.0, max_value=50.0, value=5.0, step=0.5,
+                key="bsl_amendment_rate",
+            )
+        with oc2:
+            st.markdown("**Project organic amendment**")
+            wp_amendment_type = st.selectbox(
+                "Type", options=list(_CFOA_LABELS.keys()),
+                format_func=lambda k: _CFOA_LABELS[k], key="wp_amendment_type",
+            )
+            wp_amendment_rate = st.number_input(
+                "Rate (t/ha)", min_value=0.0, max_value=50.0, value=5.0, step=0.5,
+                key="wp_amendment_rate",
+                help="Defaults to matching the baseline (no assumed change in straw "
+                     "management) — adjust if the project removes/burns straw instead.",
+            )
+
     run_carbon = st.button("⚡ Calculate Carbon Credits", type="primary")
 
     if run_carbon or st.session_state.get("carbon_ready"):
@@ -1122,6 +1173,9 @@ def render_carbon_tab_rice_awd():
             season_length_days=carbon_season,
             area_ha=carbon_area,
             q_n_kg_per_ha=q_n_kg_per_ha,
+            preseason_category=preseason_category,
+            baseline_amendments=((bsl_amendment_type, bsl_amendment_rate),),
+            project_amendments=((wp_amendment_type, wp_amendment_rate),),
         )
         st.session_state["export_cr"]            = cr
         st.session_state["export_q_n"]           = q_n_kg_per_ha
@@ -1130,6 +1184,12 @@ def render_carbon_tab_rice_awd():
         st.session_state["export_carbon_awd"]    = carbon_awd
 
         st.markdown("---")
+
+        if not cr.get("qa3_pathway_valid", True):
+            st.error(
+                "🚫 **QA3 pathway not valid for this project.** " + cr["qa3_block_reason"]
+            )
+            st.stop()
 
         # Summary metrics
         m1, m2, m3, m4 = st.columns(4)
@@ -1142,21 +1202,27 @@ def render_carbon_tab_rice_awd():
         st.markdown("#### 📐 Step-by-Step Audit Trail")
 
         # Step 1
-        st.markdown("**Step 1: Baseline Scenario** — continuous flooding, $SF_w = 1.0$")
-        st.latex(r"E_{\text{baseline}} = EF_c \times SF_{w,\text{baseline}} \times D \times A")
+        st.markdown(
+            "**Step 1: Baseline Scenario** — continuous flooding, "
+            f"$SF_w = 1.0$, $SC_p = {cr['sc_preseason']}$, $SC_o = {cr['sc_organic_bsl']:.3f}$"
+        )
+        st.latex(r"E_{\text{baseline}} = EF_c \times SF_{w,\text{bsl}} \times SC_p \times SC_{o,\text{bsl}} \times D \times A")
         st.latex(
-            f"E_{{\\text{{baseline}}}} = 1.4 \\times 1.0 \\times {carbon_season}"
+            f"E_{{\\text{{baseline}}}} = 1.4 \\times 1.0 \\times {cr['sc_preseason']}"
+            f" \\times {cr['sc_organic_bsl']:.3f} \\times {carbon_season}"
             f" \\times {carbon_area:.1f} = {cr['e_baseline']:.2f}\\text{{ kg CH}}_4"
         )
 
         # Step 2
         st.markdown(
             f"**Step 2: Project Scenario** — {carbon_awd} AWD event(s) "
-            f"→ $SF_{{w,\\text{{project}}}} = {cr['sf_w_project']}$"
+            f"→ $SF_{{w,\\text{{project}}}} = {cr['sf_w_project']}$, "
+            f"$SC_{{o,\\text{{wp}}}} = {cr['sc_organic_wp']:.3f}$"
         )
-        st.latex(r"E_{\text{project}} = EF_c \times SF_{w,\text{project}} \times D \times A")
+        st.latex(r"E_{\text{project}} = EF_c \times SF_{w,\text{project}} \times SC_p \times SC_{o,\text{wp}} \times D \times A")
         st.latex(
             f"E_{{\\text{{project}}}} = 1.4 \\times {cr['sf_w_project']}"
+            f" \\times {cr['sc_preseason']} \\times {cr['sc_organic_wp']:.3f}"
             f" \\times {carbon_season} \\times {carbon_area:.1f}"
             f" = {cr['e_project']:.2f}\\text{{ kg CH}}_4"
         )
@@ -1212,18 +1278,17 @@ def render_carbon_tab_rice_awd():
                 f" = {cr['pe_n2o_tco2e']:.4f}\\text{{ tCO}}_2\\text{{e}}"
             )
 
-        # Step 7 — Leakage de minimis screen (VM0051 §8.4)
-        st.markdown("**Step 7: Leakage De Minimis Screen** — VM0051 §8.4")
-        if cr["leakage_de_minimis"]:
-            st.success(
-                f"N₂O penalty is **{cr['leakage_pct']:.1f}%** of gross CH₄ reduction "
-                f"(< 5% threshold) → **de minimis**, no leakage deduction required."
-            )
-        else:
-            st.warning(
-                f"N₂O penalty is **{cr['leakage_pct']:.1f}%** of gross CH₄ reduction "
-                f"(≥ 5% threshold) → **not de minimis**, full N₂O deduction applied."
-            )
+        # Step 7 — N2O penalty context (NOT a §8.4 leakage screen — PE_Red-Irri is
+        # a mandatory Eq. 29 project emission, always subtracted in full below;
+        # §8.4 leakage sources are organic-amendment import/yield decline/biomass
+        # diversion, none of which this engine computes)
+        st.markdown("**Step 7: N₂O Penalty Context** — informational only")
+        st.caption(
+            f"N₂O correction (PE_Red-Irri) is **{cr['n2o_penalty_pct_of_gross']:.1f}%** of "
+            "gross CH₄ reduction. This is a mandatory VM0051 Eq. 29 project emission, not "
+            "a §8.4 leakage source — it is always subtracted in full below regardless of "
+            "this percentage."
+        )
 
         # Step 8 — Net reductions (VM0051 Eq. 29, simplified)
         st.markdown(
@@ -1286,20 +1351,22 @@ def render_carbon_tab_rice_awd():
                 "from_phenology":     st.session_state.get("export_from_phenology", False),
             }
             _car = {
-                "sf_w_project":       cr["sf_w_project"],
-                "p_uncertainty":      cr["p_uncertainty"],
-                "e_baseline":         cr["e_baseline"],
-                "e_project":          cr["e_project"],
-                "delta_e_ch4":        cr["delta_e_ch4"],
-                "delta_e_co2e":       cr["delta_e_co2e"],
-                "unc_tco2e":          cr["unc_tco2e"],
-                "ch4_after_unc":      cr["ch4_after_unc"],
-                "pe_n2o_tco2e":       cr["pe_n2o_tco2e"],
-                "q_n_kg_per_ha":      cr["q_n_kg_per_ha"],
-                "leakage_pct":        cr["leakage_pct"],
-                "leakage_de_minimis": cr["leakage_de_minimis"],
-                "final_issuance":     cr["final_issuance"],
-                "confidence_pct":     None,
+                "sf_w_project":             cr["sf_w_project"],
+                "sc_preseason":             cr["sc_preseason"],
+                "sc_organic_bsl":           cr["sc_organic_bsl"],
+                "sc_organic_wp":            cr["sc_organic_wp"],
+                "p_uncertainty":            cr["p_uncertainty"],
+                "e_baseline":               cr["e_baseline"],
+                "e_project":                cr["e_project"],
+                "delta_e_ch4":              cr["delta_e_ch4"],
+                "delta_e_co2e":             cr["delta_e_co2e"],
+                "unc_tco2e":                cr["unc_tco2e"],
+                "ch4_after_unc":            cr["ch4_after_unc"],
+                "pe_n2o_tco2e":             cr["pe_n2o_tco2e"],
+                "q_n_kg_per_ha":            cr["q_n_kg_per_ha"],
+                "n2o_penalty_pct_of_gross": cr["n2o_penalty_pct_of_gross"],
+                "final_issuance":           cr["final_issuance"],
+                "confidence_pct":           None,
             }
             _df_exp    = st.session_state["export_df"]
             _fid_slug  = selected_id.replace("-", "").lower()
@@ -1387,8 +1454,11 @@ def render_carbon_tab_alm():
         )
     with c2:
         verification_years = st.number_input(
-            "Verification period (years)", 1.0, 10.0, 1.0, step=1.0,
-            help="Length of the verification period, x in Eqs. 46-47.",
+            "Verification period (years)", 1.0, 5.0, 1.0, step=1.0,
+            help="Length of the verification period, x in Eqs. 46-47. Capped at "
+                 "5 years — VM0042's mandatory SOC remeasurement cadence "
+                 "(monitoring tables p.92/p.128; June 2026 Corrections Clarification 8) "
+                 "requires remeasurement at least every 5 years.",
             key="alm_verif_years",
         )
     with c3:
@@ -1402,17 +1472,27 @@ def render_carbon_tab_alm():
     run_carbon = st.button("⚡ Calculate Carbon Credits", type="primary", key="alm_run_carbon")
 
     if run_carbon or st.session_state.get("alm_carbon_ready"):
+        _prior_cumulative = get_alm_cumulative_delta(selected_id)
         cr = carbon_engine.calculate_credits(
             practice_schedule=practice_schedule,
             soc_measurements=soc_measurements,
             area_ha=carbon_area,
             verification_years=verification_years,
             non_permanence_risk_pct=non_permanence_risk_pct,
+            prior_cumulative_delta_co2_wp_t=_prior_cumulative,
         )
+        if run_carbon:
+            update_alm_cumulative_delta(selected_id, cr["cumulative_delta_co2_wp"])
         st.session_state["alm_carbon_ready"] = True
         st.session_state["export_cr"]        = cr
 
         st.markdown("---")
+
+        st.warning(
+            "⚠️ **Leakage not screened.** " + cr["leakage_gap_note"] + " Net reductions/"
+            "removals below are unscreened for this mandatory VM0042 §8.4.3 category."
+        )
+
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("Net Reductions (ER)",  f"{cr['er_t']:.3f} tCO₂e")
         m2.metric("Net Removals (CR)",    f"{cr['cr_t']:.3f} tCO₂e")
