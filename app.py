@@ -37,6 +37,7 @@ from src.database import (
     save_alm_practice_schedule, get_alm_practice_schedule,
     save_soc_measurements, get_soc_measurements, ALM_PRACTICE_COLUMNS,
     get_alm_cumulative_delta, update_alm_cumulative_delta,
+    save_alm_livestock_schedule, get_alm_livestock_schedule,
 )
 from src.data_engine import SpatialDataEngine
 from src.field_types import build_detector, build_methodology, field_uses_sar
@@ -874,9 +875,17 @@ def render_signal_analytics_tab():
             )
 
 
-def _alm_practice_form(scenario_label: str, existing: dict, key_prefix: str) -> dict:
-    """Renders one baseline/project ALM practice-schedule form (Table 4 subset)."""
+_LIVESTOCK_TYPE_LABELS = {
+    "cattle_dairy": "Dairy cattle", "cattle_nondairy": "Non-dairy cattle",
+    "buffalo": "Buffalo", "sheep": "Sheep", "goat": "Goats",
+}
+
+
+def _alm_practice_form(scenario_label: str, existing: dict, existing_livestock: list, key_prefix: str):
+    """Renders one baseline/project ALM practice-schedule form (Table 4 subset).
+    Returns (practices_dict, livestock_list)."""
     existing = existing or {}
+    existing_livestock = {e["livestock_type"]: e for e in (existing_livestock or [])}
     st.markdown(f"##### {scenario_label}")
     _CROP_TYPE_OPTIONS = ["Wheat", "Maize", "Rice", "Sugarcane", "Other Crops"]
     _existing_crop = existing.get("crop_type") or ""
@@ -975,7 +984,43 @@ def _alm_practice_form(scenario_label: str, existing: dict, key_prefix: str) -> 
         key=f"{key_prefix}_crop_yield", disabled=not track_yield,
     ) if track_yield else None
 
-    return {
+    has_livestock = st.checkbox(
+        "Integrated crop-livestock system (pasture-based grazing)",
+        value=bool(existing_livestock), key=f"{key_prefix}_has_livestock",
+        help="VM0042 §8.2.6/§8.2.7/§8.2.10 (Condition 1e/3a). Scoped to "
+             "Pasture/Range/Paddock grazing only — feedlots and other manure "
+             "management systems are not modeled.",
+    )
+    livestock = []
+    if has_livestock:
+        with st.expander("🐄 Livestock (enteric fermentation + manure CH4/N2O)", expanded=True):
+            for ltype, label in _LIVESTOCK_TYPE_LABELS.items():
+                lc1, lc2 = st.columns(2)
+                existing_entry = existing_livestock.get(ltype, {})
+                with lc1:
+                    pop = st.number_input(
+                        f"{label} — head count", min_value=0, max_value=500,
+                        value=int(existing_entry.get("population_head") or 0), step=1,
+                        key=f"{key_prefix}_livestock_{ltype}_pop",
+                    )
+                with lc2:
+                    ps_options = ["low", "high"]
+                    ps_default = existing_entry.get("productivity_system") or "low"
+                    productivity_system = st.selectbox(
+                        f"{label} — productivity system",
+                        options=ps_options,
+                        index=ps_options.index(ps_default) if ps_default in ps_options else 0,
+                        format_func=lambda p: p.capitalize(),
+                        key=f"{key_prefix}_livestock_{ltype}_ps",
+                        disabled=pop <= 0,
+                    )
+                if pop > 0:
+                    livestock.append({
+                        "livestock_type": ltype, "population_head": pop,
+                        "productivity_system": productivity_system,
+                    })
+
+    practices = {
         "crop_type": crop_type.strip() or None,
         "crop_rotation": crop_rotation,
         "cover_crops": cover_crops,
@@ -991,6 +1036,7 @@ def _alm_practice_form(scenario_label: str, existing: dict, key_prefix: str) -> 
         "fuel_use_l_ha": fuel_use_l_ha,
         "crop_yield_t_ha": crop_yield_t_ha,
     }
+    return practices, livestock
 
 
 def _parse_soc_values(text: str) -> list:
@@ -1020,21 +1066,26 @@ def render_practice_tab():
     st.markdown("---")
 
     existing_practices = get_alm_practice_schedule(selected_id)
+    existing_livestock = get_alm_livestock_schedule(selected_id)
 
     st.markdown("### 📋 Practice Schedule")
     col_bsl, col_wp = st.columns(2)
     with col_bsl:
-        bsl_practices = _alm_practice_form(
-            "Baseline scenario", existing_practices.get("baseline"), key_prefix="bsl"
+        bsl_practices, bsl_livestock = _alm_practice_form(
+            "Baseline scenario", existing_practices.get("baseline"),
+            existing_livestock.get("baseline"), key_prefix="bsl",
         )
     with col_wp:
-        wp_practices = _alm_practice_form(
-            "Project scenario", existing_practices.get("project"), key_prefix="wp"
+        wp_practices, wp_livestock = _alm_practice_form(
+            "Project scenario", existing_practices.get("project"),
+            existing_livestock.get("project"), key_prefix="wp",
         )
 
     if st.button("💾 Save Practice Schedule", type="primary"):
         save_alm_practice_schedule(selected_id, "baseline", bsl_practices)
         save_alm_practice_schedule(selected_id, "project", wp_practices)
+        save_alm_livestock_schedule(selected_id, "baseline", bsl_livestock)
+        save_alm_livestock_schedule(selected_id, "project", wp_livestock)
         st.success("Practice schedule saved.")
         st.rerun()
 
@@ -1087,6 +1138,9 @@ def render_practice_tab():
         st.session_state["alm_practice_schedule"] = practice_schedule
         st.session_state["alm_soc_measurements"]  = soc_inputs
         st.session_state["alm_area_ha"]           = field_area
+        st.session_state["alm_livestock_schedule"] = {
+            "baseline": bsl_livestock, "project": wp_livestock,
+        }
 
 
 # ===========================================================================
@@ -1453,14 +1507,16 @@ def render_carbon_tab_alm():
     st.caption(
         "Reads the practice schedule and SOC samples saved in the "
         "**Practice & Soil Data** tab. Covers tillage/residue, fertilizer, "
-        "and crop planting/harvesting practice changes only — grazing, "
-        "liming, and leakage are out of scope (see Methodology in the "
+        "crop planting/harvesting, and pasture-based integrated crop-"
+        "livestock practice changes — liming, non-pasture manure systems, "
+        "and other leakage sources are out of scope (see Methodology in the "
         "exported report)."
     )
     st.markdown("---")
 
     practice_schedule = st.session_state.get("alm_practice_schedule")
     soc_measurements   = st.session_state.get("alm_soc_measurements")
+    livestock_schedule = st.session_state.get("alm_livestock_schedule") or {"baseline": [], "project": []}
     default_area       = st.session_state.get("alm_area_ha", field_area)
 
     if practice_schedule is None or soc_measurements is None or \
@@ -1505,6 +1561,8 @@ def render_carbon_tab_alm():
             verification_years=verification_years,
             non_permanence_risk_pct=non_permanence_risk_pct,
             prior_cumulative_delta_co2_wp_t=_prior_cumulative,
+            baseline_livestock=livestock_schedule.get("baseline"),
+            project_livestock=livestock_schedule.get("project"),
         )
         st.session_state["export_cr"] = cr
 
@@ -1565,6 +1623,16 @@ def render_carbon_tab_alm():
             f"\\qquad N_2O_{{bb}}: {cr['n2o_bb_bsl']:.4f} \\to {cr['n2o_bb_wp']:.4f}\\text{{ tCO}}_2\\text{{e}}"
         )
 
+        st.markdown("**Step 3b: Livestock — enteric fermentation + manure CH₄/N₂O** — §8.2.6/§8.2.7/Ch 11 Eq. 11.5")
+        st.caption("Pasture/Range/Paddock scope only (see caption above).")
+        st.latex(
+            f"CH_{{4,ent}}: {cr['ch4_ent_bsl']:.4f} \\to {cr['ch4_ent_wp']:.4f}"
+            f"\\qquad CH_{{4,manure}}: {cr['ch4_manure_bsl']:.4f} \\to {cr['ch4_manure_wp']:.4f}\\text{{ tCO}}_2\\text{{e}}"
+        )
+        st.latex(
+            f"N_2O_{{manure}}: {cr['n2o_manure_bsl']:.4f} \\to {cr['n2o_manure_wp']:.4f}\\text{{ tCO}}_2\\text{{e}}"
+        )
+
         st.markdown("**Step 4: CO₂ from fossil fuel combustion** — Eqs. 6-7")
         st.latex(
             f"CO_{{2,ff}}: {cr['co2_ff_bsl']:.4f} \\to {cr['co2_ff_wp']:.4f}\\text{{ tCO}}_2\\text{{e}}"
@@ -1594,7 +1662,7 @@ def render_carbon_tab_alm():
             f" CR_t = {cr['cr_t']:.4f}\\text{{ tCO}}_2\\text{{e}} \\qquad"
             f" ERR_{{NET,t}} = {cr['err_net']:.4f}\\text{{ tCO}}_2\\text{{e}}"
         )
-        st.caption("Leakage (organic amendment import, displacement, production decline) is out of scope — treated as zero.")
+        st.caption("Other leakage sources (organic amendment import, livestock/biomass displacement) are out of scope — treated as zero (see warning above).")
 
         st.markdown(
             f"**Step 8: Buffer deduction & VCU issuance** — Eqs. 75-79, "
@@ -1636,7 +1704,7 @@ def render_carbon_tab_alm():
         col_pdf, col_json, col_csv = st.columns(3)
         with col_pdf:
             try:
-                pdf_bytes = generate_pdf_alm(_fi, _meta, practice_schedule, cr)
+                pdf_bytes = generate_pdf_alm(_fi, _meta, practice_schedule, cr, livestock_schedule)
                 st.download_button(
                     "⬇️ Audit Report (PDF)", data=pdf_bytes,
                     file_name=f"terra_audit_alm_{_fid_slug}.pdf",
@@ -1647,7 +1715,7 @@ def render_carbon_tab_alm():
         with col_json:
             st.download_button(
                 "⬇️ Audit Package (JSON)",
-                data=generate_audit_json_alm(_fi, _meta, practice_schedule, soc_measurements, cr),
+                data=generate_audit_json_alm(_fi, _meta, practice_schedule, soc_measurements, cr, livestock_schedule),
                 file_name=f"audit_alm_{_fid_slug}.json",
                 mime="application/json", use_container_width=True,
             )

@@ -111,6 +111,22 @@ def initialize_database():
         except Exception:
             pass
 
+        # VM0042 ALM field type — integrated crop-livestock schedule (§8.2.6/
+        # §8.2.7/§8.2.10, Pasture/Range/Paddock scope — see AlmCarbonEngine's
+        # LIVESTOCK_TABLE docstring). One row per (field_id, scenario,
+        # livestock_type); zero-population entries are never stored.
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS alm_livestock_schedule (
+                field_id            TEXT NOT NULL,
+                scenario            TEXT NOT NULL CHECK (scenario IN ('baseline', 'project')),
+                livestock_type      TEXT NOT NULL,
+                population_head     REAL NOT NULL,
+                productivity_system TEXT NOT NULL CHECK (productivity_system IN ('high', 'low')),
+                updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (field_id, scenario, livestock_type)
+            )
+        """)
+
         # VM0042 ALM field type — SOC lab measurements (Quantification Approach 2).
         # Paired project-site vs baseline-control-site samples at two timepoints,
         # feeding Eqs 3-5/46-47 (stock change) and Eqs 70-71/74 (uncertainty).
@@ -218,6 +234,54 @@ def get_alm_practice_schedule(field_id: str) -> dict:
     result = {"baseline": None, "project": None}
     for row in rows:
         result[row["scenario"]] = {k: row[k] for k in ALM_PRACTICE_COLUMNS}
+    return result
+
+
+def save_alm_livestock_schedule(field_id: str, scenario: str, livestock: list):
+    """Replaces all livestock rows for a (field, scenario) pair. `livestock`
+    is a list of {"livestock_type", "population_head", "productivity_system"}
+    dicts; entries with population_head <= 0 are dropped, not stored."""
+    with get_db_connection() as conn:
+        conn.execute(
+            "DELETE FROM alm_livestock_schedule WHERE field_id = ? AND scenario = ?",
+            (field_id, scenario),
+        )
+        rows = [
+            (field_id, scenario, e["livestock_type"], e["population_head"], e["productivity_system"])
+            for e in livestock
+            if (e.get("population_head") or 0) > 0
+        ]
+        if rows:
+            conn.executemany(
+                """
+                INSERT INTO alm_livestock_schedule
+                    (field_id, scenario, livestock_type, population_head, productivity_system)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                rows,
+            )
+        conn.commit()
+
+
+def get_alm_livestock_schedule(field_id: str) -> dict:
+    """Returns {'baseline': [...], 'project': [...]} of livestock entries
+    for a field, each a {"livestock_type", "population_head",
+    "productivity_system"} dict."""
+    with get_db_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT scenario, livestock_type, population_head, productivity_system
+            FROM alm_livestock_schedule WHERE field_id = ?
+            """,
+            (field_id,),
+        ).fetchall()
+    result = {"baseline": [], "project": []}
+    for row in rows:
+        result[row["scenario"]].append({
+            "livestock_type": row["livestock_type"],
+            "population_head": row["population_head"],
+            "productivity_system": row["productivity_system"],
+        })
     return result
 
 

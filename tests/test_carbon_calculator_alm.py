@@ -167,6 +167,81 @@ def test_combustion_factor_falls_back_to_other_crops_for_unknown_type(engine):
     assert engine._combustion_factor("") == 0.85
 
 
+def test_enteric_fermentation_uses_ipcc_ef_ent_per_head(engine):
+    """Eq. 10.19/10.20 — kg CH4/head/yr straight from Table 10.11, no TAM
+    conversion needed (already a per-head-per-year rate)."""
+    livestock = [{"livestock_type": "cattle_nondairy", "population_head": 10, "productivity_system": "high"}]
+    result = engine._enteric_fermentation(livestock)
+    expected_kg_ch4 = 10 * engine.LIVESTOCK_TABLE["cattle_nondairy"]["ef_ent"]["high"]
+    assert result == pytest.approx(expected_kg_ch4 * engine.GWP_CH4 / 1000.0)
+
+
+def test_enteric_fermentation_skips_unknown_type_and_zero_population(engine):
+    """Unrecognized livestock_type or non-positive population must be
+    skipped, not guessed at with a default emission factor."""
+    livestock = [
+        {"livestock_type": "unicorn", "population_head": 5},
+        {"livestock_type": "goat", "population_head": 0},
+    ]
+    assert engine._enteric_fermentation(livestock) == 0.0
+
+
+def test_manure_pasture_ch4_n2o_matches_hand_calc(engine):
+    """Eq. 10.22 (CH4, Table 10.14's constant PRP factor) and Ch 11 Eq. 11.5
+    (N2O via F_PRP, Table 11.1's EF3PRP) computed from VS_rate/Nex_rate/TAM."""
+    livestock = [{"livestock_type": "buffalo", "population_head": 4, "productivity_system": "low"}]
+    ch4, n2o = engine._manure_pasture_ch4_n2o(livestock)
+
+    params = engine.LIVESTOCK_TABLE["buffalo"]
+    tam = params["tam_kg"]["low"]
+    vs_annual = params["vs_rate"]["low"] * tam / 1000 * 365
+    nex_annual = params["nex_rate"]["low"] * tam / 1000 * 365
+    expected_ch4_tco2e = (4 * vs_annual * engine.EF_CH4_MD_PRP_G_PER_KG_VS / 1000.0) * engine.GWP_CH4 / 1000.0
+    expected_n2o_tco2e = (4 * nex_annual * engine.EF3_PRP_CPP) * 44 / 28 * engine.GWP_N2O / 1000.0
+
+    assert ch4 == pytest.approx(expected_ch4_tco2e)
+    assert n2o == pytest.approx(expected_n2o_tco2e)
+
+
+def test_manure_pasture_n2o_uses_so_factor_for_sheep_and_goats(engine):
+    """Table 11.1 gives sheep/'other animals' (which includes goats) a
+    distinct, lower EF3PRP (SO) than cattle/buffalo/poultry/pigs (CPP)."""
+    livestock = [{"livestock_type": "sheep", "population_head": 20, "productivity_system": "high"}]
+    _, n2o = engine._manure_pasture_ch4_n2o(livestock)
+
+    params = engine.LIVESTOCK_TABLE["sheep"]
+    tam = params["tam_kg"]["high"]
+    nex_annual = params["nex_rate"]["high"] * tam / 1000 * 365
+    expected = (20 * nex_annual * engine.EF3_PRP_SO) * 44 / 28 * engine.GWP_N2O / 1000.0
+    assert n2o == pytest.approx(expected)
+
+
+def test_livestock_defaults_to_no_op_when_omitted(engine, practice_schedule, soc_measurements):
+    """Zero livestock (the default, and existing pre-Phase-3 call sites) must
+    be a strict no-op — backward compatibility for every existing caller."""
+    r_without = engine.calculate_credits(practice_schedule, soc_measurements, area_ha=5.0)
+    r_with_empty = engine.calculate_credits(
+        practice_schedule, soc_measurements, area_ha=5.0,
+        baseline_livestock=[], project_livestock=[],
+    )
+    assert r_without["final_issuance"] == pytest.approx(r_with_empty["final_issuance"])
+    assert r_without["delta_ch4_livestock"] == 0.0
+    assert r_without["delta_n2o_livestock"] == 0.0
+
+
+def test_livestock_reduction_increases_final_issuance(engine, practice_schedule, soc_measurements):
+    """Removing baseline livestock in the project scenario is an emission
+    reduction and must increase final_issuance relative to no livestock."""
+    r_no_livestock = engine.calculate_credits(practice_schedule, soc_measurements, area_ha=5.0)
+    r_with_livestock = engine.calculate_credits(
+        practice_schedule, soc_measurements, area_ha=5.0,
+        baseline_livestock=[{"livestock_type": "cattle_nondairy", "population_head": 5, "productivity_system": "low"}],
+        project_livestock=[],
+    )
+    assert r_with_livestock["delta_ch4_livestock"] > 0
+    assert r_with_livestock["final_issuance"] > r_no_livestock["final_issuance"]
+
+
 def test_cumulative_indicator_persists_across_verification_periods(engine, practice_schedule, soc_measurements):
     r1 = engine.calculate_credits(practice_schedule, soc_measurements, area_ha=5.0, verification_years=2.0)
     r2 = engine.calculate_credits(
@@ -248,3 +323,53 @@ def test_alm_end_to_end_ui_walkthrough_fixture(engine):
     assert r["other_leakage_screened"] is False
     assert r["production_decline_leakage_data_available"] is False  # fixture predates crop_yield_t_ha
     assert r["cadence_compliant"] is True
+
+
+def test_alm_livestock_ui_walkthrough_fixture(engine):
+    """
+    Locks in the first-ever real-data walkthrough of VM0042's integrated
+    crop-livestock feature through the actual Streamlit UI (field F-102):
+    the same wheat baseline/project practice schedule as
+    test_alm_end_to_end_ui_walkthrough_fixture, with 5 non-dairy cattle
+    (low productivity) grazing in the baseline scenario and none in the
+    project scenario (a rotational-grazing-to-cropland-only practice
+    change). Exercised via app.py's Practice & Soil Data tab (enabling the
+    livestock checkbox, entering head count/productivity system, saving)
+    and Carbon Ledger tab (calculate, export PDF/JSON/CSV) with no
+    exceptions before this fixture was written.
+    """
+    practice_schedule = {
+        "baseline": {
+            "crop_type": "Wheat", "tillage": 1, "tillage_depth_cm": 20.0,
+            "residue_removed": 0, "residue_burned_kg_ha": 500.0,
+            "synthetic_n_rate_kg_ha": 120.0, "organic_n_rate_kg_ha": 0.0,
+            "n_fixing_species": 0, "n_fixing_dry_matter_kg_ha": 0.0,
+            "fuel_use_l_ha": 40.0,
+        },
+        "project": {
+            "crop_type": "Wheat", "tillage": 0, "tillage_depth_cm": 0.0,
+            "residue_removed": 0, "residue_burned_kg_ha": 0.0,
+            "synthetic_n_rate_kg_ha": 80.0, "organic_n_rate_kg_ha": 20.0,
+            "n_fixing_species": 1, "n_fixing_dry_matter_kg_ha": 1000.0,
+            "fuel_use_l_ha": 25.0,
+        },
+    }
+    soc_measurements = {
+        ("project", "t_start"): [30.0, 32.0, 29.0],
+        ("project", "t_final"): [34.0, 35.0, 33.0],
+        ("control", "t_start"): [30.0, 31.0, 29.0],
+        ("control", "t_final"): [30.0, 31.0, 30.0],
+    }
+    r = engine.calculate_credits(
+        practice_schedule, soc_measurements, area_ha=31.837,
+        verification_years=1.0, non_permanence_risk_pct=20.0,
+        baseline_livestock=[{"livestock_type": "cattle_nondairy", "population_head": 5, "productivity_system": "low"}],
+        project_livestock=[],
+    )
+    assert r["ch4_ent_bsl"] == pytest.approx(6.58)
+    assert r["ch4_ent_wp"] == pytest.approx(0.0)
+    assert r["ch4_manure_bsl"] == pytest.approx(0.08682912)
+    assert r["n2o_manure_bsl"] == pytest.approx(0.4412152328571428)
+    assert r["er_t"] == pytest.approx(9.71049851792856)
+    assert r["cr_t"] == pytest.approx(89.0212203072913)  # SOC term unaffected by livestock
+    assert r["final_issuance"] == pytest.approx(80.9274747637616)
