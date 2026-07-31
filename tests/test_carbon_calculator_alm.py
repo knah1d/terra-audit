@@ -88,13 +88,53 @@ def test_buffer_vcu_arithmetic_holds(engine, practice_schedule, soc_measurements
     assert r["cr_t"] - r["bu_cr"] == pytest.approx(r["vcu_cr"])
 
 
-def test_leakage_gap_is_disclosed_not_silently_zero(engine, practice_schedule, soc_measurements):
-    """VM0042 §8.4.3 makes production-decline leakage mandatory; this engine
-    can't compute it (no VMD0054), but must disclose the gap rather than
-    silently returning a clean zero."""
+def test_other_leakage_gap_is_disclosed_not_silently_zero(engine, practice_schedule, soc_measurements):
+    """VM0042 §8.4.3 makes organic-amendment-import/biomass-displacement
+    leakage mandatory; this engine can't compute it, but must disclose the
+    gap rather than silently returning a clean zero."""
     r = engine.calculate_credits(practice_schedule, soc_measurements, area_ha=5.0)
-    assert r["leakage_screened"] is False
-    assert r["leakage_gap_note"]  # non-empty
+    assert r["other_leakage_screened"] is False
+    assert r["other_leakage_gap_note"]  # non-empty
+
+
+def test_production_decline_leakage_unscreened_when_no_yield_data(engine, practice_schedule, soc_measurements):
+    """practice_schedule fixture has no crop_yield_t_ha entered — production-
+    decline leakage can't be screened, but (unlike a real decline) must not
+    block issuance either, since we simply don't know."""
+    r = engine.calculate_credits(practice_schedule, soc_measurements, area_ha=5.0)
+    assert r["production_decline_leakage_data_available"] is False
+    assert r["production_decline_leakage_screened"] is False
+    assert "production_decline_leakage_blocked" not in r
+    assert r["final_issuance"] is not None
+
+
+def test_production_decline_leakage_screens_clean_when_yield_maintained(engine, soc_measurements):
+    """Yield-neutral practice change (common for reduced tillage/cover crops)
+    -> foregone production is zero -> screened clean, not blocked."""
+    practice_schedule = {
+        "baseline": {"crop_yield_t_ha": 4.0},
+        "project": {"crop_yield_t_ha": 4.2},  # yield maintained/improved
+    }
+    r = engine.calculate_credits(practice_schedule, soc_measurements, area_ha=5.0)
+    assert r["production_decline_leakage_data_available"] is True
+    assert r["production_decline_leakage_screened"] is True
+    assert r["foregone_production_t"] == pytest.approx(0.0)
+    assert r["final_issuance"] is not None
+
+
+def test_production_decline_leakage_blocks_issuance_when_yield_declines(engine, soc_measurements):
+    """Real production decline detected -> VMD0054 Steps 3-5 (new-land
+    carbon-stock accounting) are required but not implemented -> block
+    rather than fabricate a number."""
+    practice_schedule = {
+        "baseline": {"crop_yield_t_ha": 5.0},
+        "project": {"crop_yield_t_ha": 3.5},  # yield declined
+    }
+    r = engine.calculate_credits(practice_schedule, soc_measurements, area_ha=5.0)
+    assert r["production_decline_leakage_blocked"] is True
+    assert r["final_issuance"] is None
+    assert r["foregone_production_t"] == pytest.approx((5.0 - 3.5) * 5.0)
+    assert "VMD0054" in r["leakage_block_reason"]
 
 
 def test_cumulative_indicator_persists_across_verification_periods(engine, practice_schedule, soc_measurements):
@@ -175,5 +215,6 @@ def test_alm_end_to_end_ui_walkthrough_fixture(engine):
     assert r["cr_t"] == pytest.approx(89.0212203072913)
     assert r["unc_co2_pct"] == pytest.approx(16.115318364835353)
     assert r["final_issuance"] == pytest.approx(73.81943041090446)
-    assert r["leakage_screened"] is False
+    assert r["other_leakage_screened"] is False
+    assert r["production_decline_leakage_data_available"] is False  # fixture predates crop_yield_t_ha
     assert r["cadence_compliant"] is True
