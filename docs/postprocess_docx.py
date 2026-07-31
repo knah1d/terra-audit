@@ -11,11 +11,27 @@ def ensure(p,n):
     c=p.find(n,NS)
     return c if c is not None else ET.SubElement(p,qn(n))
 def text(p): return "".join(n.text or "" for n in p.findall(".//w:t",NS))
+TABLE_BORDER_COLOR="4F81BD"
+def set_table_borders(styles_path):
+    tree=ET.parse(styles_path); root=tree.getroot()
+    for style in root.findall("w:style",NS):
+        if style.get(qn("w:styleId"))=="Table":
+            tbl_pr=ensure(style,"w:tblPr")
+            borders=ET.Element(qn("w:tblBorders"))
+            for edge in ("top","left","bottom","right","insideH","insideV"):
+                el=ET.SubElement(borders,qn("w:"+edge))
+                el.set(qn("w:val"),"single"); el.set(qn("w:sz"),"4")
+                el.set(qn("w:space"),"0"); el.set(qn("w:color"),TABLE_BORDER_COLOR)
+            tbl_ind=tbl_pr.find("w:tblInd",NS)
+            tbl_pr.insert(list(tbl_pr).index(tbl_ind)+1 if tbl_ind is not None else 0,borders)
+            tree.write(styles_path,encoding="UTF-8",xml_declaration=True)
+            return
 def process(name):
     src=Path(name)
     with tempfile.TemporaryDirectory(prefix="terra-srs-docx-") as td:
         tmp=Path(td)
         with zipfile.ZipFile(src) as z: z.extractall(tmp)
+        set_table_borders(tmp/"word/styles.xml")
         xml=tmp/"word/document.xml"; tree=ET.parse(xml); root=tree.getroot(); body=root.find("w:body",NS)
         sect=body.find("w:sectPr",NS); size=ensure(sect,"w:pgSz"); size.set(qn("w:w"),"11906"); size.set(qn("w:h"),"16838")
         margins=ensure(sect,"w:pgMar")
