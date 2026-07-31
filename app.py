@@ -1430,6 +1430,7 @@ def render_carbon_tab_rice_awd():
                 "from_phenology":     st.session_state.get("export_from_phenology", False),
             }
             _car = {
+                "ef_c_used":                cr["ef_c_used"],
                 "sf_w_project":             cr["sf_w_project"],
                 "sc_preseason":             cr["sc_preseason"],
                 "sc_organic_bsl":           cr["sc_organic_bsl"],
