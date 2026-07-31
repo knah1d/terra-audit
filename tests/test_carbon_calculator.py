@@ -100,6 +100,16 @@ def test_n2o_penalty_uses_gwp_n2o_and_cf_n2o_constants(engine):
     assert r["pe_n2o_tco2e"] == pytest.approx(expected)
 
 
+def test_ef_c_matches_ipcc_2019_table_5_11_south_asia(engine):
+    """Regression guard: EF_c must be 0.85 kg CH4/ha/day (IPCC 2019 Refinement
+    Table 5.11, South Asia regional default), not the previously-hardcoded
+    1.4 - which appears nowhere in Table 5.11 and inflated final_issuance by
+    ~1.65x."""
+    assert engine.ef_c == 0.85
+    r = engine.calculate_credits(awd_events=2, season_length_days=120, area_ha=1.0)
+    assert r["ef_c_used"] == 0.85
+
+
 def test_final_issuance_uses_symbolic_ch4_gwp(engine):
     """delta_e_co2e must scale with engine.gwp_ch4, not a hardcoded 28, so a
     future GWP vintage change doesn't require rewriting this test."""

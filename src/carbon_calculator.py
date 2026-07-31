@@ -69,7 +69,16 @@ class CarbonAssetEngine:
     # mandatory for reductions/removals on or after 1 Jan 2021 — CH4=28, N2O=265.
     GWP_N2O = 265      # IPCC AR5 GWP100 for N2O
 
-    def __init__(self, ef_c: float = 1.4, gwp_ch4: int = 28):
+    # VM0051 §9.1 (p.47) doesn't quote EF_c itself — it defers to "Table 5.11
+    # in data source." IPCC 2019 Refinement Vol 4 Ch 5, Table 5.11 (Updated)
+    # gives the South Asia regional default directly: 0.85 kg CH4/ha/day
+    # (error range 0.58-1.26). This is a Tier 1 regional default, not Tier 2
+    # (Tier 2 would be a custom, literature-derived, country-specific factor).
+    # Corrected from 1.4 kg CH4/ha/day, which appears nowhere in Table 5.11
+    # and inflated every rice credit calculation by ~1.65x.
+    EF_C_SOUTH_ASIA = 0.85
+
+    def __init__(self, ef_c: float = EF_C_SOUTH_ASIA, gwp_ch4: int = 28):
         self.ef_c    = ef_c
         self.gwp_ch4 = gwp_ch4
 
@@ -178,6 +187,7 @@ class CarbonAssetEngine:
                     "uncertainty calculation is required instead, which this engine "
                     "does not implement."
                 ),
+                "ef_c_used":    self.ef_c,
                 "sf_w_project": sf_w_project,
                 "e_baseline":   e_baseline,
                 "e_project":    e_project,
@@ -209,6 +219,7 @@ class CarbonAssetEngine:
 
         return {
             "qa3_pathway_valid":  True,
+            "ef_c_used":          self.ef_c,
             "sf_w_project":       sf_w_project,
             "sc_preseason":       sc_p,
             "sc_organic_bsl":     sc_o_bsl,

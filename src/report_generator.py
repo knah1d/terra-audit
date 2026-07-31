@@ -219,7 +219,7 @@ def generate_pdf(
         return bytes(pdf.output())
 
     pdf.kv("Quantification Approach", "QA3 - Default Emission Factors (§8.2.3)")
-    pdf.kv("Emission Factor EF_c",    "1.4 kg CH4/ha/day  (IPCC 2019 South Asia Tier 2)")
+    pdf.kv("Emission Factor EF_c",    f"{carbon['ef_c_used']} kg CH4/ha/day  (IPCC 2019 Table 5.11, South Asia Tier 1 regional default)")
     pdf.kv("GWP CH4 (AR5 100yr)",     "28")
     pdf.kv("GWP N2O (AR5 100yr)",     "265")
     pdf.kv("Baseline SF_w",           "1.00  (continuous flooding, Eq. 6)")
@@ -280,8 +280,8 @@ def generate_pdf(
     # ---- 7. Assumptions ---------------------------------------------------
     pdf.section("7. Assumptions")
     for i, a in enumerate([
-        "EF_c = 1.4 kg CH4/ha/day (IPCC South Asia regional default; "
-        "may not reflect site-specific soil conditions)",
+        f"EF_c = {carbon['ef_c_used']} kg CH4/ha/day (IPCC 2019 Table 5.11, South Asia "
+        "Tier 1 regional default; may not reflect site-specific soil conditions)",
         "DESCENDING orbit pass only used to avoid time-series artefacts "
         "from mixed-orbit acquisition geometry",
         "Field area computed via Shoelace formula with spherical latitude "
@@ -364,7 +364,7 @@ def generate_audit_json(
             else {
                 "methodology":                        "VM0051 v1.0, QA3 Default Emission Factors",
                 "qa3_pathway_valid":                   True,
-                "emission_factor_ef_c_kg_ch4_per_ha_per_day": 1.4,
+                "emission_factor_ef_c_kg_ch4_per_ha_per_day": carbon["ef_c_used"],
                 "gwp_ch4_ar5_100yr":                  28,
                 "gwp_n2o_ar5_100yr":                  265,
                 "sf_w_baseline":                      1.0,
