@@ -878,8 +878,19 @@ def _alm_practice_form(scenario_label: str, existing: dict, key_prefix: str) -> 
     """Renders one baseline/project ALM practice-schedule form (Table 4 subset)."""
     existing = existing or {}
     st.markdown(f"##### {scenario_label}")
-    crop_type = st.text_input(
-        "Crop type(s)", value=existing.get("crop_type") or "", key=f"{key_prefix}_crop_type"
+    _CROP_TYPE_OPTIONS = ["Wheat", "Maize", "Rice", "Sugarcane", "Other Crops"]
+    _existing_crop = existing.get("crop_type") or ""
+    _crop_default_idx = (
+        _CROP_TYPE_OPTIONS.index(_existing_crop) if _existing_crop in _CROP_TYPE_OPTIONS else 4
+    )
+    crop_type = st.selectbox(
+        "Crop type",
+        options=_CROP_TYPE_OPTIONS,
+        index=_crop_default_idx,
+        key=f"{key_prefix}_crop_type",
+        help="Determines the biomass-burning combustion factor (IPCC 2019 "
+             "Table 2.6). 'Other Crops' is the conservative default for any "
+             "crop not in this list, and for pre-existing free-text entries.",
     )
     c1, c2, c3 = st.columns(3)
     with c1:

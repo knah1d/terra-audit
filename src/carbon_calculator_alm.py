@@ -7,7 +7,9 @@ practice changes on non-wetland cropland.
 Covers (this implementation):
   - N2O from nitrogen fertilizer, direct + indirect (§8.2.9/8.3, Eqs. 17-23)
   - N2O from N-fixing cover-crop residues (§8.2.9/8.3, Eqs. 24-25)
-  - N2O and CH4 from biomass burning (§8.2.8/8.2.11/8.3, Eqs. 14, 32)
+  - N2O and CH4 from biomass burning (§8.2.8/8.2.11/8.3, Eqs. 14, 32),
+    with the combustion factor keyed by crop_type per IPCC 2019 Refinement
+    Vol 4 Ch 2 Table 2.6 (Wheat/Maize/Rice/Sugarcane/Other Crops)
   - CO2 from fossil fuel combustion (§8.2.3/8.3, Eqs. 6-7)
   - SOC stock change, Quantification Approach 2 (measure and remeasure,
     §8.2.1/8.3, Eqs. 3-5, 46-47) — driven by manually entered paired lab
@@ -84,12 +86,19 @@ class AlmCarbonEngine:
     EF_RESIDUE_CH4  = 2.7     # g CH4 / kg dry matter burnt
     EF_RESIDUE_N2O  = 0.07    # g N2O / kg dry matter burnt
     # CF_RESIDUE — Table 2.6 gives crop-specific combustion factors, not one
-    # generic "agricultural residues" value: Wheat=0.90, Other Crops=0.85,
-    # Maize/Rice/Sugarcane=0.80. 0.90 (used here as a single default for all
-    # crop types) is the Wheat-specific value, not a universal default — an
-    # accurate per-crop table would need practice_schedule's crop_type to key
-    # into it, which this scoped implementation does not yet do.
-    CF_RESIDUE      = 0.90    # combustion factor (fraction of biomass consumed)
+    # generic "agricultural residues" value. Confirmed against IPCC 2019
+    # Refinement Vol 4 Ch 2, Table 2.6 (p.2.56): Wheat=0.90, Maize=0.80,
+    # Rice=0.80, Sugarcane=0.80, Other Crops=0.85. Keyed by practice_schedule's
+    # crop_type per scenario (baseline/project may differ in a rotation).
+    # An unrecognized crop_type falls back to "Other Crops" (0.85) — the
+    # middle value of the table, not a silent guess at the extremes.
+    CF_RESIDUE_TABLE = {
+        "wheat":       0.90,
+        "maize":       0.80,
+        "rice":        0.80,
+        "sugarcane":   0.80,
+        "other_crops": 0.85,
+    }
 
     # Fossil fuel CO2 — VM0042 v2.2 parameter table (p.102) quotes this directly:
     # diesel = 0.002886 t CO2e/L (source: IPCC 2019 Refinement Vol 2 Ch 3 Table 3.3.1)
@@ -149,10 +158,18 @@ class AlmCarbonEngine:
         f_cr_t = dry_matter_t * self.N_CONTENT_NFIX
         return f_cr_t * ef_ndirect * 44 / 28 * self.GWP_N2O
 
-    def _biomass_burning(self, mb_kg: float) -> tuple[float, float]:
+    def _combustion_factor(self, crop_type: str) -> float:
+        """IPCC 2019 Refinement Vol 4 Ch 2, Table 2.6 — combustion factor
+        varies by crop residue type; unrecognized/missing crop_type falls
+        back to "Other Crops" (0.85)."""
+        key = (crop_type or "").strip().lower().replace(" ", "_")
+        return self.CF_RESIDUE_TABLE.get(key, self.CF_RESIDUE_TABLE["other_crops"])
+
+    def _biomass_burning(self, mb_kg: float, crop_type: str = None) -> tuple[float, float]:
         """Eqs. 14, 32 — CH4 and N2O from residue burning (tCO2e each)."""
-        ch4 = mb_kg * self.CF_RESIDUE * self.EF_RESIDUE_CH4 / 1e6 * self.GWP_CH4
-        n2o = mb_kg * self.CF_RESIDUE * self.EF_RESIDUE_N2O / 1e6 * self.GWP_N2O
+        cf = self._combustion_factor(crop_type)
+        ch4 = mb_kg * cf * self.EF_RESIDUE_CH4 / 1e6 * self.GWP_CH4
+        n2o = mb_kg * cf * self.EF_RESIDUE_N2O / 1e6 * self.GWP_N2O
         return ch4, n2o
 
     def _fossil_fuel_co2(self, ffc_liters: float) -> float:
@@ -170,6 +187,7 @@ class AlmCarbonEngine:
             ),
             "mb_kg":         (practices.get("residue_burned_kg_ha") or 0.0) * area_ha,
             "ffc_liters":    (practices.get("fuel_use_l_ha") or 0.0) * area_ha,
+            "crop_type":     practices.get("crop_type"),
         }
 
     # -----------------------------------------------------------------
@@ -350,8 +368,8 @@ class AlmCarbonEngine:
         n2o_nfix_bsl = self._n2o_n_fixing(bsl_terms["nfix_dm_t"], ef_ndirect)
         n2o_nfix_wp  = self._n2o_n_fixing(wp_terms["nfix_dm_t"], ef_ndirect)
 
-        ch4_bb_bsl, n2o_bb_bsl = self._biomass_burning(bsl_terms["mb_kg"])
-        ch4_bb_wp,  n2o_bb_wp  = self._biomass_burning(wp_terms["mb_kg"])
+        ch4_bb_bsl, n2o_bb_bsl = self._biomass_burning(bsl_terms["mb_kg"], bsl_terms["crop_type"])
+        ch4_bb_wp,  n2o_bb_wp  = self._biomass_burning(wp_terms["mb_kg"], wp_terms["crop_type"])
 
         co2_ff_bsl = self._fossil_fuel_co2(bsl_terms["ffc_liters"])
         co2_ff_wp  = self._fossil_fuel_co2(wp_terms["ffc_liters"])
