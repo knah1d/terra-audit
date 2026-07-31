@@ -1222,7 +1222,7 @@ def render_carbon_tab_rice_awd():
         )
         st.latex(r"E_{\text{baseline}} = EF_c \times SF_{w,\text{bsl}} \times SC_p \times SC_{o,\text{bsl}} \times D \times A")
         st.latex(
-            f"E_{{\\text{{baseline}}}} = 1.4 \\times 1.0 \\times {cr['sc_preseason']}"
+            f"E_{{\\text{{baseline}}}} = {cr['ef_c_used']} \\times 1.0 \\times {cr['sc_preseason']}"
             f" \\times {cr['sc_organic_bsl']:.3f} \\times {carbon_season}"
             f" \\times {carbon_area:.1f} = {cr['e_baseline']:.2f}\\text{{ kg CH}}_4"
         )
@@ -1235,7 +1235,7 @@ def render_carbon_tab_rice_awd():
         )
         st.latex(r"E_{\text{project}} = EF_c \times SF_{w,\text{project}} \times SC_p \times SC_{o,\text{wp}} \times D \times A")
         st.latex(
-            f"E_{{\\text{{project}}}} = 1.4 \\times {cr['sf_w_project']}"
+            f"E_{{\\text{{project}}}} = {cr['ef_c_used']} \\times {cr['sf_w_project']}"
             f" \\times {cr['sc_preseason']} \\times {cr['sc_organic_wp']:.3f}"
             f" \\times {carbon_season} \\times {carbon_area:.1f}"
             f" = {cr['e_project']:.2f}\\text{{ kg CH}}_4"
