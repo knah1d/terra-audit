@@ -65,7 +65,12 @@ def test_soc_not_ready_falls_back_to_zero_with_full_uncertainty(engine, practice
 
 def test_full_scenario_golden_values(engine, practice_schedule, soc_measurements):
     """Characterization test locking in the corrected engine's output for a
-    fixed scenario — catches any accidental regression in the calculation chain."""
+    fixed scenario — catches any accidental regression in the calculation chain.
+
+    practice_schedule has no crop_type set, so biomass burning uses the
+    "Other Crops" combustion factor (0.85, the conservative fallback for an
+    unspecified crop) rather than the old hardcoded universal 0.90 -
+    final_issuance is correspondingly slightly lower than before this fix."""
     r = engine.calculate_credits(
         practice_schedule, soc_measurements, area_ha=5.0,
         verification_years=2.0, non_permanence_risk_pct=15.0,
@@ -75,7 +80,7 @@ def test_full_scenario_golden_values(engine, practice_schedule, soc_measurements
     assert r["delta_co2_soil_bsl"] == pytest.approx(0.8333333333333304)
     assert r["unc_co2_pct"] == pytest.approx(64.46127345934141)
     assert r["cumulative_delta_co2_wp"] == pytest.approx(3.257716599560371)
-    assert r["final_issuance"] == pytest.approx(3.6027382490109376)
+    assert r["final_issuance"] == pytest.approx(3.5909694990109378)
 
 
 def test_buffer_vcu_arithmetic_holds(engine, practice_schedule, soc_measurements):
@@ -135,6 +140,31 @@ def test_production_decline_leakage_blocks_issuance_when_yield_declines(engine, 
     assert r["final_issuance"] is None
     assert r["foregone_production_t"] == pytest.approx((5.0 - 3.5) * 5.0)
     assert "VMD0054" in r["leakage_block_reason"]
+
+
+def test_combustion_factor_varies_by_crop_type(engine):
+    """IPCC 2019 Refinement Vol 4 Ch 2 Table 2.6: Wheat=0.90, Rice=0.80 —
+    identical residue mass burned must yield different CH4/N2O for
+    different crop types, not a single wheat-derived value for everything."""
+    assert engine._combustion_factor("Wheat") == 0.90
+    assert engine._combustion_factor("Rice") == 0.80
+    assert engine._combustion_factor("Maize") == 0.80
+    assert engine._combustion_factor("Sugarcane") == 0.80
+    assert engine._combustion_factor("Other Crops") == 0.85
+
+    ch4_wheat, n2o_wheat = engine._biomass_burning(1000.0, "Wheat")
+    ch4_rice, n2o_rice = engine._biomass_burning(1000.0, "Rice")
+    assert ch4_wheat > ch4_rice
+    assert n2o_wheat > n2o_rice
+    assert ch4_wheat == pytest.approx(ch4_rice * (0.90 / 0.80))
+
+
+def test_combustion_factor_falls_back_to_other_crops_for_unknown_type(engine):
+    """An unrecognized/missing crop_type must not silently guess at an
+    extreme value - it falls back to the middle-of-table Other Crops (0.85)."""
+    assert engine._combustion_factor("Lentils") == 0.85
+    assert engine._combustion_factor(None) == 0.85
+    assert engine._combustion_factor("") == 0.85
 
 
 def test_cumulative_indicator_persists_across_verification_periods(engine, practice_schedule, soc_measurements):
