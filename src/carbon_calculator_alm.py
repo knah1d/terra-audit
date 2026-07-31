@@ -25,9 +25,17 @@ Covers (this implementation):
     compares baseline vs. project crop yield (Table 4's "Crop yield (where
     applicable)" field) to determine foregone production. See
     _production_decline_leakage() docstring for the deliberate scope cut.
+  - Integrated crop-livestock systems (§8.2.6 enteric fermentation Eq. 11,
+    §8.2.7 manure CH4 Eq. 12/13, Ch 11 Eq. 11.5 manure N2O deposited on
+    pasture), scoped to Pasture/Range/Paddock grazing only, curated to
+    cattle/buffalo/sheep/goats. See LIVESTOCK_TABLE docstring for the
+    deliberate scope cut (feedlots and non-pasture manure systems excluded).
 
 Explicitly excluded / assumed zero (documented limitations, not verified):
-  - Grazing practices — no enteric fermentation / manure CH4 or N2O
+  - Non-pasture manure management systems (drylot/slurry/digester) and
+    feedlot livestock (VM0042 excludes feedlots from its project boundary
+    entirely, footnote 6 p.12) — only Pasture/Range/Paddock grazing is
+    modeled for livestock
   - Liming CO2 (§8.2.4)
   - Quantification Approach 1 (external biogeochemical model) — SOC is
     Approach 2 only in this implementation
@@ -55,19 +63,18 @@ import math
 
 class AlmCarbonEngine:
     # IPCC 2019 Refinement to the 2006 IPCC Guidelines — Volume 4, Chapter 11
-    # Table 11.1 (direct N2O from N inputs, wet climate; conservative range).
-    # EF_NDIRECT_LOW/HIGH confirmed verbatim against VM0042 v2.2 §8.6.3 (p.81),
-    # which quotes IPCC (2019)'s 0.013-0.019 wet-climate range directly.
+    # (methodologies/ipcc/2019_refinement/19R_V4_Ch11_Soils_N2O_CO2.pdf).
+    # Table 11.1's disaggregated "Synthetic fertiliser inputs in wet climates"
+    # EF1 uncertainty range is 0.013-0.019 (default 0.016) — confirmed exact
+    # match to VM0042 v2.2 §8.6.3 (p.81)'s quoted 0.013-0.019 wet-climate range.
     EF_NDIRECT_LOW  = 0.013
     EF_NDIRECT_HIGH = 0.019
-    # Table 11.3 (indirect N2O — volatilization / leaching-runoff fractions
-    # and emission factors). STILL UNVERIFIED: Chapter 11 itself is not
-    # present in methodologies/ipcc/2019_refinement/ (only Ch.2 and Ch.5 are)
-    # and neither of those chapters reproduces Table 11.3's values — VM0042's
-    # own parameter tables (p.119-121, p.125) also just point to "Lookup Table
-    # 11.3" without quoting numbers. These five constants remain plausible
-    # (standard literature defaults) but not confirmed in-repo; sourcing
-    # Vol 4 Ch 11 would resolve this.
+    # Table 11.3 (indirect N2O — volatilization/leaching-runoff fractions and
+    # emission factors), Bangladesh being a wet climate per Table 11.3's own
+    # wet/dry definition (annual precipitation > 1000mm in tropical zones).
+    # CONFIRMED exact match against Table 11.3's aggregated FracGASF (0.11),
+    # FracGASM (0.21), disaggregated wet-climate EF4 (0.014), disaggregated
+    # wet-climate FracLEACH-(H) (0.24), and aggregated EF5 (0.011).
     FRAC_GASF  = 0.11
     FRAC_GASM  = 0.21
     EF_NVOLAT  = 0.014
@@ -131,6 +138,80 @@ class AlmCarbonEngine:
     )
 
     # -----------------------------------------------------------------
+    # Integrated crop-livestock (VM0042 §8.2.6/§8.2.7/§8.2.10, Condition 1e/3a)
+    # -----------------------------------------------------------------
+    # Scoped to Pasture/Range/Paddock (grazing) manure management only — the
+    # realistic ICLS/rotational-grazing case, and the only manure-management
+    # system VM0042 itself defaults without extra evidence (MS_bsl=1, p.90).
+    # Feedlots and non-pasture manure systems (drylot/slurry/digester) are out
+    # of scope (feedlots are excluded from VM0042's own project boundary,
+    # footnote 6 p.12).
+    #
+    # All defaults are IPCC 2019 Refinement Vol 4 Ch 10 (Livestock)
+    # (methodologies/ipcc/2019_refinement/19R_V4_Ch10_Livestock.pdf), India
+    # subcontinent region (Bangladesh's bucket — IPCC's "Asia" region in this
+    # chapter means East/Southeast Asia, a distinct column), Tier 1a
+    # (High/Low Productivity System split where the source tables provide
+    # one). Curated to cattle (dairy + non-dairy), buffalo, sheep, and goats —
+    # the livestock realistically integrated into South Asian ICLS/grazing
+    # systems; other IPCC livestock categories (swine, poultry, camels, etc.)
+    # are not modeled.
+    #
+    # ef_ent    : Table 10.11 (cattle/buffalo) / Table 10.10 (sheep/goat,
+    #             not region-disaggregated) — kg CH4/head/yr, enteric
+    #             fermentation (Eq. 10.19/10.20), already a per-head-per-year
+    #             rate (no TAM conversion needed).
+    # vs_rate   : Table 10.13a — kg VS (1000 kg animal mass)^-1 day^-1.
+    # nex_rate  : Table 10.19 — kg N (1000 kg animal mass)^-1 day^-1.
+    # tam_kg    : Table 10A.5 — typical animal mass (kg), used to convert
+    #             vs_rate/nex_rate into per-head-per-year VS/Nex via Eq.
+    #             10.22a/10.30. Buffalo/sheep/goat have no High/Low split in
+    #             the source tables — the same value is used for both.
+    LIVESTOCK_TABLE = {
+        "cattle_dairy":    {"ef_ent": {"high": 70, "low": 74},
+                             "vs_rate": {"high": 9.1, "low": 16.1},
+                             "nex_rate": {"high": 0.51, "low": 0.70},
+                             "tam_kg": {"high": 350, "low": 265}},
+        "cattle_nondairy": {"ef_ent": {"high": 41, "low": 47},
+                             "vs_rate": {"high": 13.5, "low": 12.0},
+                             "nex_rate": {"high": 0.64, "low": 0.41},
+                             "tam_kg": {"high": 167, "low": 236}},
+        "buffalo":         {"ef_ent": {"high": 85, "low": 85},
+                             "vs_rate": {"high": 15.2, "low": 15.2},
+                             "nex_rate": {"high": 0.58, "low": 0.58},
+                             "tam_kg": {"high": 336, "low": 336}},
+        "sheep":           {"ef_ent": {"high": 9, "low": 5},
+                             "vs_rate": {"high": 8.3, "low": 8.3},
+                             "nex_rate": {"high": 0.32, "low": 0.32},
+                             "tam_kg": {"high": 31, "low": 31}},
+        "goat":            {"ef_ent": {"high": 9, "low": 5},
+                             "vs_rate": {"high": 10.4, "low": 10.4},
+                             "nex_rate": {"high": 0.34, "low": 0.34},
+                             "tam_kg": {"high": 24, "low": 24}},
+    }
+
+    # Table 10.14 footnote (Ch 10): "Pasture range and paddock emission
+    # factor is based on observation in the updated version of Cai et al.
+    # (2017)... No differences were observed for animal type, region or
+    # productivity class and are therefore reported as a constant for all
+    # animal and productivity categories." — a single g CH4/kg VS value
+    # applies regardless of livestock type or productivity system.
+    EF_CH4_MD_PRP_G_PER_KG_VS = 0.6
+
+    # Manure N2O deposited on pasture is NOT in Ch10's manure-management EF3
+    # table (Table 10.21 explicitly redirects Pasture/Range/Paddock to
+    # "Chapter 11, Section 11.2, N2O emissions from managed soils" instead —
+    # VM0042's own citation to "Table 10.21" for this term is imprecise for
+    # the PRP case specifically). The correct parameter is Ch 11
+    # (methodologies/ipcc/2019_refinement/19R_V4_Ch11_Soils_N2O_CO2.pdf)
+    # Table 11.1's EF3PRP — cattle/buffalo/poultry/pigs (CPP) vs. sheep/other
+    # animals (SO, includes goats per footnote 10, p.13). Using the
+    # wet-climate disaggregated CPP value (Bangladesh is unambiguously wet
+    # per Table 11.3's own definition); SO has no wet/dry split.
+    EF3_PRP_CPP = 0.006   # cattle, buffalo (wet climate)
+    EF3_PRP_SO  = 0.003   # sheep, goats
+
+    # -----------------------------------------------------------------
     # Default-factor (Approach 3) emission terms — mirrored baseline/project
     # -----------------------------------------------------------------
 
@@ -175,6 +256,55 @@ class AlmCarbonEngine:
     def _fossil_fuel_co2(self, ffc_liters: float) -> float:
         """Eqs. 6-7 — CO2 from fossil fuel combustion (tCO2e)."""
         return ffc_liters * self.EF_CO2_DIESEL_T_PER_L
+
+    def _enteric_fermentation(self, livestock: list) -> float:
+        """
+        Eq. 10.19/10.20 (IPCC 2019 Refinement Vol 4 Ch 10) — CH4 from enteric
+        fermentation (tCO2e). livestock: list of {"livestock_type",
+        "population_head", "productivity_system"} dicts; unrecognized
+        livestock_type or non-positive population is skipped, not guessed at.
+        """
+        total_kg_ch4 = 0.0
+        for entry in livestock or []:
+            params = self.LIVESTOCK_TABLE.get(entry.get("livestock_type"))
+            pop = entry.get("population_head") or 0
+            if not params or pop <= 0:
+                continue
+            p = (entry.get("productivity_system") or "low").lower()
+            ef = params["ef_ent"].get(p, params["ef_ent"]["low"])
+            total_kg_ch4 += pop * ef
+        return total_kg_ch4 * self.GWP_CH4 / 1000.0
+
+    def _manure_pasture_ch4_n2o(self, livestock: list) -> tuple[float, float]:
+        """
+        Manure CH4 (Eq. 10.22, Table 10.14's constant Pasture/Range/Paddock
+        factor) and manure N2O (Ch 11 Eq. 11.5's F_PRP term with Table 11.1's
+        EF3PRP — see EF3_PRP_CPP/SO docstring) for manure deposited on
+        pasture (MS_bsl=1, VM0042 p.90 default with no extra evidence
+        required). Returns (ch4_tco2e, n2o_tco2e).
+        """
+        total_kg_ch4 = 0.0
+        total_kg_n2o_n = 0.0
+        for entry in livestock or []:
+            ltype = entry.get("livestock_type")
+            params = self.LIVESTOCK_TABLE.get(ltype)
+            pop = entry.get("population_head") or 0
+            if not params or pop <= 0:
+                continue
+            p = (entry.get("productivity_system") or "low").lower()
+            tam = params["tam_kg"].get(p, params["tam_kg"]["low"])
+            vs_annual_kg = params["vs_rate"].get(p, params["vs_rate"]["low"]) * tam / 1000 * 365
+            nex_annual_kg = params["nex_rate"].get(p, params["nex_rate"]["low"]) * tam / 1000 * 365
+
+            total_kg_ch4 += pop * vs_annual_kg * self.EF_CH4_MD_PRP_G_PER_KG_VS / 1000.0
+
+            ef3_prp = self.EF3_PRP_SO if ltype in ("sheep", "goat") else self.EF3_PRP_CPP
+            f_prp_kg_n = pop * nex_annual_kg
+            total_kg_n2o_n += f_prp_kg_n * ef3_prp
+
+        ch4_tco2e = total_kg_ch4 * self.GWP_CH4 / 1000.0
+        n2o_tco2e = total_kg_n2o_n * 44 / 28 * self.GWP_N2O / 1000.0
+        return ch4_tco2e, n2o_tco2e
 
     def _scenario_terms(self, practices: dict, area_ha: float) -> dict:
         """Converts one scenario's per-ha practice rates into absolute masses."""
@@ -308,6 +438,8 @@ class AlmCarbonEngine:
         verification_years: float = 1.0,
         non_permanence_risk_pct: float = 20.0,
         prior_cumulative_delta_co2_wp_t: float = 0.0,
+        baseline_livestock: list = None,
+        project_livestock: list = None,
     ) -> dict:
         """
         practice_schedule  : {'baseline': {...}, 'project': {...}} — see
@@ -334,6 +466,13 @@ class AlmCarbonEngine:
                               pass this in (see src.database.get_alm_cumulative_delta)
                               or the classification will only reflect the current
                               period, which VM0042 does not permit.
+        baseline_livestock / project_livestock : list of {"livestock_type"
+                              (one of LIVESTOCK_TABLE's keys), "population_head",
+                              "productivity_system" ("high"/"low")} dicts,
+                              scoped to pasture-based ICLS/grazing systems
+                              (see LIVESTOCK_TABLE docstring). Default `None`
+                              (treated as empty) — zero livestock is a no-op
+                              delta, so existing calls are unaffected.
         """
         prod_leakage = self._production_decline_leakage(practice_schedule, area_ha)
         if prod_leakage["data_available"] and not prod_leakage["screened_clean"]:
@@ -374,10 +513,17 @@ class AlmCarbonEngine:
         co2_ff_bsl = self._fossil_fuel_co2(bsl_terms["ffc_liters"])
         co2_ff_wp  = self._fossil_fuel_co2(wp_terms["ffc_liters"])
 
-        delta_co2_ff   = co2_ff_bsl - co2_ff_wp
-        delta_ch4_bb   = ch4_bb_bsl - ch4_bb_wp
-        delta_n2o_soil = (n2o_fert_bsl + n2o_nfix_bsl) - (n2o_fert_wp + n2o_nfix_wp)
-        delta_n2o_bb   = n2o_bb_bsl - n2o_bb_wp
+        ch4_ent_bsl = self._enteric_fermentation(baseline_livestock)
+        ch4_ent_wp  = self._enteric_fermentation(project_livestock)
+        ch4_manure_bsl, n2o_manure_bsl = self._manure_pasture_ch4_n2o(baseline_livestock)
+        ch4_manure_wp,  n2o_manure_wp  = self._manure_pasture_ch4_n2o(project_livestock)
+
+        delta_co2_ff     = co2_ff_bsl - co2_ff_wp
+        delta_ch4_bb     = ch4_bb_bsl - ch4_bb_wp
+        delta_n2o_soil   = (n2o_fert_bsl + n2o_nfix_bsl) - (n2o_fert_wp + n2o_nfix_wp)
+        delta_n2o_bb     = n2o_bb_bsl - n2o_bb_wp
+        delta_ch4_livestock = (ch4_ent_bsl + ch4_manure_bsl) - (ch4_ent_wp + ch4_manure_wp)
+        delta_n2o_livestock = n2o_manure_bsl - n2o_manure_wp
 
         soc_ready = all(
             len(soc_measurements.get((s, t), [])) >= self.MIN_SOC_SAMPLES
@@ -399,7 +545,10 @@ class AlmCarbonEngine:
         # project start (Σ from year 1 to t), not the current period alone.
         cumulative_delta_co2_wp = prior_cumulative_delta_co2_wp_t + delta_co2_wp_t
         i_wp = 1 if cumulative_delta_co2_wp > 0 else 0
-        non_soc_terms = delta_co2_ff + delta_ch4_bb + delta_n2o_soil + delta_n2o_bb
+        non_soc_terms = (
+            delta_co2_ff + delta_ch4_bb + delta_n2o_soil + delta_n2o_bb
+            + delta_ch4_livestock + delta_n2o_livestock
+        )
         min_diff = min(0.0, delta_co2_wp_t) - min(0.0, delta_co2_bsl_t)
         max_diff = max(0.0, delta_co2_wp_t) - max(0.0, delta_co2_bsl_t)
         er_t = non_soc_terms + min_diff + (0 if i_wp else max_diff)
@@ -437,6 +586,14 @@ class AlmCarbonEngine:
             "delta_ch4_bb":        delta_ch4_bb,
             "delta_n2o_soil":      delta_n2o_soil,
             "delta_n2o_bb":        delta_n2o_bb,
+            "ch4_ent_bsl":         ch4_ent_bsl,
+            "ch4_ent_wp":          ch4_ent_wp,
+            "ch4_manure_bsl":      ch4_manure_bsl,
+            "ch4_manure_wp":       ch4_manure_wp,
+            "n2o_manure_bsl":      n2o_manure_bsl,
+            "n2o_manure_wp":       n2o_manure_wp,
+            "delta_ch4_livestock": delta_ch4_livestock,
+            "delta_n2o_livestock": delta_n2o_livestock,
             "soc_ready":           soc_ready,
             "delta_co2_soil_wp":   delta_co2_soil_wp,
             "delta_co2_soil_bsl":  delta_co2_soil_bsl,

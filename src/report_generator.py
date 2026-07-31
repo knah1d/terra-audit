@@ -403,6 +403,7 @@ def generate_pdf_alm(
     meta: dict,
     practice_schedule: dict,
     carbon: dict,
+    livestock_schedule: dict = None,
 ) -> bytes:
     """
     field_info : {field_id, name, district, area_ha}
@@ -410,7 +411,11 @@ def generate_pdf_alm(
     practice_schedule : {'baseline': {...}, 'project': {...}} — see
                  src.database.ALM_PRACTICE_COLUMNS for keys
     carbon     : return dict of AlmCarbonEngine.calculate_credits()
+    livestock_schedule : {'baseline': [...], 'project': [...]} of
+                 {"livestock_type", "population_head", "productivity_system"}
+                 dicts, or None if no livestock is tracked for this field
     """
+    livestock_schedule = livestock_schedule or {"baseline": [], "project": []}
     pdf = _PDF(orientation="P", unit="mm", format="A4")
     pdf.methodology_label = "Verra VM0042 v2.2"
     pdf.set_margins(left=18, top=20, right=18)
@@ -454,6 +459,13 @@ def generate_pdf_alm(
                "Yes" if p.get("n_fixing_species") else "No")
         pdf.kv(f"{scenario_label} — Crop yield",
                f"{p['crop_yield_t_ha']:.2f} t/ha" if p.get("crop_yield_t_ha") is not None else "Not tracked")
+        livestock = livestock_schedule.get(key) or []
+        if livestock:
+            summary = ", ".join(
+                f"{e['population_head']:.0f} {e['livestock_type']} ({e['productivity_system']})"
+                for e in livestock
+            )
+            pdf.kv(f"{scenario_label} — Livestock (pasture-based)", summary)
         pdf.ln(1)
 
     pdf.section("3. Carbon Estimation (Verra VM0042 v2.2)")
@@ -468,6 +480,9 @@ def generate_pdf_alm(
     pdf.kv("CH4 / N2O biomass burning (baseline -> project)",
            f"{carbon['ch4_bb_bsl']:.4f}->{carbon['ch4_bb_wp']:.4f} / {carbon['n2o_bb_bsl']:.4f}->{carbon['n2o_bb_wp']:.4f} tCO2e")
     pdf.kv("CO2 fossil fuel (baseline -> project)", f"{carbon['co2_ff_bsl']:.4f} -> {carbon['co2_ff_wp']:.4f} tCO2e")
+    pdf.kv("CH4 enteric fermentation (baseline -> project)", f"{carbon['ch4_ent_bsl']:.4f} -> {carbon['ch4_ent_wp']:.4f} tCO2e  (§8.2.6 Eq. 11)")
+    pdf.kv("CH4 manure, pasture (baseline -> project)", f"{carbon['ch4_manure_bsl']:.4f} -> {carbon['ch4_manure_wp']:.4f} tCO2e  (§8.2.7 Eq. 12/13)")
+    pdf.kv("N2O manure, pasture (baseline -> project)", f"{carbon['n2o_manure_bsl']:.4f} -> {carbon['n2o_manure_wp']:.4f} tCO2e  (Ch 11 Eq. 11.5, EF3PRP)")
     pdf.ln(2)
     pdf.kv("SOC stock change (baseline, Approach 2)", f"{carbon['delta_co2_soil_bsl']:.4f} tCO2e (Eqs. 46-47)")
     pdf.kv("SOC stock change (project, Approach 2)", f"{carbon['delta_co2_soil_wp']:.4f} tCO2e (Eqs. 46-47)")
@@ -508,12 +523,15 @@ def generate_pdf_alm(
     pdf.body(
         "Terra-Audit implements a scoped subset of the Verra VM0042 v2.2 Improved "
         "Agricultural Land Management methodology, covering tillage/residue "
-        "management, fertilizer management, and crop planting/harvesting "
-        "(rotations, cover crops) practice changes. N2O from fertilizer and "
-        "N-fixing residues, CH4/N2O from biomass burning, and CO2 from fossil "
-        "fuel combustion are quantified via Quantification Approach 3 default "
-        "emission factors (IPCC 2019 Refinement), using the most conservative "
-        "EF within the cited uncertainty range per §8.6.3. Soil organic carbon "
+        "management, fertilizer management, crop planting/harvesting "
+        "(rotations, cover crops), and pasture-based integrated crop-livestock "
+        "practice changes. N2O from fertilizer and N-fixing residues, CH4/N2O "
+        "from biomass burning, CO2 from fossil fuel combustion, and CH4/N2O "
+        "from enteric fermentation and manure deposited on pasture (§8.2.6/"
+        "§8.2.7, Ch 11 Eq. 11.5) are quantified via Quantification Approach 3 "
+        "default emission factors (IPCC 2019 Refinement), using the most "
+        "conservative EF within the cited uncertainty range per §8.6.3 where "
+        "applicable. Soil organic carbon "
         "(SOC) - the mandatory, non-de-minimis carbon pool - is quantified via "
         "Quantification Approach 2 (measure and remeasure), from lab-measured "
         "paired samples at the project site and a baseline control site. Net "
@@ -523,8 +541,11 @@ def generate_pdf_alm(
 
     pdf.section("5. Assumptions and Limitations")
     for i, a in enumerate([
-        "Grazing practices, liming, and Quantification Approach 1 (external "
-        "biogeochemical model) are out of scope - not modeled",
+        "Integrated crop-livestock is modeled for pasture-based grazing only "
+        "(cattle, buffalo, sheep, goats). Feedlots and non-pasture manure "
+        "systems (drylot/slurry/digester) are out of scope. Liming and "
+        "Quantification Approach 1 (external biogeochemical model) are also "
+        "out of scope - not modeled",
         "Production-decline leakage (§8.4.3, VMD0054) is screened when crop "
         "yield is entered for both scenarios (Steps 1-2: zero if yield is "
         "maintained/improved). A genuine decline blocks issuance rather than "
@@ -557,6 +578,7 @@ def generate_audit_json_alm(
     practice_schedule: dict,
     soc_measurements: dict,
     carbon: dict,
+    livestock_schedule: dict = None,
 ) -> str:
     record = {
         "generated_at": datetime.datetime.utcnow().isoformat() + "Z",
@@ -566,6 +588,7 @@ def generate_audit_json_alm(
         "verification_period_years": meta["verification_years"],
         "non_permanence_risk_pct": meta["non_permanence_risk_pct"],
         "practice_schedule": practice_schedule,
+        "livestock_schedule": livestock_schedule or {"baseline": [], "project": []},
         "soc_measurements": {
             f"{site_type}_{timepoint}": values
             for (site_type, timepoint), values in soc_measurements.items()
