@@ -951,6 +951,19 @@ def _alm_practice_form(scenario_label: str, existing: dict, key_prefix: str) -> 
                  "field operations — drives Eqs. 6-7 (fossil fuel CO2).",
         )
 
+    track_yield = st.checkbox(
+        "Track crop yield (for VMD0054 production-decline leakage screening)",
+        value=existing.get("crop_yield_t_ha") is not None, key=f"{key_prefix}_track_yield",
+        help="VM0042 Table 4 lists crop yield as 'where applicable'. Entering it "
+             "for both scenarios lets the engine screen for production-decline "
+             "leakage (§8.4.3) instead of leaving it unscreened.",
+    )
+    crop_yield_t_ha = st.number_input(
+        "Crop yield (t/ha)", min_value=0.0, max_value=50.0,
+        value=float(existing.get("crop_yield_t_ha") or 0.0), step=0.1,
+        key=f"{key_prefix}_crop_yield", disabled=not track_yield,
+    ) if track_yield else None
+
     return {
         "crop_type": crop_type.strip() or None,
         "crop_rotation": crop_rotation,
@@ -965,6 +978,7 @@ def _alm_practice_form(scenario_label: str, existing: dict, key_prefix: str) -> 
         "n_fixing_species": n_fixing_species,
         "n_fixing_dry_matter_kg_ha": n_fixing_dry_matter_kg_ha,
         "fuel_use_l_ha": fuel_use_l_ha,
+        "crop_yield_t_ha": crop_yield_t_ha,
     }
 
 
@@ -1481,16 +1495,31 @@ def render_carbon_tab_alm():
             non_permanence_risk_pct=non_permanence_risk_pct,
             prior_cumulative_delta_co2_wp_t=_prior_cumulative,
         )
-        if run_carbon:
-            update_alm_cumulative_delta(selected_id, cr["cumulative_delta_co2_wp"])
-        st.session_state["alm_carbon_ready"] = True
-        st.session_state["export_cr"]        = cr
+        st.session_state["export_cr"] = cr
 
         st.markdown("---")
 
+        if cr.get("production_decline_leakage_blocked"):
+            st.error("🚫 **Issuance blocked.** " + cr["leakage_block_reason"])
+            st.stop()
+
+        if run_carbon:
+            update_alm_cumulative_delta(selected_id, cr["cumulative_delta_co2_wp"])
+        st.session_state["alm_carbon_ready"] = True
+
+        if cr["production_decline_leakage_data_available"]:
+            st.success(
+                "✅ **Production-decline leakage screened clean** — project yield "
+                f"maintained or improved (foregone production: {cr['foregone_production_t']:.2f} t)."
+            )
+        else:
+            st.warning(
+                "⚠️ **Production-decline leakage not screened** — enter crop yield "
+                "for both scenarios in the Practice & Soil Data tab to screen this "
+                "(VM0042 §8.4.3, VMD0054)."
+            )
         st.warning(
-            "⚠️ **Leakage not screened.** " + cr["leakage_gap_note"] + " Net reductions/"
-            "removals below are unscreened for this mandatory VM0042 §8.4.3 category."
+            "⚠️ **Other leakage sources not screened.** " + cr["other_leakage_gap_note"]
         )
 
         m1, m2, m3, m4 = st.columns(4)

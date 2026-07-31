@@ -99,10 +99,17 @@ def initialize_database():
                 n_fixing_species        INTEGER,
                 n_fixing_dry_matter_kg_ha REAL,
                 fuel_use_l_ha           REAL,
+                crop_yield_t_ha         REAL,
                 updated_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 PRIMARY KEY (field_id, scenario)
             )
         """)
+        # Migration: crop_yield_t_ha added later (VMD0054 production-decline
+        # leakage screening — see carbon_calculator_alm.py) for DBs that predate it
+        try:
+            conn.execute("ALTER TABLE alm_practice_schedule ADD COLUMN crop_yield_t_ha REAL")
+        except Exception:
+            pass
 
         # VM0042 ALM field type — SOC lab measurements (Quantification Approach 2).
         # Paired project-site vs baseline-control-site samples at two timepoints,
@@ -180,6 +187,7 @@ ALM_PRACTICE_COLUMNS = [
     "tillage", "tillage_depth_cm", "residue_removed", "residue_burned_kg_ha",
     "synthetic_n_rate_kg_ha", "organic_n_rate_kg_ha",
     "n_fixing_species", "n_fixing_dry_matter_kg_ha", "fuel_use_l_ha",
+    "crop_yield_t_ha",
 ]
 
 

@@ -18,18 +18,26 @@ Covers (this implementation):
   - Net reductions/removals (§8.5, Eqs. 37, 40, 43) and buffer/VCU
     calculation (§8.7, Eqs. 75-79) against a user-supplied non-permanence
     risk rating
+  - Production-decline leakage screening, Steps 1-2 only, of VMD0054 v1.0
+    (§8.4.3 makes this mandatory via VMD0054's Eq. 39/42 LK_disp,t term) —
+    compares baseline vs. project crop yield (Table 4's "Crop yield (where
+    applicable)" field) to determine foregone production. See
+    _production_decline_leakage() docstring for the deliberate scope cut.
 
 Explicitly excluded / assumed zero (documented limitations, not verified):
   - Grazing practices — no enteric fermentation / manure CH4 or N2O
   - Liming CO2 (§8.2.4)
   - Quantification Approach 1 (external biogeochemical model) — SOC is
     Approach 2 only in this implementation
-  - Leakage from organic amendment import, livestock displacement, or
-    production declines (§8.4) — NOT screened or computed (VM0042 §8.4.3
-    makes production-decline leakage accounting mandatory via VMD0054, which
-    this engine does not implement). `calculate_credits()` reports
-    `leakage_screened=False` with a `leakage_gap_note` so every caller can
-    detect and surface this rather than it living only in this docstring.
+  - Leakage from organic amendment import (§8.4.1) and livestock/biomass
+    displacement (§8.4.3, LE_BR-style terms) — NOT screened or computed.
+    `calculate_credits()` reports `other_leakage_screened=False` with an
+    `other_leakage_gap_note` so every caller can detect and surface this.
+    Production-decline leakage (LK_disp,t) IS now screened when foregone
+    production is zero — see above — but its Steps 3-5 (new-land carbon-
+    stock accounting when production genuinely declines) are not
+    implemented; that case blocks issuance rather than fabricating a number
+    (see calculate_credits()'s `qa3`-style early return).
   - Multi-stratum sampling — the whole field is treated as a single
     quantification unit / stratum (permitted per §8.1)
   - Covariance between t_start and t_final SOC samples in the uncertainty
@@ -104,13 +112,13 @@ class AlmCarbonEngine:
     # event where verification occurs more frequently.
     MAX_VERIFICATION_YEARS = 5
 
-    # VM0042 §8.4.3 (p.52, mandatory language) + June 2026 Corrections Eq. 39/42 —
-    # production-decline leakage (LK_disp,t via VMD0054) is a required leakage
-    # category this engine does not implement (VMD0054 is not in this repo).
-    LEAKAGE_GAP_NOTE = (
-        "VM0042 §8.4.3 requires LK_disp,t (via VMD0054) for production-decline "
-        "leakage; this engine does not implement VMD0054 and reports er_net/cr_net "
-        "unscreened for this mandatory leakage category."
+    # VM0042 §8.4.3 (p.52, mandatory language) — leakage from organic-amendment
+    # import and livestock/biomass displacement (distinct from production-decline
+    # leakage, which _production_decline_leakage() now screens separately below).
+    OTHER_LEAKAGE_GAP_NOTE = (
+        "VM0042 §8.4.3 requires leakage screening for organic-amendment import "
+        "and livestock/biomass displacement; this engine does not compute these "
+        "and reports er_net/cr_net unscreened for these categories."
     )
 
     # -----------------------------------------------------------------
@@ -228,6 +236,49 @@ class AlmCarbonEngine:
         return delta_co2_soil_wp, delta_co2_soil_bsl, unc_co2
 
     # -----------------------------------------------------------------
+    # Production-decline leakage (VMD0054 v1.0, Steps 1-2 only)
+    # -----------------------------------------------------------------
+
+    def _production_decline_leakage(self, practice_schedule: dict, area_ha: float) -> dict:
+        """
+        VMD0054 v1.0 (the module VM0042's June 2026 Corrections cite for
+        Eq. 39/42's LK_disp,t) is actually the ARR leakage module: production
+        decline -> someone elsewhere clears new (assumed forested) land to
+        compensate -> that land's carbon-stock loss IS the leakage (its
+        Steps 3-5, Eqs. 6-10). That needs regional forest-biomass and IPCC
+        Tier 1 SOC change-factor defaults this engine does not have sourced,
+        plus multi-year production monitoring this app's single-verification-
+        period model doesn't track.
+
+        Scope cut implemented here — Steps 1-2 only: compare baseline vs.
+        project crop yield (VMD0054 Eq. 1/2, simplified to a single
+        before/after comparison rather than a multi-year historical-growth-
+        rate projection, matching how this engine treats every other
+        baseline/project comparison as one verification period at a time).
+        Leakage mitigation (VMD0054 Step 2, Eqs. 3-5) is optional under
+        VMD0054 itself and not implemented — treated as zero mitigation,
+        which is the conservative (not the favorable) direction.
+
+        Returns a dict with `data_available` (bool — both scenarios have a
+        crop_yield_t_ha entered), `foregone_production_t` (None if data
+        unavailable), and `screened_clean` (True only when data is
+        available AND foregone production is ~zero — the common case for
+        yield-neutral/yield-positive ALM practices).
+        """
+        bsl_yield = (practice_schedule.get("baseline") or {}).get("crop_yield_t_ha")
+        wp_yield = (practice_schedule.get("project") or {}).get("crop_yield_t_ha")
+
+        if bsl_yield is None or wp_yield is None:
+            return {"data_available": False, "foregone_production_t": None, "screened_clean": False}
+
+        foregone_production_t = max(0.0, bsl_yield - wp_yield) * area_ha
+        return {
+            "data_available": True,
+            "foregone_production_t": foregone_production_t,
+            "screened_clean": foregone_production_t <= 1e-9,
+        }
+
+    # -----------------------------------------------------------------
     # Public API
     # -----------------------------------------------------------------
 
@@ -266,6 +317,24 @@ class AlmCarbonEngine:
                               or the classification will only reflect the current
                               period, which VM0042 does not permit.
         """
+        prod_leakage = self._production_decline_leakage(practice_schedule, area_ha)
+        if prod_leakage["data_available"] and not prod_leakage["screened_clean"]:
+            return {
+                "production_decline_leakage_blocked": True,
+                "foregone_production_t": prod_leakage["foregone_production_t"],
+                "leakage_block_reason": (
+                    f"Project yield is {prod_leakage['foregone_production_t']:.2f} t below "
+                    "baseline (VMD0054 Step 1) — production-decline leakage is nonzero. "
+                    "Quantifying it (VMD0054 Steps 3-5) needs regional forest-biomass and "
+                    "IPCC Tier 1 SOC change-factor defaults this engine does not have "
+                    "sourced, so this engine blocks issuance rather than omit a mandatory "
+                    "leakage term (§8.4.3)."
+                ),
+                "final_issuance": None,
+                "p_uncertainty": None,
+                "confidence_pct": None,
+            }
+
         bsl = practice_schedule.get("baseline") or {}
         wp  = practice_schedule.get("project") or {}
         bsl_terms = self._scenario_terms(bsl, area_ha)
@@ -358,8 +427,11 @@ class AlmCarbonEngine:
             "cr_t":                cr_t,
             "err_net":             err_net,
             "cumulative_delta_co2_wp": cumulative_delta_co2_wp,
-            "leakage_screened":    False,
-            "leakage_gap_note":    self.LEAKAGE_GAP_NOTE,
+            "production_decline_leakage_screened": prod_leakage["screened_clean"],
+            "production_decline_leakage_data_available": prod_leakage["data_available"],
+            "foregone_production_t": prod_leakage["foregone_production_t"],
+            "other_leakage_screened": False,
+            "other_leakage_gap_note": self.OTHER_LEAKAGE_GAP_NOTE,
             "cadence_compliant":   verification_years <= self.MAX_VERIFICATION_YEARS,
             "non_permanence_risk_pct": non_permanence_risk_pct,
             "bu_er":               bu_er,

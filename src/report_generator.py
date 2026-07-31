@@ -452,9 +452,16 @@ def generate_pdf_alm(
                f"{p.get('synthetic_n_rate_kg_ha') or 0:.1f} / {p.get('organic_n_rate_kg_ha') or 0:.1f} kg N/ha")
         pdf.kv(f"{scenario_label} — N-fixing cover crop",
                "Yes" if p.get("n_fixing_species") else "No")
+        pdf.kv(f"{scenario_label} — Crop yield",
+               f"{p['crop_yield_t_ha']:.2f} t/ha" if p.get("crop_yield_t_ha") is not None else "Not tracked")
         pdf.ln(1)
 
     pdf.section("3. Carbon Estimation (Verra VM0042 v2.2)")
+
+    if carbon.get("production_decline_leakage_blocked"):
+        pdf.banner("ISSUANCE BLOCKED: " + carbon.get("leakage_block_reason", ""), ok=False)
+        return bytes(pdf.output())
+
     pdf.kv("EF_Ndirect used (conservative, Eqs. 17-25)", f"{carbon['ef_ndirect_used']}")
     pdf.kv("N2O fertilizer (baseline -> project)", f"{carbon['n2o_fert_bsl']:.4f} -> {carbon['n2o_fert_wp']:.4f} tCO2e")
     pdf.kv("N2O N-fixing residues (baseline -> project)", f"{carbon['n2o_nfix_bsl']:.4f} -> {carbon['n2o_nfix_wp']:.4f} tCO2e")
@@ -466,15 +473,18 @@ def generate_pdf_alm(
     pdf.kv("SOC stock change (project, Approach 2)", f"{carbon['delta_co2_soil_wp']:.4f} tCO2e (Eqs. 46-47)")
     pdf.kv("SOC uncertainty deduction", f"{carbon['unc_co2_pct']:.1f}%  (Eqs. 70-71, 74)")
     pdf.ln(2)
-    if not carbon.get("leakage_screened", False):
+    if carbon.get("production_decline_leakage_data_available"):
+        pdf.kv("Production-decline leakage (VMD0054 Steps 1-2)",
+               f"Screened clean - foregone production {carbon['foregone_production_t']:.2f} t")
+    else:
         pdf.banner(
-            "LEAKAGE NOT SCREENED: " + carbon.get("leakage_gap_note", "VM0042 §8.4.3 "
-            "requires production-decline leakage accounting (LK_disp,t via VMD0054), "
-            "not implemented by this engine."),
+            "PRODUCTION-DECLINE LEAKAGE NOT SCREENED: enter crop yield for both "
+            "scenarios to screen this (VM0042 §8.4.3, VMD0054).",
             ok=False,
         )
-    pdf.kv("Net Emission Reductions (ER_t)", f"{carbon['er_t']:.4f} tCO2e  (Eq. 37, leakage unscreened)")
-    pdf.kv("Net Removals (CR_t)", f"{carbon['cr_t']:.4f} tCO2e  (Eq. 40, leakage unscreened)")
+    pdf.banner("OTHER LEAKAGE NOT SCREENED: " + carbon.get("other_leakage_gap_note", ""), ok=False)
+    pdf.kv("Net Emission Reductions (ER_t)", f"{carbon['er_t']:.4f} tCO2e  (Eq. 37, other-leakage unscreened)")
+    pdf.kv("Net Removals (CR_t)", f"{carbon['cr_t']:.4f} tCO2e  (Eq. 40, other-leakage unscreened)")
     pdf.kv("Net Reductions + Removals (ERR_NET,t)", f"{carbon['err_net']:.4f} tCO2e  (Eq. 43)")
     pdf.kv("Cumulative project SOC change (I(dCO2wp) basis)", f"{carbon['cumulative_delta_co2_wp']:.4f} tCO2e  (Eq. 37/40)")
     pdf.kv("Buffer deduction (ER / CR)", f"{carbon['bu_er']:.4f} / {carbon['bu_cr']:.4f} tCO2e  (Eqs. 75-76)")
@@ -515,11 +525,13 @@ def generate_pdf_alm(
     for i, a in enumerate([
         "Grazing practices, liming, and Quantification Approach 1 (external "
         "biogeochemical model) are out of scope - not modeled",
-        "Leakage from organic amendment import, livestock/production "
-        "displacement, and production declines (§8.4.3) is NOT screened or "
-        "computed by this engine, though VM0042 makes production-decline "
-        "leakage accounting mandatory via VMD0054 - net reductions/removals "
-        "above are unscreened for this category",
+        "Production-decline leakage (§8.4.3, VMD0054) is screened when crop "
+        "yield is entered for both scenarios (Steps 1-2: zero if yield is "
+        "maintained/improved). A genuine decline blocks issuance rather than "
+        "estimating it, since VMD0054's Steps 3-5 need regional forest-biomass "
+        "and IPCC Tier 1 SOC change-factor defaults not sourced in this app. "
+        "Leakage from organic amendment import and livestock/biomass "
+        "displacement is NOT screened or computed at all.",
         "The entire field is treated as a single quantification unit / "
         "stratum (permitted per §8.1); no sub-field stratification",
         "SOC uncertainty (Eqs. 70-71) conservatively assumes zero covariance "
