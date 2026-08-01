@@ -312,6 +312,18 @@ def _build_css(mode: str) -> str:
         border-right: 1px solid var(--ta-border);
     }}
 
+    /* Forces the sidebar's own content column to scroll independently of the
+       page once it grows taller than the viewport (e.g. the field-edit form
+       plus the delete confirmation plus the progress list all open at once)
+       — without this, content past the viewport bottom is unreachable.
+       Scoped to ONLY the actual widget container (not its stSidebarContent
+       parent too) — applying this to both nested elements at once made each
+       independently as tall as the full viewport, doubling the sidebar. */
+    [data-testid="stSidebarUserContent"] {{
+        height: 100%;
+        overflow-y: auto !important;
+    }}
+
     [data-testid="stSidebar"] .block-container {{
         padding: 1.4rem 1.1rem 2.5rem !important;
     }}
@@ -537,7 +549,12 @@ def _build_css(mode: str) -> str:
         display: none;
     }}
 
-    .stCheckbox [data-baseweb="checkbox"] span:first-child {{
+    /* Scoped to the UNCHECKED state only — applying this unconditionally
+       (regardless of checked state) overrides BaseWeb's own checked-state
+       background/checkmark rendering with the same glass color in both
+       states, making the tick mark invisible even though the underlying
+       value toggles correctly. */
+    .stCheckbox [data-baseweb="checkbox"]:not(:has(input:checked)) span:first-child {{
         background: var(--ta-glass) !important;
         border-color: var(--ta-border-strong) !important;
     }}

@@ -1,3 +1,4 @@
+import json
 import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
@@ -141,8 +142,37 @@ def initialize_database():
                 PRIMARY KEY (field_id, site_type, timepoint, sample_index)
             )
         """)
+
+        # Persisted log of every "Calculate Carbon Credits" run — one row per
+        # click, for either methodology path. inputs_json/result_json store
+        # the full calculate_credits() call so a past run can be inspected in
+        # detail, not just its headline final_issuance figure.
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS credit_history (
+                id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                field_id       TEXT NOT NULL,
+                field_type     TEXT NOT NULL,
+                calculated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                final_issuance REAL NOT NULL,
+                inputs_json    TEXT NOT NULL,
+                result_json    TEXT NOT NULL
+            )
+        """)
         conn.commit()
     _DB_INITIALIZED = True
+
+
+def update_field_info(field_id: str, name: str, district: str):
+    """Updates a field's name/district in place. field_type and geometry are
+    deliberately not editable here — changing methodology path or redrawing
+    a boundary means the field's underlying data (SAR cache vs. practice/SOC
+    rows) no longer matches, so those still require delete + re-register."""
+    with get_db_connection() as conn:
+        conn.execute(
+            "UPDATE fields SET name = ?, district = ? WHERE field_id = ?",
+            (name, district, field_id),
+        )
+        conn.commit()
 
 
 def check_cache(field_id: str, window_start: str, window_end: str) -> pd.DataFrame:
@@ -322,6 +352,100 @@ def update_alm_cumulative_delta(field_id: str, value: float):
             (value, field_id),
         )
         conn.commit()
+
+
+def delete_field(field_id: str):
+    """Deletes a field and every row keyed to it across all tables — the
+    registry entry, cached timeseries, (for cropland_alm_vm0042 fields) the
+    practice schedule, livestock schedule, and SOC measurements, and the
+    calculated-credit history log. SQLite foreign keys aren't enforced here,
+    so this cascade is done explicitly rather than relying on ON DELETE
+    CASCADE."""
+    with get_db_connection() as conn:
+        conn.execute("DELETE FROM fields WHERE field_id = ?", (field_id,))
+        conn.execute("DELETE FROM timeseries_cache WHERE field_id = ?", (field_id,))
+        conn.execute("DELETE FROM alm_practice_schedule WHERE field_id = ?", (field_id,))
+        conn.execute("DELETE FROM alm_livestock_schedule WHERE field_id = ?", (field_id,))
+        conn.execute("DELETE FROM soc_measurements WHERE field_id = ?", (field_id,))
+        conn.execute("DELETE FROM credit_history WHERE field_id = ?", (field_id,))
+        conn.commit()
+
+
+def save_credit_history(field_id: str, field_type: str, inputs: dict, result: dict):
+    """Logs one calculate_credits() run so past calculations survive a
+    session/page revisit — today only session_state holds this, so nothing
+    persists once the user navigates away. Stores the full inputs/result
+    dicts as JSON, not just final_issuance, so a past run can be inspected
+    in detail rather than just its headline figure."""
+    with get_db_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO credit_history (field_id, field_type, final_issuance, inputs_json, result_json)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (field_id, field_type, float(result["final_issuance"]),
+             json.dumps(inputs), json.dumps(result)),
+        )
+        conn.commit()
+
+
+def get_credit_history(field_id: str) -> list:
+    """Returns this field's past calculate_credits() runs, most recent
+    first, each as {'calculated_at', 'final_issuance', 'inputs', 'result'}."""
+    with get_db_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT calculated_at, final_issuance, inputs_json, result_json
+            FROM credit_history
+            WHERE field_id = ?
+            ORDER BY calculated_at DESC, id DESC
+            """,
+            (field_id,),
+        ).fetchall()
+    return [
+        {
+            "calculated_at": row["calculated_at"],
+            "final_issuance": row["final_issuance"],
+            "inputs": json.loads(row["inputs_json"]),
+            "result": json.loads(row["result_json"]),
+        }
+        for row in rows
+    ]
+
+
+def get_portfolio_summary() -> list:
+    """One row per registered field — identity/area plus its latest
+    calculated credit (final_issuance/calculated_at are None if the field
+    has never had Calculate Carbon Credits run) — for a cross-field
+    aggregate view spanning both methodology paths."""
+    with get_db_connection() as conn:
+        field_rows = conn.execute(
+            "SELECT field_id, name, district, field_type, area_ha FROM fields ORDER BY field_id"
+        ).fetchall()
+        latest_rows = conn.execute(
+            """
+            SELECT field_id, final_issuance, calculated_at
+            FROM credit_history
+            WHERE id IN (
+                SELECT MAX(id) FROM credit_history GROUP BY field_id
+            )
+            """
+        ).fetchall()
+    latest_by_field = {row["field_id"]: row for row in latest_rows}
+
+    summary = []
+    for f in field_rows:
+        latest = latest_by_field.get(f["field_id"])
+        summary.append({
+            "field_id": f["field_id"],
+            "name": f["name"],
+            "district": f["district"],
+            "field_type": f["field_type"],
+            "area_ha": f["area_ha"],
+            "final_issuance": latest["final_issuance"] if latest else None,
+            "calculated_at": latest["calculated_at"] if latest else None,
+        })
+    return summary
 
 
 def get_soc_measurements(field_id: str) -> dict:
