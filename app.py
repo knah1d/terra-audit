@@ -33,11 +33,12 @@ def render_preview_map(feature: dict, key: str, height: int = 400):
     st_folium(m, height=height, use_container_width=True, key=key, returned_objects=[])
 
 from src.database import (
-    get_db_connection, check_cache, save_cache,
+    get_db_connection, check_cache, save_cache, delete_field, update_field_info,
     save_alm_practice_schedule, get_alm_practice_schedule,
     save_soc_measurements, get_soc_measurements, ALM_PRACTICE_COLUMNS,
     get_alm_cumulative_delta, update_alm_cumulative_delta,
     save_alm_livestock_schedule, get_alm_livestock_schedule,
+    save_credit_history, get_credit_history, get_portfolio_summary,
 )
 from src.data_engine import SpatialDataEngine
 from src.field_types import build_detector, build_methodology, field_uses_sar
@@ -46,9 +47,9 @@ from src.report_generator import (
     generate_pdf_alm, generate_audit_json_alm, generate_alm_data_csv,
 )
 from src.ai.predictor import predict_awd_states
-from src.ai.dataset_builder import load_dataset
+from src.ai.dataset_builder import build_dataset, save_dataset, load_dataset
 from src.ai.feature_engineering import build_features
-from src.ai.models import train_and_evaluate
+from src.ai.models import train_and_evaluate, save_model
 from src.ai import evaluate as ai_evaluate
 
 # ---------------------------------------------------------------------------
@@ -309,6 +310,34 @@ with st.sidebar:
         """, unsafe_allow_html=True)
         st.markdown("")
 
+        # ---- Edit field (name/district only) -----------------------------
+        _edit_key = f"editing_field_{selected_id}"
+        if st.session_state.get(_edit_key):
+            edit_name = st.text_input("Field Name", value=sf["name"], key=f"edit_name_{selected_id}")
+            edit_district = st.text_input(
+                "District", value=sf["district"], key=f"edit_district_{selected_id}"
+            )
+            st.caption(
+                "Field type and boundary are not editable here — they determine "
+                "which cached data belongs to this field. Remove and re-register "
+                "to change either."
+            )
+            _col_save, _col_cancel = st.columns(2)
+            if _col_save.button("💾 Save", type="primary", use_container_width=True, key=f"save_edit_{selected_id}"):
+                if not edit_name.strip() or not edit_district.strip():
+                    st.error("Name and district are required.")
+                else:
+                    update_field_info(selected_id, edit_name.strip(), edit_district.strip())
+                    st.session_state.pop(_edit_key, None)
+                    st.rerun()
+            if _col_cancel.button("Cancel", use_container_width=True, key=f"cancel_edit_{selected_id}"):
+                st.session_state.pop(_edit_key, None)
+                st.rerun()
+        else:
+            if st.button("✏️ Edit Name / District", use_container_width=True):
+                st.session_state[_edit_key] = True
+                st.rerun()
+
         # ---- Remove field -----------------------------------------------
         _confirm_key = f"confirm_delete_{selected_id}"
         if st.session_state.get(_confirm_key):
@@ -318,12 +347,7 @@ with st.sidebar:
             )
             _col_yes, _col_no = st.columns(2)
             if _col_yes.button("Yes, delete", type="primary", use_container_width=True):
-                with get_db_connection() as conn:
-                    conn.execute("DELETE FROM fields WHERE field_id = ?", (selected_id,))
-                    conn.execute(
-                        "DELETE FROM timeseries_cache WHERE field_id = ?", (selected_id,)
-                    )
-                    conn.commit()
+                delete_field(selected_id)
                 for _k in [
                     "signal_df", "signal_field_id", "signal_cache_source",
                     "signal_total_awd", "signal_sowing_date", "signal_harvest_date",
@@ -331,6 +355,8 @@ with st.sidebar:
                     "carbon_ready", "carbon_total_awd", "carbon_season_length",
                     "carbon_area_ha", "season_from_phenology",
                     "export_df", "export_cr", _confirm_key,
+                    "alm_data_field_id", "alm_practice_schedule", "alm_soc_measurements",
+                    "alm_area_ha", "alm_livestock_schedule", "alm_carbon_ready",
                 ]:
                     st.session_state.pop(_k, None)
                 st.session_state["map_version"] = st.session_state.get("map_version", 0) + 1
@@ -342,7 +368,9 @@ with st.sidebar:
             if st.button(
                 "🗑️ Remove this field",
                 use_container_width=True,
-                help="Permanently delete this field and its cached timeseries data.",
+                help="Permanently delete this field and all its data — cached "
+                     "timeseries, and (for cropland fields) practice schedule, "
+                     "livestock, and SOC measurements.",
             ):
                 st.session_state[_confirm_key] = True
                 st.rerun()
@@ -399,11 +427,12 @@ carbon_engine = build_methodology(selected_field_type)
 # ---------------------------------------------------------------------------
 # Tab layout
 # ---------------------------------------------------------------------------
-tab_map, tab_2, tab_carbon, tab_validation = st.tabs([
+tab_map, tab_2, tab_carbon, tab_validation, tab_portfolio = st.tabs([
     "🌍 Spatial Asset Inspection",
     "📈 Statistical Signal Analytics" if selected_uses_sar else "🧪 Practice & Soil Data",
     "💰 Carbon Asset Ledger",
     "🤖 AI Validation",
+    "📊 Portfolio",
 ])
 
 # ===========================================================================
@@ -1155,6 +1184,34 @@ with tab_2:
 # ===========================================================================
 # TAB 3 — CARBON ASSET LEDGER
 # ===========================================================================
+def _render_credit_history_panel(field_id: str):
+    """Every Calculate Carbon Credits click is logged to credit_history —
+    this surfaces that log so past runs survive a session/page revisit
+    instead of vanishing once export_cr falls out of session_state."""
+    history = get_credit_history(field_id)
+    if not history:
+        return
+
+    st.markdown("---")
+    st.markdown("#### 🕘 Verification History")
+    st.caption(
+        f"{len(history)} prior calculation(s) recorded for this field — "
+        "logged automatically each time Calculate Carbon Credits runs."
+    )
+    rows = []
+    for h in history:
+        row = {
+            "Calculated At": h["calculated_at"],
+            "Final Issuance (tCO₂e)": round(h["final_issuance"], 4),
+        }
+        cumulative = h["result"].get("cumulative_delta_co2_wp")
+        if cumulative is not None:
+            row["Cumulative SOC Δ (tCO₂e)"] = round(cumulative, 4)
+        row["Inputs"] = ", ".join(f"{k}={v}" for k, v in h["inputs"].items())
+        rows.append(row)
+    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+
 def render_carbon_tab_rice_awd():
     if not selected_id:
         st.info("Draw and save a field in the **Spatial Asset Inspection** tab first.")
@@ -1261,6 +1318,14 @@ def render_carbon_tab_rice_awd():
         st.session_state["export_carbon_area"]   = carbon_area
         st.session_state["export_carbon_season"] = carbon_season
         st.session_state["export_carbon_awd"]    = carbon_awd
+
+        if run_carbon:
+            save_credit_history(selected_id, "rice_awd", {
+                "season_length_days": carbon_season,
+                "area_ha": carbon_area,
+                "awd_events": carbon_awd,
+                "q_n_kg_per_ha": q_n_kg_per_ha,
+            }, cr)
 
         st.markdown("---")
 
@@ -1498,6 +1563,8 @@ def render_carbon_tab_rice_awd():
             "or enter parameters manually above and click **Calculate Carbon Credits**."
         )
 
+    _render_credit_history_panel(selected_id)
+
 
 def render_carbon_tab_alm():
     if not selected_id:
@@ -1575,6 +1642,11 @@ def render_carbon_tab_alm():
 
         if run_carbon:
             update_alm_cumulative_delta(selected_id, cr["cumulative_delta_co2_wp"])
+            save_credit_history(selected_id, "cropland_alm_vm0042", {
+                "area_ha": carbon_area,
+                "verification_years": verification_years,
+                "non_permanence_risk_pct": non_permanence_risk_pct,
+            }, cr)
         st.session_state["alm_carbon_ready"] = True
 
         if cr["production_decline_leakage_data_available"]:
@@ -1730,6 +1802,8 @@ def render_carbon_tab_alm():
     else:
         st.info("Click **Calculate Carbon Credits** to run the VM0042 quantification chain.")
 
+    _render_credit_history_panel(selected_id)
+
 
 # ===========================================================================
 # TAB 3 dispatcher
@@ -1759,6 +1833,58 @@ with tab_validation:
         "defines would trivially score 100%."
     )
 
+    st.markdown("##### 🛠️ Model Training Pipeline")
+    st.caption(
+        "Build the labeled dataset from cached field timeseries, then train "
+        "and save a baseline model — no terminal required."
+    )
+    col_build, col_train = st.columns(2)
+
+    with col_build:
+        if st.button("📦 Build / Rebuild Dataset", use_container_width=True):
+            _built_df = build_dataset()
+            save_dataset(_built_df)
+            if _built_df.empty:
+                st.warning(
+                    "No cached field timeseries found — run Signal Analytics "
+                    "on at least one rice field first, then rebuild."
+                )
+            else:
+                _n_groups = _built_df[
+                    ["field_id", "window_start", "window_end"]
+                ].drop_duplicates().shape[0]
+                st.success(
+                    f"Built dataset: {len(_built_df)} rows across "
+                    f"{_n_groups} field/window group(s)."
+                )
+                st.dataframe(
+                    _built_df["label"].value_counts().rename("count"),
+                    use_container_width=True,
+                )
+
+    with col_train:
+        _TRAIN_MODEL_CHOICES = {"Random Forest": "random_forest", "XGBoost": "xgboost"}
+        _train_model_label = st.selectbox(
+            "Model to train", options=list(_TRAIN_MODEL_CHOICES.keys()), key="train_model_choice"
+        )
+        _train_model_key = _TRAIN_MODEL_CHOICES[_train_model_label]
+        if st.button(f"🎯 Train & Save {_train_model_label}", use_container_width=True):
+            _train_df = load_dataset()
+            if _train_df.empty:
+                st.warning("No training dataset found. Click **Build / Rebuild Dataset** first.")
+            else:
+                _train_X, _train_y = build_features(_train_df)
+                _train_result = train_and_evaluate(_train_model_key, _train_X, _train_y)
+                _saved_path = save_model(_train_result)
+                st.success(f"Trained and saved to `data/ai_models/{_saved_path.name}`.")
+                _existing_results = dict(st.session_state.get("validation_results") or {})
+                _existing_results[_train_model_key] = {
+                    "result": _train_result,
+                    "summary": ai_evaluate.summarize_fold_predictions(_train_result),
+                }
+                st.session_state["validation_results"] = _existing_results
+
+    st.markdown("---")
     run_validation = st.button("Run Validation", type="primary")
 
     if run_validation:
@@ -1885,3 +2011,93 @@ with tab_validation:
             "Click **Run Validation** to cross-validate the Random Forest and "
             "XGBoost baselines against the current AI training dataset."
         )
+
+
+# ===========================================================================
+# TAB 5 — PORTFOLIO
+# ===========================================================================
+with tab_portfolio:
+    st.markdown("#### 📊 Portfolio Overview")
+    st.caption(
+        "Aggregate view across every registered field, spanning both the "
+        "rice AWD (VM0051) and cropland ALM (VM0042) methodology paths."
+    )
+    st.markdown("---")
+
+    _portfolio = get_portfolio_summary()
+
+    if not _portfolio:
+        st.info("No fields registered yet. Add one in the **Spatial Asset Inspection** tab.")
+    else:
+        _FIELD_TYPE_LABELS = {
+            "rice_awd": "Rice — AWD (VM0051)",
+            "cropland_alm_vm0042": "Cropland — ALM (VM0042)",
+        }
+        # Validated categorical palette (dataviz skill reference), slots 1/2 —
+        # blue vs orange clears every CVD/contrast gate in both light and dark.
+        _FIELD_TYPE_COLORS = {
+            "rice_awd": "#3987e5" if _theme_mode == "dark" else "#2a78d6",
+            "cropland_alm_vm0042": "#d95926" if _theme_mode == "dark" else "#eb6834",
+        }
+
+        _total_area = sum(p["area_ha"] or 0.0 for p in _portfolio)
+        _rice_credits = sum(
+            p["final_issuance"] for p in _portfolio
+            if p["field_type"] == "rice_awd" and p["final_issuance"] is not None
+        )
+        _alm_credits = sum(
+            p["final_issuance"] for p in _portfolio
+            if p["field_type"] == "cropland_alm_vm0042" and p["final_issuance"] is not None
+        )
+
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Registered Fields", len(_portfolio))
+        m2.metric("Total Area", f"{_total_area:.2f} ha")
+        m3.metric("Rice AWD Credits", f"{_rice_credits:.3f} tCO₂e")
+        m4.metric("Cropland ALM Credits", f"{_alm_credits:.3f} tCO₂e")
+
+        _calculated = [p for p in _portfolio if p["final_issuance"] is not None]
+        st.markdown("##### Latest Credits by Field")
+        if _calculated:
+            _fig_portfolio = go.Figure()
+            for _ftype in ("rice_awd", "cropland_alm_vm0042"):
+                _rows = [p for p in _calculated if p["field_type"] == _ftype]
+                if not _rows:
+                    continue
+                _fig_portfolio.add_trace(go.Bar(
+                    x=[p["final_issuance"] for p in _rows],
+                    y=[f"{p['field_id']} — {p['name']}" for p in _rows],
+                    orientation="h",
+                    name=_FIELD_TYPE_LABELS[_ftype],
+                    marker=dict(color=_FIELD_TYPE_COLORS[_ftype]),
+                ))
+            _fig_portfolio.update_layout(
+                template="plotly_dark" if _theme_mode == "dark" else "plotly_white",
+                xaxis_title="Final Issuance (tCO₂e)",
+                height=max(280, 60 * len(_calculated)),
+                margin=dict(t=30, l=10),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+            )
+            st.plotly_chart(_fig_portfolio, use_container_width=True)
+        else:
+            st.info(
+                "No field has calculated credits yet — this chart populates "
+                "once **Calculate Carbon Credits** has run on at least one field."
+            )
+
+        st.markdown("##### All Registered Fields")
+        _table_rows = [
+            {
+                "Field ID": p["field_id"],
+                "Name": p["name"],
+                "District": p["district"],
+                "Type": _FIELD_TYPE_LABELS.get(p["field_type"], p["field_type"]),
+                "Area (ha)": p["area_ha"],
+                "Latest Credits (tCO₂e)": (
+                    round(p["final_issuance"], 4) if p["final_issuance"] is not None else "Not calculated"
+                ),
+                "Last Calculated": p["calculated_at"] or "—",
+            }
+            for p in _portfolio
+        ]
+        st.dataframe(pd.DataFrame(_table_rows), use_container_width=True, hide_index=True)

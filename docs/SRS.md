@@ -1,42 +1,49 @@
-::: {custom-style="Title"}
-TERRA-AUDIT
+| ![](diagrams/logo_du_seal.png){width=0.7in} | [INSTITUTE OF INFORMATION TECHNOLOGY]{custom-style="CoverRedHeader"}\
+UNIVERSITY OF DHAKA | ![](diagrams/logo_iit.png){width=1.1in} |
+|:---:|:---:|:---:|
+
+::: {custom-style="CoverRule"}
+
 :::
 
-::: {custom-style="Subtitle"}
-AI-ASSISTED DIGITAL MRV PLATFORM FOR AWD RICE IRRIGATION CARBON CREDITS
+::: {custom-style="CoverCenter"}
+[TERRA-AUDIT]{custom-style="CoverTitleBlue"}
+
+[– AI-Assisted Digital MRV Platform for AWD Rice Irrigation Carbon Credits]{custom-style="CoverSubtitleItalic"}
 :::
 
-::: {custom-style="Subtitle"}
-**SOFTWARE REQUIREMENTS SPECIFICATION & ANALYSIS**
+::: {custom-style="CoverCenter"}
+[Submitted As]{custom-style="CoverRedHeader"}\
+**Software Requirements Specification & Analysis**\
+SE801 Project
 :::
 
-<div align="center">
+::: {custom-style="CoverCenter"}
+[Submitted By]{custom-style="CoverRedHeader"}\
+**Kazi Nahid** — BSSE-1437\
+**Md. Jariful Rahman** — BSSE-1419
+:::
 
-<br>
-
-**Submitted By:**\
-Kazi Nahid | BSSE-1437\
-Md. Jariful Rahman | BSSE-1419
-
-<br>
-
-**Submitted To:**\
-Dr. Mohammed Shafiul Alam Khan\
+::: {custom-style="CoverCenter"}
+[Supervised By]{custom-style="CoverRedHeader"}\
+**Dr. Mohammed Shafiul Alam Khan**\
 Professor\
 Institute of Information Technology\
 University of Dhaka
+:::
 
-<br>
-
+::: {custom-style="CoverCenter"}
 **Supervisor's Signature:** \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
+:::
 
-<br>
+::: {custom-style="CoverRule"}
 
-**IIT — University of Dhaka**
+:::
 
-</div>
-
----
+::: {custom-style="CoverCenter"}
+[Date of Submission]{custom-style="CoverRedHeader"}\
+4 September 2026
+:::
 
 # Table of Contents
 

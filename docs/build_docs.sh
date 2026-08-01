@@ -22,7 +22,7 @@ build_document() {
   fi
 
   pandoc \
-    --from=markdown+implicit_figures+fenced_divs \
+    --from=markdown+implicit_figures+fenced_divs+bracketed_spans \
     --to=docx \
     --resource-path=. \
     --lua-filter=pagebreaks.lua \

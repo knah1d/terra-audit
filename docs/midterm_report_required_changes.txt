@@ -1,0 +1,524 @@
+TERRA-AUDIT MIDTERM REPORT — REQUIRED CHANGES
+================================================
+
+Target report:
+  docs/Terra-Audit_SE801_Midterm_Report (1).pdf
+
+Editable source:
+  docs/srs_mid.md
+
+Likely generated editable/output files:
+  docs/srs_mid.docx
+  docs/Terra-Audit_SE801_Midterm_Report (1).pdf
+
+Purpose of this file
+--------------------
+Update the midterm technical report so that it accurately represents the
+current repository and satisfies both supplied midterm outlines. Preserve the
+existing visual style and keep the final document within approximately 30
+pages where practical.
+
+
+PRIORITY 1 — CORRECT FACTUAL MISMATCHES
+=======================================
+
+1. Update Section 1.3, "Objectives"
+-----------------------------------
+
+WHERE:
+  Section 1.3, after the objective about the VM0042 cropland ALM path.
+
+ADD/REVISE:
+  State that the VM0042 path also covers integrated crop-livestock accounting
+  for supported grazing livestock, including enteric-fermentation CH4 and
+  pasture/range/paddock manure CH4 and N2O.
+
+  State that the system performs production-decline leakage screening using
+  baseline and project yields. Explain that missing yield data leaves the
+  screen unresolved and a real yield decline blocks issuance.
+
+  State that calculations are persisted in credit history and summarized in
+  a cross-field portfolio view.
+
+CODE EVIDENCE:
+  src/carbon_calculator_alm.py
+  src/database.py: alm_livestock_schedule and credit_history tables
+  app.py: livestock entry, credit-history panel, and portfolio tab
+
+
+2. Update Section 1.4, "Scope"
+------------------------------
+
+WHERE:
+  Under "In scope".
+
+ADD:
+  - Manual baseline/project livestock schedules for supported integrated
+    crop-livestock systems.
+  - Enteric-fermentation and pasture manure emissions for cattle, buffalo,
+    sheep, and goats.
+  - Yield-based production-decline leakage screening.
+  - Persistent calculation history and a portfolio-level summary covering
+    both methodology paths.
+  - Editing a field's name and district while keeping geometry and field type
+    immutable after registration.
+
+WHERE:
+  Under "Out of scope".
+
+REPLACE the current leakage wording. Do not simply say all ALM leakage is
+unimplemented. Use wording equivalent to:
+
+  "Full VM0042/VMD0054 leakage quantification is outside this phase. The
+  current engine implements a conservative production-decline screen using
+  baseline/project yield data, but it does not quantify every displacement,
+  imported-organic-amendment, livestock-displacement, or land-conversion
+  leakage category. Unresolved categories are disclosed explicitly and are
+  never silently treated as zero."
+
+
+3. Update Section 1.5, "Deliverables"
+-------------------------------------
+
+WHERE:
+  Existing deliverables list.
+
+ADD OR EXPAND:
+  - Include the livestock schedule and credit-history tables in the SQLite
+    deliverable.
+  - Mention yield-based leakage screening and integrated livestock terms in
+    the VM0042 engine deliverable.
+  - Mention the portfolio dashboard and persisted calculation history in the
+    dashboard deliverable.
+
+DO NOT claim that every feature is fully covered by automated tests. The
+existing automated tests concentrate on the two accounting engines; several
+UI, database, reporting, geometry, caching, and AI flows remain manual or
+untested.
+
+
+4. Expand Section 2.1, "Functional Requirements"
+-------------------------------------------------
+
+WHERE:
+  After FR12. Continue numbering without reusing an existing ID.
+
+ADD requirements equivalent to:
+
+  FR13 (Must): For a cropland ALM field, accept baseline and project livestock
+  schedules for supported livestock types, population, and productivity
+  system, and calculate enteric-fermentation and pasture-manure emissions.
+
+  FR14 (Must): Accept baseline and project crop yields, screen for production
+  decline, disclose missing leakage data, and block issuance when the project
+  causes a material yield decline that has not been fully quantified and
+  mitigated.
+
+  FR15 (Should): Persist every carbon-calculation run with its timestamp,
+  inputs, intermediate results, and final issuance, and allow the user to
+  inspect previous calculations for a field.
+
+  FR16 (Should): Present a portfolio summary containing every registered
+  field, methodology path, area, latest calculation date, latest issuance,
+  and totals by methodology.
+
+  FR17 (Should): Allow the user to edit a registered field's name and district
+  without changing its geometry or methodology type.
+
+  FR18 (Must): Include every input that materially affects a calculation in
+  the audit JSON and PDF. If the CSV is advertised as a complete evidence
+  export, it must also include livestock data; otherwise describe the CSV
+  accurately as a practice-and-SOC data export.
+
+ALSO REVISE FR8:
+  Add integrated livestock emission differences and production-decline
+  leakage screening to the VM0042 calculation description.
+
+REVISE FR11:
+  Avoid claiming that the ALM CSV is a complete calculation package unless
+  generate_alm_data_csv() is changed to include the livestock schedule.
+  Currently its signature receives only practice_schedule and
+  soc_measurements.
+
+
+5. Strengthen Section 2.2, "Non-functional Requirements"
+---------------------------------------------------------
+
+WHERE:
+  Replace the current two-column table with an ID/Category/Requirement/
+  Verification table, or add IDs and verification criteria to it.
+
+REQUIRED IMPROVEMENTS:
+  - Give every NFR a unique ID such as NFR1, NFR2, etc.
+  - Replace "instantly" with a measurable local-cache response target.
+  - Define what a "readable" validation error must contain.
+  - Define traceability: every result must expose input values, factor values,
+    factor sources, intermediate results, and deductions.
+  - Add security/privacy wording appropriate to a local prototype: no
+    authentication is provided, local database access controls depend on the
+    host machine, and exported evidence can contain sensitive field data.
+  - Add backup/recovery limitations for the local SQLite database.
+  - Add an accessibility target for labels, contrast, keyboard interaction,
+    and non-colour-only status indicators.
+  - Define graceful behavior for Earth Engine authentication, network, empty
+    collection, and API errors.
+  - Add a reproducibility requirement for AI model metadata, features,
+    training timestamp, label provenance, and evaluation method.
+
+Do not invent performance numbers that have not been measured. If no benchmark
+exists, identify the target as preliminary and state how it will be measured.
+
+
+6. Expand Section 2.3, "Stakeholders"
+-------------------------------------
+
+ADD:
+  - Farmer / landholder: owns or manages the enrolled field and provides
+    practice, livestock, yield, and SOC evidence.
+  - System operator / administrator: maintains Earth Engine credentials,
+    dependencies, the SQLite store, model artifacts, and backups.
+  - Validation and verification body / Verra auditor: checks applicability,
+    evidence, equations, uncertainty, leakage, and issuance eligibility.
+  - Google Earth Engine / Copernicus: external data-service stakeholders whose
+    availability and data characteristics constrain the rice workflow.
+
+Clarify that a carbon-credit estimate from this prototype is not itself a
+Verra registration or issuance decision.
+
+
+PRIORITY 2 — FIX SYSTEM AND DATA MODELING
+=========================================
+
+7. Correct Section 3.1, "Use Case Diagram and Descriptions"
+------------------------------------------------------------
+
+PROBLEM:
+  The text says there are six first-level capability areas, but the use-case
+  list contains 1.1 through 1.7. Use Case 1.7 has no dedicated diagram and the
+  report says it will be added later.
+
+REQUIRED CHANGE:
+  - Update Figure 2 and its caption to show all current first-level capability
+    areas, including Cropland ALM Practice & Credit Entry.
+  - Add a dedicated diagram for Use Case 1.7.
+  - Remove the sentence saying its diagram "will be added" in the final SRS.
+  - Represent livestock entry, yield/leakage screening, calculation-history
+    viewing, field editing, and portfolio viewing where appropriate.
+
+ADD USE-CASE DESCRIPTIONS:
+  For each major use case, provide at least actor, preconditions, trigger,
+  normal flow, alternative/error flow, and postconditions. The current report
+  mostly provides captions rather than full use-case specifications.
+
+
+8. Correct Section 3.2, "Activity Diagram"
+-------------------------------------------
+
+REQUIRED CHANGE:
+  Add or update the ALM activity flow to include:
+
+  enter baseline/project crop practices
+  -> enter baseline/project livestock schedule
+  -> enter baseline/project yield
+  -> enter paired SOC measurements
+  -> validate completeness and cadence
+  -> calculate SOC and non-SOC emission terms
+  -> run production-decline leakage screen
+  -> apply uncertainty and non-permanence buffer
+  -> block or disclose unresolved issuance conditions
+  -> save calculation history
+  -> export evidence
+  -> update portfolio summary
+
+Do not say the activity diagrams were carried forward unchanged if the current
+implementation has materially changed.
+
+
+9. Replace Figure 19 and update Sections 4.1 and 4.2
+---------------------------------------------------
+
+PROBLEM:
+  The report says Figure 19 reflects the current schema "in full," but it
+  omits implemented tables.
+
+THE CURRENT ER DIAGRAM MUST INCLUDE:
+  1. fields
+  2. timeseries_cache
+  3. alm_practice_schedule
+  4. alm_livestock_schedule
+  5. soc_measurements
+  6. credit_history
+
+SHOW RELATIONSHIPS:
+  fields 1 -> many timeseries_cache
+  fields 1 -> many alm_practice_schedule rows (one per scenario)
+  fields 1 -> many alm_livestock_schedule rows
+  fields 1 -> many soc_measurements
+  fields 1 -> many credit_history rows
+
+UPDATE THE DATABASE-SCHEMA TABLE:
+  Add rows for alm_livestock_schedule and credit_history, including their
+  primary/key columns and purposes.
+
+ALSO CORRECT THE MIGRATION DESCRIPTION:
+  Avoid claiming that swallowing every Exception proves migrations are
+  completely "safe." Say they are designed to be idempotent for duplicate
+  column migrations, while noting that broad exception handling should be
+  narrowed in future hardening so genuine migration failures are not hidden.
+
+
+10. Update Section 4.3, "Dataset Description"
+----------------------------------------------
+
+KEEP the existing disclosure that labels come from the rule-based gate. It is
+one of the report's strongest and most honest sections.
+
+ADD:
+  - Dataset size and per-class counts from an actual saved/built dataset.
+  - Number of fields, districts, and monitoring windows represented.
+  - Training/validation date and exact model versions.
+  - The known risk that observation-level folds can place observations from
+    the same field/window in both training and validation folds.
+  - A future validation plan using independent irrigation logs or field
+    observations and grouped splits by field or monitoring window.
+
+If no dataset has been built yet, explicitly state that the pipeline is
+implemented but empirical model results are pending. Do not invent results.
+
+
+11. Update Section 5.1, "Component Diagram"
+--------------------------------------------
+
+ADD TO THE DIAGRAM AND COMPONENT TABLE:
+  - Livestock schedule persistence and ALM livestock calculations.
+  - Leakage-screening responsibility.
+  - Credit-history persistence.
+  - Portfolio-summary query and UI.
+  - Field-information update flow.
+
+Clarify that the field-type registry dispatches detector/methodology metadata,
+while app.py still contains separate methodology-specific UI renderers. Avoid
+overstating that a third field type requires no changes anywhere; adding one
+would currently require UI/reporting integration as well as registry setup.
+
+
+PRIORITY 3 — AI, TESTS, AND IMPLEMENTATION STATUS
+================================================
+
+12. Update Section 6, "AI Engineering Design"
+----------------------------------------------
+
+KEEP:
+  - Random Forest and XGBoost selection rationale.
+  - "Prompt Design: Not applicable."
+  - The explanation that metrics represent agreement with the rule-based
+    gate, not independently verified accuracy.
+
+CORRECT/CLARIFY:
+  - When a class has too few samples, the code falls back to ordinary KFold;
+    explicitly state that minority-class results are provisional.
+  - Report actual dataset counts and model results only if models were really
+    trained and the results were captured.
+  - Do not call the AI validation work empirically complete merely because
+    the pipeline code exists.
+  - Add grouped, field-level validation and independent ground truth as final
+    project work.
+
+
+13. Expand Section 7, "Preliminary Test Plan"
+---------------------------------------------
+
+ADD AUTOMATED TEST TARGETS:
+  - GeoJSON, KML, coordinate parsing, malformed input, MultiPolygon handling,
+    and known-reference area calculation.
+  - Database initialization, migration behavior, CRUD, cache-window keys,
+    cascade deletion, livestock persistence, and credit history.
+  - Field-type registry dispatch and invalid field types.
+  - PDF/JSON/CSV evidence completeness for rice and ALM, including livestock.
+  - AI feature leakage, feature-column alignment, missing-model fallback,
+    grouped cross-validation, metrics, and artifact metadata.
+  - Portfolio aggregation and latest-calculation selection.
+  - End-to-end flows for both field types.
+
+ADD COLUMNS TO THE TEST TABLE:
+  Requirement ID, test level, automated/manual, current status, and evidence.
+
+IMPORTANT:
+  Do not write "all tests pass" until a clean test run is executed and its
+  result is recorded. In the current review environment, pytest could not be
+  run because the installed Python environment did not contain pytest, even
+  though requirements.txt declares pytest>=8.0.0.
+
+
+14. Add a new implementation-progress section
+----------------------------------------------
+
+WHY:
+  mid/SE801 mid implementation progress.pdf separately asks for:
+  1. Working Prototype
+  2. Implementation Progress
+  3. Challenges
+
+WHERE:
+  Preferably add a concise section after the Preliminary Test Plan and before
+  Timeline, then renumber Timeline if necessary. If the technical report must
+  remain exactly eight sections, add these as subsections under Timeline or
+  as a short appendix and include them in the table of contents.
+
+ADD "Working Prototype":
+  - Include 2-4 readable screenshots: field registration/map, rice signal
+    analytics, ALM practice/SOC/livestock entry, carbon/evidence or portfolio.
+  - Caption each screenshot with the demonstrated feature and current state.
+  - Do not use screenshots containing secrets or private field data.
+
+ADD "Implementation Progress" STATUS TABLE:
+  Suggested columns: Module/Feature, Status, Evidence, Remaining Work.
+
+  Suggested rows:
+  - Field registration and geometry parsing
+  - SQLite field registry and SAR cache
+  - Sentinel-1 retrieval
+  - Threshold-gate analytics and phenology
+  - VM0051 calculator
+  - VM0042 practice/SOC calculator
+  - Integrated livestock calculations
+  - Production-decline leakage screening
+  - Evidence PDF/JSON/CSV
+  - Credit history and portfolio
+  - AI dataset/model pipeline
+  - Automated calculator tests
+  - Database/report/AI/UI automated tests
+  - Independent ground-truth validation
+  - Full leakage quantification
+  - Deployment, authentication, backup, and hardening
+
+  Use only Complete / In Progress / Not Started, matching the supplied brief.
+  Do not mark database/report/AI/UI automated coverage or independent
+  ground-truth validation complete unless evidence exists.
+
+ADD "Challenges and Planned Responses":
+  Cover at least:
+  - No independent AWD ground truth -> collect field/irrigation observations.
+  - Very small drydown class -> gather more seasons/fields and use grouped
+    validation.
+  - Earth Engine authentication/API dependency -> graceful error handling,
+    cache-first operation, and documented setup.
+  - Incomplete leakage quantification -> finish applicability/data review and
+    implement or explicitly block unsupported cases.
+  - SOC sampling cost and cadence -> validation rules and documented sampling
+    protocol.
+  - Local SQLite/no authentication -> backups, access controls, and deployment
+    hardening for later phases.
+
+
+15. Correct Section 8, "Timeline"
+---------------------------------
+
+REVISE STATUS CLAIMS:
+  Separate "code implemented" from "validated complete."
+
+  The AI pipeline may be implemented, but independent validation is not
+  complete without ground truth and recorded model results.
+
+  The regression suite covers the accounting engines well, but system-wide
+  regression testing is not complete while geometry, database, reporting,
+  caching, AI integration, and UI flows remain manual or untested.
+
+ADD REMAINING WORK:
+  - Correct report diagrams and schema.
+  - Complete export coverage for livestock data.
+  - Add system-level automated tests.
+  - Record an actual clean test run.
+  - Perform grouped and independent AI validation.
+  - Complete or formally bound leakage treatment.
+  - Run final end-to-end demonstration and evidence-package audit.
+
+
+PRIORITY 4 — REFERENCES AND EDITORIAL CORRECTIONS
+================================================
+
+16. Fix Reference 1
+-------------------
+
+REPLACE:
+  docs/VM0051v1_27Feb25.pdf
+
+WITH:
+  methodologies/verra/vm0051/VM0051v1_27Feb25.pdf
+
+
+17. Improve reference precision
+-------------------------------
+
+ADD OR VERIFY references for implemented claims involving:
+  - VM0042 v2.2 and its June 2026 corrections where applicable.
+  - VMD0054 for production-decline leakage screening.
+  - IPCC 2019 Refinement Chapter 10 for livestock factors.
+  - IPCC 2019 Refinement Chapter 11 for pasture-deposited manure N2O.
+  - The applicable Verra program standard, registration/issuance process, and
+    non-permanence risk tool if the report discusses issuance or buffers.
+
+Use consistent citation style. Add section/page/table/equation identifiers for
+methodology constants instead of citing an entire document whenever possible.
+
+
+18. Clarify document identity
+-----------------------------
+
+The supplied outline calls this a "Project Midterm Technical Report," while
+the user may refer to it as an SRS. Keep the official cover title aligned with
+the course outline. If "SRS" is used inside the document, explain whether this
+midterm report is a concise SRS/design/progress extract or the authoritative
+full SRS.
+
+
+19. Verify the date
+-------------------
+
+The cover says "Date of Submission: 2 August 2026." Confirm that this is the
+real intended submission date before regenerating the PDF.
+
+
+20. Improve traceability
+------------------------
+
+ADD a compact traceability matrix, preferably after the test plan or in an
+appendix:
+
+  Requirement ID -> Use Case -> Component/Module -> Test(s) -> Status
+
+Include at least FR1-FR18 after the new requirements are added. This will make
+the report substantially more defensible as an SRS-style document.
+
+
+FINAL GENERATION AND VERIFICATION CHECKLIST
+===========================================
+
+After editing docs/srs_mid.md:
+
+[ ] Regenerate docs/srs_mid.docx using the existing documentation build flow.
+[ ] Regenerate the final PDF from the corrected DOCX/source.
+[ ] Confirm all Table of Contents entries and page numbers are updated.
+[ ] Confirm every figure is referenced before or near its appearance.
+[ ] Confirm no figure/table is clipped, blurry, or split badly across pages.
+[ ] Confirm the updated ER diagram contains all six current application tables.
+[ ] Confirm Use Case 1.7 has a dedicated diagram and no "will be added" note.
+[ ] Confirm the implementation-progress and challenges requirements are covered.
+[ ] Confirm the VM0051 reference path is correct.
+[ ] Confirm livestock appears in requirements, data model, design, tests, and export discussion.
+[ ] Confirm leakage claims match the implemented partial screening exactly.
+[ ] Confirm "complete" status is used only where evidence supports it.
+[ ] Install dependencies in the intended environment and run: python3 -m pytest -q
+[ ] Record the test result accurately; do not fabricate a pass count.
+[ ] Keep the report concise and preferably at or below approximately 30 pages.
+[ ] Proofread names, roll numbers, supervisor information, submission date,
+    headings, captions, numbering, grammar, and citation formatting.
+
+
+IMPORTANT INSTRUCTION TO THE EDITOR
+===================================
+
+Do not modify application behavior merely to make it match outdated report
+text. Update the report to match the current implementation unless a genuine
+software defect is independently found. Preserve existing user changes and
+do not overwrite unrelated files.
