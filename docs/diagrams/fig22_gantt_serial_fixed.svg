@@ -1,0 +1,103 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1908" height="1188" viewBox="0 0 1908 1188">
+  <rect width="1908" height="1188" fill="#ffffff"/>
+  <style>
+    .label { font: 28px Arial, Helvetica, sans-serif; fill: #111111; }
+    .serial { font: 700 28px Arial, Helvetica, sans-serif; fill: #111111; text-anchor: end; }
+    .tick { font: 25px Arial, Helvetica, sans-serif; fill: #111111; }
+    .legend { font: 27px Arial, Helvetica, sans-serif; fill: #111111; }
+    .midterm { font: 700 28px Arial, Helvetica, sans-serif; fill: #bd4d49; text-anchor: end; }
+  </style>
+
+  <!-- Vertical fortnight grid; schedule and spacing match the original chart. -->
+  <g stroke="#b8b8b8" stroke-width="1.5" stroke-dasharray="2 4">
+    <line x1="698" y1="31" x2="698" y2="1064"/>
+    <line x1="844" y1="31" x2="844" y2="1064"/>
+    <line x1="991" y1="31" x2="991" y2="1064"/>
+    <line x1="1137" y1="31" x2="1137" y2="1064"/>
+    <line x1="1283" y1="31" x2="1283" y2="1064"/>
+    <line x1="1429" y1="31" x2="1429" y2="1064"/>
+    <line x1="1576" y1="31" x2="1576" y2="1064"/>
+    <line x1="1722" y1="31" x2="1722" y2="1064"/>
+    <line x1="1868" y1="31" x2="1868" y2="1064"/>
+  </g>
+
+  <!-- Dedicated serial-number column: kept well inside the canvas to prevent Word cropping. -->
+  <g>
+    <text class="serial" x="82" y="195">1.</text>
+    <text class="label" x="94" y="195">Inception &amp; Requirements Analysis</text>
+
+    <text class="serial" x="82" y="309">2.</text>
+    <text class="label" x="94" y="309">Data &amp; Signal Engine (SAR, caching, gate)</text>
+
+    <text class="serial" x="82" y="423">3.</text>
+    <text class="label" x="94" y="423">Carbon Calculation Engine (VM0051 QA3)</text>
+
+    <text class="serial" x="82" y="537">4.</text>
+    <text class="label" x="94" y="537">Dashboard UI &amp; Evidence Reporting</text>
+
+    <text class="serial" x="82" y="651">5.</text>
+    <text class="label" x="94" y="651">AI Validation Module &amp; Regression Testing</text>
+
+    <text class="serial" x="82" y="765">6.</text>
+    <text class="label" x="94" y="765">Methodology Audit &amp; Documentation (SRS)</text>
+
+    <text class="serial" x="82" y="879">7.</text>
+    <text class="label" x="94" y="879">Final Integration &amp; System Hardening</text>
+
+    <text class="serial" x="82" y="993">8.</text>
+    <text class="label" x="94" y="993">Final Report &amp; Submission</text>
+  </g>
+
+  <!-- Completed work bars. -->
+  <g fill="#5687bf">
+    <rect x="687" y="151" width="150" height="66"/>
+    <rect x="760" y="265" width="222" height="66"/>
+    <rect x="906" y="379" width="222" height="66"/>
+    <rect x="979" y="493" width="296" height="66"/>
+    <rect x="1199" y="607" width="275" height="66"/>
+    <rect x="1355" y="721" width="138" height="66"/>
+  </g>
+
+  <!-- Planned/remaining portions. -->
+  <g fill="#adc3df" stroke="#5687bf" stroke-width="3">
+    <rect x="1492" y="721" width="74" height="66"/>
+    <rect x="1565" y="835" width="147" height="66"/>
+    <rect x="1711" y="949" width="127" height="66"/>
+  </g>
+
+  <!-- Midterm marker. -->
+  <line x1="1492" y1="30" x2="1492" y2="1050" stroke="#bd4d49" stroke-width="4" stroke-dasharray="17 9"/>
+  <text class="midterm" x="1475" y="81">Midterm</text>
+  <text class="midterm" x="1475" y="113">(2 Aug 2026)</text>
+
+  <!-- Legend. -->
+  <rect x="1560" y="49" width="39" height="28" fill="#5687bf"/>
+  <text class="legend" x="1615" y="72">Completed</text>
+  <rect x="1560" y="88" width="39" height="28" fill="#adc3df" stroke="#5687bf" stroke-width="3"/>
+  <text class="legend" x="1615" y="111">Planned / remaining</text>
+
+  <!-- Time axis. -->
+  <line x1="635" y1="1064" x2="1879" y2="1064" stroke="#111111" stroke-width="4"/>
+  <g stroke="#111111" stroke-width="4">
+    <line x1="698" y1="1064" x2="698" y2="1076"/>
+    <line x1="844" y1="1064" x2="844" y2="1076"/>
+    <line x1="991" y1="1064" x2="991" y2="1076"/>
+    <line x1="1137" y1="1064" x2="1137" y2="1076"/>
+    <line x1="1283" y1="1064" x2="1283" y2="1076"/>
+    <line x1="1429" y1="1064" x2="1429" y2="1076"/>
+    <line x1="1576" y1="1064" x2="1576" y2="1076"/>
+    <line x1="1722" y1="1064" x2="1722" y2="1076"/>
+    <line x1="1868" y1="1064" x2="1868" y2="1076"/>
+  </g>
+  <g class="tick" text-anchor="end">
+    <text transform="translate(698 1098) rotate(-35)">18 May</text>
+    <text transform="translate(844 1098) rotate(-35)">01 Jun</text>
+    <text transform="translate(991 1098) rotate(-35)">15 Jun</text>
+    <text transform="translate(1137 1098) rotate(-35)">29 Jun</text>
+    <text transform="translate(1283 1098) rotate(-35)">13 Jul</text>
+    <text transform="translate(1429 1098) rotate(-35)">27 Jul</text>
+    <text transform="translate(1576 1098) rotate(-35)">10 Aug</text>
+    <text transform="translate(1722 1098) rotate(-35)">24 Aug</text>
+    <text transform="translate(1868 1098) rotate(-35)">07 Sep</text>
+  </g>
+</svg>
