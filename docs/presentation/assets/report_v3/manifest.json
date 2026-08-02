@@ -1,0 +1,200 @@
+[
+  {
+    "order": 1,
+    "rid": "rId9",
+    "source": "image5.png",
+    "figure": 1,
+    "caption": "Fig 1: Terra-Audit — AI-Assisted Digital MRV Platform (Level 0). The root use case: all three primary actors interact with Terra-Audit, which depends on the three secondary actors to do its work.",
+    "title": "Terra-Audit — AI-Assisted Digital MRV Platform (Level 0). The root use case: all three primary actors interact with Terra-Audit, which depends on the three secondary actors to do its work.",
+    "presentation_file": "fig01.png"
+  },
+  {
+    "order": 2,
+    "rid": "rId10",
+    "source": "image8.png",
+    "figure": 2,
+    "caption": "Fig 2: Level 1 of Terra-Audit. The root use case decomposes into seven first-level capability areas — Field Management, Satellite Data Engine, MRV Signal Analytics, Carbon Estimation, Evidence Reporting, AI Validation, and Cropland ALM Practice & Credit Entry — each expanded further below.",
+    "title": "Level 1 of Terra-Audit. The root use case decomposes into seven first-level capability areas — Field Management, Satellite Data Engine, MRV Signal Analytics, Carbon Estimation, Evidence Reporting, AI Validation, and Cropland ALM Practice & Credit Entry — each expanded further below.",
+    "presentation_file": "fig02.png"
+  },
+  {
+    "order": 3,
+    "rid": "rId11",
+    "source": "image7.png",
+    "figure": 3,
+    "caption": "Fig 3: Field Management (Use Case 1.1). The developer registers, selects, and deletes fields; this level decomposes into Geometry Input (1.1.1) and Field Registration (1.1.2).",
+    "title": "Field Management (Use Case 1.1). The developer registers, selects, and deletes fields; this level decomposes into Geometry Input (1.1.1) and Field Registration (1.1.2).",
+    "presentation_file": "fig03.png"
+  },
+  {
+    "order": 4,
+    "rid": "rId12",
+    "source": "image10.png",
+    "figure": 4,
+    "caption": "Fig 4: Geometry Input (Use Case 1.1.1). The developer supplies a field boundary by drawing on the map, uploading a GeoJSON/KML file, or pasting GPS coordinates; malformed input returns a readable error instead of crashing the app.",
+    "title": "Geometry Input (Use Case 1.1.1). The developer supplies a field boundary by drawing on the map, uploading a GeoJSON/KML file, or pasting GPS coordinates; malformed input returns a readable error instead of crashing the app.",
+    "presentation_file": "fig04.png"
+  },
+  {
+    "order": 5,
+    "rid": "rId13",
+    "source": "image9.png",
+    "figure": 5,
+    "caption": "Fig 5: Field Registration (Use Case 1.1.2). Once a geometry is validated, the system computes area via the Shoelace formula with spherical correction and persists the field — ID, name, district, geometry, area, and field type — to the SQLite registry.",
+    "title": "Field Registration (Use Case 1.1.2). Once a geometry is validated, the system computes area via the Shoelace formula with spherical correction and persists the field — ID, name, district, geometry, area, and field type — to the SQLite registry.",
+    "presentation_file": "fig05.png"
+  },
+  {
+    "order": 6,
+    "rid": "rId14",
+    "source": "image13.png",
+    "figure": 6,
+    "caption": "Fig 6: Satellite Data Engine (Use Case 1.2). For rice_awd fields, retrieves Sentinel-1 VV/VH backscatter over the field geometry (DESCENDING pass only) from Google Earth Engine, checking the local cache first and persisting any newly fetched observations for instant reuse.",
+    "title": "Satellite Data Engine (Use Case 1.2). For rice_awd fields, retrieves Sentinel-1 VV/VH backscatter over the field geometry (DESCENDING pass only) from Google Earth Engine, checking the local cache first and persisting any newly fetched observations for instant reuse.",
+    "presentation_file": "fig06.png"
+  },
+  {
+    "order": 7,
+    "rid": "rId15",
+    "source": "image11.png",
+    "figure": 7,
+    "caption": "Fig 7: MRV Signal Analytics (Use Case 1.3). Applies Savitzky-Golay smoothing, z-score flood detection, drydown-event detection, and VH-based phenology extraction to the cached time-series; the researcher may substitute an AI-assisted detector for the rule-based gate.",
+    "title": "MRV Signal Analytics (Use Case 1.3). Applies Savitzky-Golay smoothing, z-score flood detection, drydown-event detection, and VH-based phenology extraction to the cached time-series; the researcher may substitute an AI-assisted detector for the rule-based gate.",
+    "presentation_file": "fig07.png"
+  },
+  {
+    "order": 8,
+    "rid": "rId16",
+    "source": "image15.png",
+    "figure": 8,
+    "caption": "Fig 8: Carbon Estimation (Use Case 1.4). Computes VM0051 QA3 rice credits or VM0042 cropland ALM credits depending on the field’s type, exposing every intermediate value in the ledger for hand verification.",
+    "title": "Carbon Estimation (Use Case 1.4). Computes VM0051 QA3 rice credits or VM0042 cropland ALM credits depending on the field’s type, exposing every intermediate value in the ledger for hand verification.",
+    "presentation_file": "fig08.png"
+  },
+  {
+    "order": 9,
+    "rid": "rId17",
+    "source": "image12.png",
+    "figure": 9,
+    "caption": "Fig 9: Evidence Reporting (Use Case 1.5). Packages the field record, monitoring window, satellite or practice data, and carbon calculation into a downloadable PDF report, JSON audit record, and CSV.",
+    "title": "Evidence Reporting (Use Case 1.5). Packages the field record, monitoring window, satellite or practice data, and carbon calculation into a downloadable PDF report, JSON audit record, and CSV.",
+    "presentation_file": "fig09.png"
+  },
+  {
+    "order": 10,
+    "rid": "rId18",
+    "source": "image14.png",
+    "figure": 10,
+    "caption": "Fig 10: AI Validation (Use Case 1.6). The researcher builds a labeled dataset, trains Random Forest and XGBoost classifiers, and compares their agreement with the rule-based gate via precision/recall/F1, confusion matrices, feature importance, and ROC curves.",
+    "title": "AI Validation (Use Case 1.6). The researcher builds a labeled dataset, trains Random Forest and XGBoost classifiers, and compares their agreement with the rule-based gate via precision/recall/F1, confusion matrices, feature importance, and ROC curves.",
+    "presentation_file": "fig10.png"
+  },
+  {
+    "order": 11,
+    "rid": "rId19",
+    "source": "image19.png",
+    "figure": 11,
+    "caption": "Fig 11: Cropland ALM Practice & Credit Entry (Use Case 1.7). The developer enters the practice schedule, livestock schedule, and crop yield; runs the production-decline leakage screen; calculates VM0042 credits; and can separately view calculation history or edit the field's name/district.",
+    "title": "Cropland ALM Practice & Credit Entry (Use Case 1.7). The developer enters the practice schedule, livestock schedule, and crop yield; runs the production-decline leakage screen; calculates VM0042 credits; and can separately view calculation history or edit the field's name/district.",
+    "presentation_file": "fig11.png"
+  },
+  {
+    "order": 12,
+    "rid": "rId20",
+    "source": "image16.png",
+    "figure": 12,
+    "caption": "Fig 12: Terra-Audit (Activity — Use Case 1). The top-level flow: a field is registered, analytics are run, credits are calculated according to the field’s methodology path, and evidence is exported.",
+    "title": "Terra-Audit (Activity — Use Case 1). The top-level flow: a field is registered, analytics are run, credits are calculated according to the field’s methodology path, and evidence is exported.",
+    "presentation_file": "fig12.png"
+  },
+  {
+    "order": 13,
+    "rid": "rId21",
+    "source": "image18.png",
+    "figure": 13,
+    "caption": "Fig 13: Field Management (Activity — Use Case 1.1). Draw, upload, or paste a boundary; validate; compute area; persist the field record.",
+    "title": "Field Management (Activity — Use Case 1.1). Draw, upload, or paste a boundary; validate; compute area; persist the field record.",
+    "presentation_file": "fig13.png"
+  },
+  {
+    "order": 14,
+    "rid": "rId22",
+    "source": "image17.png",
+    "figure": 14,
+    "caption": "Fig 14: Geometry Input & Registration (Activity — Use Case 1.1.1). The three input methods converge on a single validation and registration path, so any input source produces an identical stored field record.",
+    "title": "Geometry Input & Registration (Activity — Use Case 1.1.1). The three input methods converge on a single validation and registration path, so any input source produces an identical stored field record.",
+    "presentation_file": "fig14.png"
+  },
+  {
+    "order": 15,
+    "rid": "rId23",
+    "source": "image20.png",
+    "figure": 15,
+    "caption": "Fig 15: Satellite Data Engine (Activity — Use Case 1.2). Check the cache; on a miss, query Earth Engine, compute derived indices, smooth the signal, and write the result back to the cache.",
+    "title": "Satellite Data Engine (Activity — Use Case 1.2). Check the cache; on a miss, query Earth Engine, compute derived indices, smooth the signal, and write the result back to the cache.",
+    "presentation_file": "fig15.png"
+  },
+  {
+    "order": 16,
+    "rid": "rId24",
+    "source": "image21.png",
+    "figure": 16,
+    "caption": "Fig 16: MRV Signal Analytics (Activity — Use Case 1.3). Standardize VV into z-scores, flag flooded states, detect drydown events, extract phenology, and — if an AI model is selected and trained — overwrite the rule-based flags with model predictions plus a confidence score.",
+    "title": "MRV Signal Analytics (Activity — Use Case 1.3). Standardize VV into z-scores, flag flooded states, detect drydown events, extract phenology, and — if an AI model is selected and trained — overwrite the rule-based flags with model predictions plus a confidence score.",
+    "presentation_file": "fig16.png"
+  },
+  {
+    "order": 17,
+    "rid": "rId25",
+    "source": "image22.png",
+    "figure": 17,
+    "caption": "Fig 17: Carbon Estimation (Activity — Use Case 1.4). Branches on field type: the VM0051 QA3 steps (water scaling, uncertainty deduction, N₂O penalty) for rice fields, or the extended VM0042 steps (SOC stock change, livestock emissions, leakage screen, uncertainty and buffer deduction) for cropland fields; both paths floor final issuance at zero and persist the result to credit history.",
+    "title": "Carbon Estimation (Activity — Use Case 1.4). Branches on field type: the VM0051 QA3 steps (water scaling, uncertainty deduction, N₂O penalty) for rice fields, or the extended VM0042 steps (SOC stock change, livestock emissions, leakage screen, uncertainty and buffer deduction) for cropland fields; both paths floor final issuance at zero and persist the result to credit history.",
+    "presentation_file": "fig17.png"
+  },
+  {
+    "order": 18,
+    "rid": "rId26",
+    "source": "image24.png",
+    "figure": 18,
+    "caption": "Fig 18: Evidence Reporting (Activity — Use Case 1.5). Assemble the field, window, signal/practice, and carbon data into the PDF and JSON generators (and the CSV generator for practice/SOC data), then serve each as a browser download.",
+    "title": "Evidence Reporting (Activity — Use Case 1.5). Assemble the field, window, signal/practice, and carbon data into the PDF and JSON generators (and the CSV generator for practice/SOC data), then serve each as a browser download.",
+    "presentation_file": "fig18.png"
+  },
+  {
+    "order": 19,
+    "rid": "rId27",
+    "source": "image3.png",
+    "figure": 19,
+    "caption": "Fig 19: AI Validation (Activity — Use Case 1.6). Build the labeled dataset, engineer leakage-safe features, train both classifiers with cross-validation, then evaluate and compare them.",
+    "title": "AI Validation (Activity — Use Case 1.6). Build the labeled dataset, engineer leakage-safe features, train both classifiers with cross-validation, then evaluate and compare them.",
+    "presentation_file": "fig19.png"
+  },
+  {
+    "order": 20,
+    "rid": "rId28",
+    "source": "image1.png",
+    "figure": 20,
+    "caption": "Fig 20: Entity-Relationship Diagram (six core tables from initialize_database()). fields is the shared parent entity; rice_awd fields populate timeseries_cache only, cropland_alm_vm0042 fields populate alm_practice_schedule, alm_livestock_schedule, and soc_measurements, and every field's calculation runs — on either methodology path — are persisted to credit_history via a single-column id primary key.",
+    "title": "Entity-Relationship Diagram (six core tables from initialize_database()). fields is the shared parent entity; rice_awd fields populate timeseries_cache only, cropland_alm_vm0042 fields populate alm_practice_schedule, alm_livestock_schedule, and soc_measurements, and every field's calculation runs — on either methodology path — are persisted to credit_history via a single-column id primary key.",
+    "presentation_file": "fig20.png"
+  },
+  {
+    "order": 21,
+    "rid": "rId29",
+    "source": "image23.png",
+    "figure": 21,
+    "caption": "Fig 21: Component Diagram.",
+    "title": "Component Diagram.",
+    "presentation_file": "fig21.png"
+  },
+  {
+    "order": 22,
+    "rid": "rId30",
+    "source": "image2.png",
+    "figure": 22,
+    "caption": "Fig 22: Project Timeline (Gantt Chart).",
+    "title": "Project Timeline (Gantt Chart).",
+    "presentation_file": "fig22.png"
+  }
+]

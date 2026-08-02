@@ -1,0 +1,340 @@
+TERRA-AUDIT FINAL_READABLE REPORT — REMAINING REQUIRED CHANGES
+==============================================================
+
+Authoritative document reviewed:
+  docs/Terra-Audit_SE801_Midterm_Report_Final_Readable.docx
+
+Purpose:
+  This list supersedes the earlier checklist. It contains only work still
+  required after reviewing the newest Final_Readable DOCX and visually
+  inspecting its revised Figures 2 and 3.
+
+
+PRIORITY 1 — CORRECT FIGURE 2 UML DEFECTS
+=========================================
+
+Target:
+  Section 3.1.2, Figure 2 — Level-1 UML Use-Case Diagram
+
+What is now correct:
+  - A system boundary exists.
+  - Actors use stick-figure notation.
+  - Use cases use ellipses.
+  - History and portfolio are separate user goals.
+  - The diagram is no longer an extremely wide workflow strip.
+
+What still must change:
+
+1. Move the Researcher/Data Scientist completely outside the system boundary.
+   In the current image, the actor overlaps the system title/boundary area.
+
+2. Add visible association lines from Researcher/Data Scientist to:
+   - 1.3 MRV Signal Analytics
+   - 1.6 AI Validation
+   - 1.2 Satellite Data Engine, if the researcher directly initiates dataset
+     retrieval/building in the implemented workflow
+
+   The current figure shows the researcher actor but no clear associations.
+
+3. Number the two new Level-1 user goals consistently:
+   - 1.8 Review Calculation History
+   - 1.9 View Portfolio Summary
+
+   Section 3.1 says there are nine Level-1 goals, so leaving the last two
+   unnumbered is inconsistent.
+
+4. Update all related report references and traceability mappings to use
+   UC1.8 and UC1.9 rather than calling history/portfolio only cross-cutting.
+
+5. Stop the use-case ellipses from touching/overlapping. Every ellipse must
+   have visible whitespace around it; touching ellipses falsely imply an
+   undefined UML relationship.
+
+6. Do not merge several actor associations into an unexplained junction.
+   Draw independent plain association lines, or use a clean layout that makes
+   each actor-to-use-case connection unambiguous.
+
+7. Associate Carbon Project Developer with the actual use cases it initiates:
+   - 1.1 Manage Fields
+   - 1.2 Satellite Data Engine / Obtain Rice Time Series
+   - 1.3 MRV Signal Analytics
+   - 1.4 Carbon Estimation
+   - 1.5 Evidence Reporting
+   - 1.7 Cropland ALM Practice & Credit Entry
+   - 1.8 Review Calculation History
+   - 1.9 View Portfolio Summary
+
+8. Associate Auditor/VVB with review-oriented goals only:
+   - 1.5 Evidence Reporting / Review Evidence Package
+   - 1.8 Review Calculation History, if the application exposes it to this
+     actor
+   - 1.9 View Portfolio Summary, if the application exposes it to this actor
+
+9. Figure 2 should not claim that "complete actor participation" is specified
+   elsewhere while omitting essential actor associations from the diagram.
+   A Level-1 UML diagram should remain readable but still show its primary
+   associations accurately.
+
+Recommended corrected caption:
+  Fig 2: Terra-Audit Level-1 UML use-case diagram showing the nine user-goal
+  use cases and their primary actor associations.
+
+
+PRIORITY 2 — CORRECT FIGURE 3 UML SEMANTICS
+===========================================
+
+Target:
+  Section 3.1.3, Figure 3 — Cropland ALM Use-Case Decomposition
+
+What is now correct:
+  - Proper stick-figure actors, ellipses and a system boundary are present.
+  - Dashed <<include>> relationships are used.
+  - The diagram is readable at page width.
+  - It is no longer presented as a chronological activity flow.
+
+What still must change:
+
+1. Add the missing use case:
+   - Apply Uncertainty and Non-Permanence Buffer
+
+   Calculate VM0042 Carbon Estimate must <<include>> it. This is a material
+   part of the implemented VM0042 result and is documented in FR8.
+
+2. Ensure Calculate VM0042 Carbon Estimate <<include>> relationships point to:
+   - Validate Evidence Completeness & Cadence
+   - Screen Production-Decline Leakage
+   - Apply Uncertainty and Non-Permanence Buffer
+   - Save Calculation History
+
+   An <<include>> arrow points from the base use case (Calculate) toward the
+   included use case. Check the arrowheads, not just the dashed lines.
+
+3. Correct the export relationship. The current diagram appears to model:
+     Export Evidence <<include>> Save Calculation History
+
+   That is not the primary dependency. Use:
+     Export Evidence <<include>> Calculate VM0042 Carbon Estimate
+
+   Saving history may be separately included by Calculate.
+
+4. Rename "Update Portfolio" to the user-goal wording:
+   - View Portfolio Summary
+
+   Updating the portfolio is internal system behavior, not an auditor goal.
+
+5. Do not associate Auditor/VVB with "Update Portfolio." Associate the auditor
+   with one of these user-facing use cases instead:
+   - Review ALM Evidence Package
+   - Export/Access Evidence
+   - View Portfolio Summary, only if this actor can access it
+
+6. If the Carbon Project Developer is associated with several use cases, make
+   the association endpoints visible. Current lines are crowded/cropped near
+   the left system boundary and are difficult to map to individual ellipses.
+
+7. Treat livestock correctly as conditional evidence. Livestock schedules are
+   supported for integrated crop-livestock projects but are not mandatory for
+   every cropland ALM field. Prefer one of:
+   - Enter Livestock Schedule <<extend>> Record ALM Evidence; or
+   - Keep it under Record ALM Evidence but explicitly label it optional.
+
+   Do not imply it is universally mandatory through <<include>> unless that is
+   truly the validation rule.
+
+8. Use consistent verb-object names:
+   - Enter Crop Practices
+   - Enter Livestock Schedule
+   - Enter Baseline/Project Yields
+   - Enter Paired SOC Measurements
+   - Validate ALM Evidence
+   - Calculate VM0042 Carbon Estimate
+   - Screen Production-Decline Leakage
+   - Apply Uncertainty and Buffer
+   - Save Calculation History
+   - Export ALM Evidence
+   - View Portfolio Summary
+
+Recommended corrected caption:
+  Fig 3: UML use-case decomposition of UC1.7. The developer records crop,
+  yield, SOC and optional livestock evidence; the VM0042 calculation includes
+  validation, leakage screening, uncertainty/buffer treatment and history
+  persistence, while evidence and portfolio views support review.
+
+
+PRIORITY 3 — FIX DATABASE SCHEMA NAMES
+======================================
+
+Target:
+  Section 4.2 credit_history row and Figure 8 if it lists these columns.
+
+Current report still incorrectly states:
+  calculation_id (PK), field_id (FK), methodology, timestamp
+
+Actual src/database.py columns:
+  id (PK AUTOINCREMENT)
+  field_id
+  field_type
+  calculated_at
+  final_issuance
+  inputs_json
+  result_json
+
+Required replacement:
+  Key Columns: id (PK), field_id, field_type, calculated_at, final_issuance,
+  inputs_json, result_json.
+
+  Purpose: Persistent calculation-run history for both methodology paths;
+  supports field-level review and latest-result portfolio aggregation.
+
+Important:
+  field_id is a logical/application relationship. The current CREATE TABLE
+  statement does not declare FOREIGN KEY/REFERENCES, so do not label it as an
+  enforced FK unless the database implementation is changed accordingly.
+
+
+PRIORITY 4 — FIX VM0051 QA3 EXPORT LABELS IN CODE
+=================================================
+
+The report correctly calls the implemented rice approach VM0051 v1.0 QA3, but
+src/report_generator.py still contains "Verra VM0051 Tier 2" labels.
+
+Required code change:
+  Search report_generator.py/UI for "VM0051 Tier 2" and "Tier 2" and replace
+  incorrect methodology labels with one canonical label:
+
+    Verra VM0051 v1.0 — QA3 Default Emission Factors
+
+Apply consistently to:
+  - PDF header/title
+  - Carbon-estimation section
+  - Audit JSON metadata
+  - UI/export descriptions
+
+Add a regression test that generated rice export metadata contains QA3 and
+does not contain Tier 2.
+
+
+PRIORITY 5 — CORRECT TIMELINE CONTENT AND GANTT READABILITY
+===========================================================
+
+1. Confirm the real completion calendar. The earlier report used September
+   2026; the current report uses January-April 2027 without explanation.
+
+2. Use official supervisor/course dates. If April 2027 is correct, explain the
+   year-long project schedule. If September 2026 is correct, restore it.
+
+3. Figure 10 is still embedded at approximately 6.2 inches wide and only 0.44
+   inches high. Rebuild/enlarge it as a normal Gantt chart with phases on the
+   vertical axis and time on the horizontal axis. It must be readable at 100%
+   zoom and on printed A4.
+
+4. Make Figure 10 dates exactly match the Section 9.1 table.
+
+5. Replace the contradictory phrase "completing diagram/schema corrections"
+   in the remaining-work paragraph with:
+   "validating the revised diagrams and schema against subsequent
+   implementation changes".
+
+
+PRIORITY 6 — CORRECT REFERENCE [1]
+==================================
+
+Current title:
+  VM0051 Improved Management in Paddy Rice Production Systems
+
+Official title:
+  VM0051 Improved Management in Rice Production Systems
+
+Keep:
+  - v1.0
+  - 27 February 2025
+  - methodologies/verra/vm0051/VM0051v1_27Feb25.pdf
+  - accurately worded v1.1 transition information
+
+
+PRIORITY 7 — PROFESSIONALIZE TEST-EXECUTION WORDING
+===================================================
+
+Replace the paragraph referring to the "supplied review environment" with:
+
+  "A clean project-wide execution record is pending setup of the intended
+  dependency environment. requirements.txt declares pytest>=8.0.0. Before
+  submission, install the declared dependencies, run python3 -m pytest -q,
+  and record the exact date, Python version, environment and pass/fail/skip
+  result. No unexecuted suite is represented as passing."
+
+After a real run, insert the exact result. Never fabricate a pass count.
+
+
+PRIORITY 8 — MAKE STATUS LABELS CONSISTENT
+==========================================
+
+The current document still marks several modules "Complete" while listing
+required validation work in the same row.
+
+Use:
+  "Implemented; validation pending"
+
+for:
+  - Field registration/geometry
+  - SQLite registry/cache
+  - Sentinel-1 retrieval
+  - Threshold/phenology
+  - VM0051 and VM0042 engines until a clean run is recorded
+  - Integrated livestock calculations until factor/export audit is complete
+  - Production-decline screening while broader leakage boundaries remain
+  - Credit history/portfolio until automated integration tests exist
+  - Calculator tests until their intended-environment run is recorded
+
+Apply consistent wording in Sections 7, 8, 9 and 10.
+
+
+PRIORITY 9 — KEEP AI AND EXPORT CLAIMS ACCURATE
+===============================================
+
+AI artifact metadata:
+  NFR12 remains a target. src/ai/models.py currently persists model, classes
+  and feature_names, not every claimed reproducibility field. Keep empirical
+  status In Progress until versions, timestamp, dataset/class summary, label
+  provenance and CV metadata are stored.
+
+ALM CSV:
+  generate_alm_data_csv(practice_schedule, soc_measurements) does not receive
+  livestock. Continue calling it "ALM practice-and-SOC CSV," or extend the code
+  to include livestock and test it. Do not call the current CSV a complete ALM
+  calculation package.
+
+
+FINAL DOCUMENT VERIFICATION
+===========================
+
+[ ] Figure 2 actors are outside the boundary and visibly associated.
+[ ] Figure 2 has UC1.1 through UC1.9 with matching text/table names.
+[ ] Figure 2 ellipses and lines do not touch or overlap ambiguously.
+[ ] Figure 3 includes uncertainty/non-permanence buffer treatment.
+[ ] Figure 3 include-arrow directions are correct.
+[ ] Figure 3 models livestock as optional when appropriate.
+[ ] Auditor is connected to review/export, not internal portfolio update.
+[ ] credit_history uses exact implementation column names.
+[ ] No VM0051 Tier 2 label remains in generated QA3 evidence.
+[ ] Timeline dates are supervisor/course-confirmed.
+[ ] Figure 10 is readable at normal A4 print size.
+[ ] Reference [1] uses the official VM0051 title.
+[ ] Test wording contains a real run result or a professional pending statement.
+[ ] "Complete" is not used where validation is still explicitly pending.
+[ ] Table of Contents and page numbers are refreshed in Word.
+[ ] Tables remain inside margins and rows are readable.
+[ ] No application screenshots are added; prototype remains text-only.
+[ ] Final PDF is inspected page-by-page at 100% zoom.
+[ ] Final report remains near or below the suggested 30-page limit.
+
+
+INSTRUCTION TO THE EDITOR
+=========================
+
+Apply these changes to:
+  docs/Terra-Audit_SE801_Midterm_Report_Final_Readable.docx
+
+Do not edit the deprecated srs_mid.docx/srs_mid.md. Preserve the cover details,
+Dr. Emon Kumar Dey's supervisor information, student information, existing
+styling, and unrelated correct content. Do not add screenshots.

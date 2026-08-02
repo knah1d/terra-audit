@@ -1,0 +1,10 @@
+{
+  "name": "terra-audit-midterm-presentation",
+  "private": true,
+  "scripts": {
+    "build": "node generate_midterm_presentation.js"
+  },
+  "dependencies": {
+    "pptxgenjs": "^4.0.1"
+  }
+}

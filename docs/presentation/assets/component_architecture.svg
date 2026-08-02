@@ -1,0 +1,133 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+  <defs>
+    <marker id="arrow" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L9,4.5 L0,9 Z" fill="#46534B"/></marker>
+    <style>
+      .node { fill:#FFFFFF; stroke:#66796D; stroke-width:2; rx:8; }
+      .rice { fill:#EDF5EA; stroke:#2F6B3B; stroke-width:2.4; rx:8; }
+      .alm { fill:#F5F3E8; stroke:#6F7D43; stroke-width:2.4; rx:8; }
+      .shared { fill:#EAF1EC; stroke:#527A68; stroke-width:2.2; rx:8; }
+      .external { fill:#FFFDFC; stroke:#C6534F; stroke-width:2; stroke-dasharray:8 6; }
+      .flow { fill:none; stroke:#46534B; stroke-width:2.1; marker-end:url(#arrow); }
+      .dependency { fill:none; stroke:#65746B; stroke-width:1.9; stroke-dasharray:7 6; marker-end:url(#arrow); }
+      .title { font-family:Cambria,"Times New Roman",serif; font-size:18px; font-weight:700; fill:#173B29; }
+      .body { font-family:Cambria,"Times New Roman",serif; font-size:15px; fill:#193A2B; }
+      .small { font-family:Cambria,"Times New Roman",serif; font-size:13px; fill:#425349; }
+      .tiny { font-family:Cambria,"Times New Roman",serif; font-size:11.5px; fill:#425349; }
+      .externalText { font-family:Cambria,"Times New Roman",serif; font-size:15px; fill:#C63F3B; }
+      .section { font-family:Cambria,"Times New Roman",serif; font-size:12.5px; font-weight:700; letter-spacing:1px; fill:#5F6D63; }
+    </style>
+  </defs>
+  <rect width="1600" height="900" fill="#FFFFFF"/>
+
+  <!-- Relationships -->
+  <path class="flow" d="M800 88 L800 126"/>
+  <path class="flow" d="M630 166 C465 166 300 187 170 229"/>
+  <path class="flow" d="M970 166 C1080 166 1090 190 1060 229"/>
+  <path class="flow" d="M170 286 L170 319"/>
+  <path class="flow" d="M340 378 L354 378"/>
+  <path class="flow" d="M495 415 L495 459"/>
+  <path class="dependency" d="M205 435 C210 447 225 452 242 459"/>
+  <path class="flow" d="M1060 286 L1060 319"/>
+  <path class="flow" d="M1060 435 C1010 456 875 461 825 484"/>
+  <path class="flow" d="M1060 435 L1130 484"/>
+  <path class="flow" d="M1170 435 C1270 452 1370 461 1435 484"/>
+  <path class="flow" d="M435 575 C360 599 245 612 170 639"/>
+  <path class="flow" d="M495 575 C505 600 500 613 493 639"/>
+  <path class="dependency" d="M545 575 C575 610 605 650 631 674"/>
+  <path class="flow" d="M635 529 C730 556 875 598 930 639"/>
+  <path class="flow" d="M825 575 C755 598 635 612 560 639"/>
+  <path class="flow" d="M1130 575 L1030 639"/>
+  <path class="flow" d="M1435 575 C1365 600 1245 614 1160 639"/>
+  <path class="flow" d="M1015 739 C990 760 960 774 935 789"/>
+  <path class="dependency" d="M493 739 C493 752 490 763 485 772"/>
+  <path class="dependency" d="M170 739 C350 785 1110 815 1299 815"/>
+  <path class="dependency" d="M1190 690 C1255 714 1298 744 1324 773"/>
+  <path class="dependency" d="M1445 720 C1445 740 1420 753 1395 762"/>
+  <path class="flow" d="M960 55 C1290 55 1450 115 1450 619"/>
+
+  <!-- Application and registry -->
+  <rect class="node" x="640" y="18" width="320" height="70"/>
+  <text class="title" x="800" y="47" text-anchor="middle">app.py</text>
+  <text class="small" x="800" y="71" text-anchor="middle">Streamlit UI — field-type selector, tabbed dashboard</text>
+  <rect class="node" x="630" y="126" width="340" height="80"/>
+  <text class="title" x="800" y="155" text-anchor="middle">FieldTypeRegistry</text>
+  <text class="small" x="800" y="179" text-anchor="middle">registry.py — dispatches detector / methodology metadata</text>
+
+  <!-- Rice AWD path -->
+  <rect x="30" y="194" width="145" height="27" rx="4" fill="#FFFFFF"/>
+  <text class="section" x="40" y="215">RICE AWD PATH</text>
+  <rect class="rice" x="40" y="230" width="260" height="56"/>
+  <text class="body" x="170" y="264" text-anchor="middle">rice_awd (uses_sar = True)</text>
+  <rect class="rice" x="40" y="320" width="300" height="115"/>
+  <text class="title" x="190" y="347" text-anchor="middle">SpatialDataEngine /</text>
+  <text class="title" x="190" y="370" text-anchor="middle">AdaptiveAWDGate</text>
+  <text class="small" x="190" y="397" text-anchor="middle">Sentinel-1 retrieval and smoothing</text>
+  <text class="small" x="190" y="419" text-anchor="middle">AWD flood / drydown / phenology detection</text>
+  <rect class="rice" x="355" y="335" width="280" height="80"/>
+  <text class="title" x="495" y="365" text-anchor="middle">CarbonAssetEngine</text>
+  <text class="small" x="495" y="391" text-anchor="middle">VM0051 QA3 credit calculation</text>
+  <rect class="rice" x="355" y="460" width="280" height="115"/>
+  <text class="title" x="495" y="489" text-anchor="middle">AI Detection Pipeline</text>
+  <text class="small" x="495" y="514" text-anchor="middle">DatasetBuilder • FeatureEngineer</text>
+  <text class="tiny" x="495" y="536" text-anchor="middle">ModelRegistry • AWDPredictor • ModelEvaluator</text>
+  <text class="small" x="495" y="558" text-anchor="middle">optional classifier with rule fallback</text>
+  <ellipse class="external" cx="242" cy="520" rx="70" ry="60"/>
+  <text class="externalText" x="242" y="512" text-anchor="middle">Google Earth</text>
+  <text class="externalText" x="242" y="535" text-anchor="middle">Engine</text>
+
+  <!-- Cropland ALM path -->
+  <rect x="918" y="194" width="190" height="27" rx="4" fill="#FFFFFF"/>
+  <text class="section" x="930" y="215">CROPLAND ALM PATH</text>
+  <rect class="alm" x="920" y="230" width="280" height="56"/>
+  <text class="body" x="1060" y="254" text-anchor="middle">cropland_alm_vm0042</text>
+  <text class="small" x="1060" y="276" text-anchor="middle">(uses_sar = False)</text>
+  <rect class="alm" x="890" y="320" width="340" height="115"/>
+  <text class="title" x="1060" y="347" text-anchor="middle">AlmPracticeValidator /</text>
+  <text class="title" x="1060" y="370" text-anchor="middle">AlmCarbonEngine</text>
+  <text class="small" x="1060" y="397" text-anchor="middle">practice / livestock / SOC completeness checks</text>
+  <text class="small" x="1060" y="419" text-anchor="middle">VM0042 credit calculation</text>
+  <rect class="alm" x="690" y="485" width="270" height="90"/>
+  <text class="title" x="825" y="515" text-anchor="middle">Practice &amp; Soil Data Tab</text>
+  <text class="small" x="825" y="541" text-anchor="middle">fertilizer • tillage • residue</text>
+  <text class="small" x="825" y="562" text-anchor="middle">lab SOC samples</text>
+  <rect class="alm" x="995" y="485" width="270" height="90"/>
+  <text class="body" x="1130" y="515" text-anchor="middle">Livestock Schedule Persistence</text>
+  <text class="small" x="1130" y="541" text-anchor="middle">alm_livestock_schedule</text>
+  <text class="tiny" x="1130" y="563" text-anchor="middle">enteric-fermentation &amp; pasture-manure terms</text>
+  <rect class="alm" x="1300" y="485" width="270" height="90"/>
+  <text class="title" x="1435" y="515" text-anchor="middle">Leakage Screening</text>
+  <text class="small" x="1435" y="541" text-anchor="middle">production-decline screen</text>
+  <text class="small" x="1435" y="562" text-anchor="middle">baseline vs. project yield</text>
+
+  <!-- Shared services and outputs -->
+  <rect x="28" y="603" width="250" height="28" rx="4" fill="#FFFFFF"/>
+  <text class="section" x="40" y="625">SHARED SERVICES AND OUTPUTS</text>
+  <rect class="shared" x="30" y="640" width="280" height="100"/>
+  <text class="title" x="170" y="670" text-anchor="middle">GeoUtils, ProjectStore</text>
+  <text class="small" x="170" y="696" text-anchor="middle">boundary parsing / area computation</text>
+  <text class="small" x="170" y="718" text-anchor="middle">SQLite persistence for both paths</text>
+  <rect class="shared" x="340" y="640" width="305" height="100"/>
+  <text class="title" x="493" y="670" text-anchor="middle">ReportGenerator</text>
+  <text class="small" x="493" y="696" text-anchor="middle">PDF / JSON export for both paths</text>
+  <text class="small" x="493" y="718" text-anchor="middle">CSV currently limited to practice / SOC data</text>
+  <ellipse class="external" cx="715" cy="690" rx="85" ry="66"/>
+  <text class="externalText" x="715" y="682" text-anchor="middle">Model Artifacts</text>
+  <text class="externalText" x="715" y="706" text-anchor="middle">data/ai_models/*.joblib</text>
+  <rect class="shared" x="840" y="640" width="350" height="100"/>
+  <text class="title" x="1015" y="670" text-anchor="middle">Credit History Persistence</text>
+  <text class="small" x="1015" y="696" text-anchor="middle">credit_history: inputs + final issuance</text>
+  <text class="small" x="1015" y="718" text-anchor="middle">stored for every calculation run</text>
+  <rect class="shared" x="1320" y="620" width="250" height="100"/>
+  <text class="title" x="1445" y="650" text-anchor="middle">Field Info Update</text>
+  <text class="small" x="1445" y="676" text-anchor="middle">edit name / district</text>
+  <text class="small" x="1445" y="698" text-anchor="middle">geometry &amp; field_type immutable</text>
+  <ellipse class="external" cx="485" cy="825" rx="85" ry="53"/>
+  <text class="externalText" x="485" y="817" text-anchor="middle">Browser Download</text>
+  <text class="externalText" x="485" y="840" text-anchor="middle">st.download_button</text>
+  <rect class="shared" x="800" y="790" width="270" height="70"/>
+  <text class="title" x="935" y="819" text-anchor="middle">Portfolio Summary</text>
+  <text class="small" x="935" y="843" text-anchor="middle">cross-field totals by methodology path</text>
+  <ellipse class="external" cx="1390" cy="825" rx="90" ry="63"/>
+  <text class="externalText" x="1390" y="817" text-anchor="middle">SQLite</text>
+  <text class="externalText" x="1390" y="841" text-anchor="middle">data/project_store.db</text>
+</svg>
