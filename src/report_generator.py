@@ -206,8 +206,8 @@ def generate_pdf(
             "Manual agronomist verification is required."
         )
 
-    # ---- 5. Carbon Estimation (VM0051 v1.0, QA3 pathway) ------------------
-    pdf.section("5. Carbon Estimation  (Verra VM0051 v1.0, QA3 - Default Emission Factors)")
+    # ---- 5. Carbon Estimation (VM0051 v1.1, QA3 pathway) ------------------
+    pdf.section("5. Carbon Estimation  (Verra VM0051 v1.1, QA3 - Default Emission Factors)")
 
     if not carbon.get("qa3_pathway_valid", True):
         pdf.banner(
@@ -260,7 +260,7 @@ def generate_pdf(
     # ---- 6. Methodology ---------------------------------------------------
     pdf.section("6. Methodology")
     pdf.body(
-        "Terra-Audit implements the Verra VM0051 v1.0 Quantification Approach 3 (QA3 - "
+        "Terra-Audit implements the Verra VM0051 v1.1 Quantification Approach 3 (QA3 - "
         "Default Emission Factors) for Alternate Wetting and Drying (AWD) rice irrigation "
         "monitoring using Sentinel-1 SAR satellite data. VV backscatter is used as the "
         "primary flood-state indicator via z-score anomaly detection (field-adaptive "
@@ -350,7 +350,7 @@ def generate_audit_json(
         },
         "carbon_calculation": (
             {
-                "methodology":         "VM0051 v1.0, QA3 Default Emission Factors",
+                "methodology":         "VM0051 v1.1, QA3 Default Emission Factors",
                 "qa3_pathway_valid":   False,
                 "qa3_block_reason":    carbon.get("qa3_block_reason"),
                 "sf_w_project":        carbon.get("sf_w_project"),
@@ -362,7 +362,7 @@ def generate_audit_json(
             }
             if not carbon.get("qa3_pathway_valid", True)
             else {
-                "methodology":                        "VM0051 v1.0, QA3 Default Emission Factors",
+                "methodology":                        "VM0051 v1.1, QA3 Default Emission Factors",
                 "qa3_pathway_valid":                   True,
                 "emission_factor_ef_c_kg_ch4_per_ha_per_day": carbon["ef_c_used"],
                 "gwp_ch4_ar5_100yr":                  28,
