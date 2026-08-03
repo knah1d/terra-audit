@@ -1,6 +1,6 @@
 class CarbonAssetEngine:
     """
-    Implements Verra VM0051 v1.0 QA3 (Default Emission Factors) pathway for
+    Implements Verra VM0051 v1.1 QA3 (Default Emission Factors) pathway for
     converting satellite-verified AWD events into verified carbon credits.
 
     Covers (this implementation):
