@@ -20,6 +20,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from sqlalchemy import text
+
 from src.database import get_db_connection, initialize_database
 from src.auth import create_org_user, VALID_ROLES
 
@@ -31,12 +33,12 @@ def create_user(email: str, password: str, org_id: str, role: str) -> str:
     creation to src.auth.create_org_user so this logic lives in one place."""
     with get_db_connection() as conn:
         org = conn.execute(
-            "SELECT org_id FROM organizations WHERE org_id = ?", (org_id,)
+            text("SELECT org_id FROM organizations WHERE org_id = :org_id"), {"org_id": org_id}
         ).fetchone()
         if org is None:
             conn.execute(
-                "INSERT INTO organizations (org_id, name) VALUES (?, ?)",
-                (org_id, org_id),
+                text("INSERT INTO organizations (org_id, name) VALUES (:org_id, :name)"),
+                {"org_id": org_id, "name": org_id},
             )
             conn.commit()
     return create_org_user(org_id, email, password, role)

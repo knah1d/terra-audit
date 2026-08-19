@@ -10,6 +10,7 @@ import folium
 from folium.plugins import Draw
 import plotly.graph_objects as go
 from streamlit_folium import st_folium
+from sqlalchemy import text
 
 from src.geo_utils import (
     compute_area_ha,
@@ -144,10 +145,10 @@ engine, init_error = init_modules()
 # ---------------------------------------------------------------------------
 with get_db_connection() as conn:
     fields = conn.execute(
-        "SELECT field_id, name, district, field_type FROM fields "
-        "WHERE org_id = ? ORDER BY field_id",
-        (org_id,),
-    ).fetchall()
+        text("SELECT field_id, name, district, field_type FROM fields "
+             "WHERE org_id = :org_id ORDER BY field_id"),
+        {"org_id": org_id},
+    ).mappings().fetchall()
 
 field_display = {f["field_id"]: f for f in fields}
 
@@ -267,10 +268,10 @@ if init_error:
 # ---------------------------------------------------------------------------
 with get_db_connection() as conn:
     fields = conn.execute(
-        "SELECT field_id, name, district, field_type FROM fields "
-        "WHERE org_id = ? ORDER BY field_id",
-        (org_id,),
-    ).fetchall()
+        text("SELECT field_id, name, district, field_type FROM fields "
+             "WHERE org_id = :org_id ORDER BY field_id"),
+        {"org_id": org_id},
+    ).mappings().fetchall()
 
 field_display = {f["field_id"]: f for f in fields}
 
@@ -300,8 +301,8 @@ with st.sidebar:
             existing_ids = [
                 r["field_id"]
                 for r in conn.execute(
-                    "SELECT field_id FROM fields WHERE org_id = ?", (org_id,)
-                ).fetchall()
+                    text("SELECT field_id FROM fields WHERE org_id = :org_id"), {"org_id": org_id}
+                ).mappings().fetchall()
             ]
         nums = []
         for fid in existing_ids:
@@ -340,11 +341,12 @@ with st.sidebar:
                 fc = {"type": "FeatureCollection", "features": [pending_sidebar]}
                 with get_db_connection() as conn:
                     conn.execute(
-                        "INSERT INTO fields "
-                        "(org_id, field_id, name, district, geojson_geometry, area_ha, field_type) "
-                        "VALUES (?,?,?,?,?,?,?)",
-                        (org_id, new_fid, new_fname.strip(), new_district.strip(),
-                         json.dumps(fc), computed_ha, new_ftype),
+                        text("INSERT INTO fields "
+                             "(org_id, field_id, name, district, geojson_geometry, area_ha, field_type) "
+                             "VALUES (:org_id, :field_id, :name, :district, :geojson_geometry, :area_ha, :field_type)"),
+                        {"org_id": org_id, "field_id": new_fid, "name": new_fname.strip(),
+                         "district": new_district.strip(), "geojson_geometry": json.dumps(fc),
+                         "area_ha": computed_ha, "field_type": new_ftype},
                     )
                     conn.commit()
                 st.session_state["map_version"] = st.session_state.get("map_version", 0) + 1
@@ -474,9 +476,9 @@ with st.sidebar:
 if selected_id:
     with get_db_connection() as conn:
         row = conn.execute(
-            "SELECT geojson_geometry, area_ha FROM fields WHERE org_id = ? AND field_id = ?",
-            (org_id, selected_id),
-        ).fetchone()
+            text("SELECT geojson_geometry, area_ha FROM fields WHERE org_id = :org_id AND field_id = :field_id"),
+            {"org_id": org_id, "field_id": selected_id},
+        ).mappings().fetchone()
     geom       = json.loads(row["geojson_geometry"])
     field_area = float(row["area_ha"]) if row["area_ha"] else 1.0
 else:
