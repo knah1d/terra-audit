@@ -1,12 +1,21 @@
 "use client";
 
+import { ClipboardList, PenLine, Upload } from "lucide-react";
 import { useRef, useState } from "react";
 import { DrawMap } from "@/components/map";
+import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
-import { FieldLabel } from "@/components/ui/Field";
+import { FieldLabel, TextArea } from "@/components/ui/Field";
+import { Tabs } from "@/components/ui/Tabs";
 import { useParseCoordinates, useParseGeojson, useParseKml } from "@/hooks/use-geometry";
 
 type InputMode = "draw" | "upload" | "paste";
+
+const MODE_OPTIONS = [
+  { value: "draw" as const, label: "Draw on Map", icon: PenLine },
+  { value: "upload" as const, label: "Upload GeoJSON/KML", icon: Upload },
+  { value: "paste" as const, label: "Paste Coordinates", icon: ClipboardList },
+];
 
 /**
  * The three geometry-input paths from app.py's sidebar, converging on one
@@ -42,26 +51,15 @@ export function GeometryInputTabs({ onGeometry }: { onGeometry: (feature: GeoJSO
 
   return (
     <div>
-      <div className="mb-4 flex gap-1 rounded-md bg-gray-100 p-1 text-sm">
-        {([
-          ["draw", "🖊️ Draw on Map"],
-          ["upload", "📁 Upload GeoJSON/KML"],
-          ["paste", "📋 Paste Coordinates"],
-        ] as const).map(([value, label]) => (
-          <button
-            key={value}
-            type="button"
-            onClick={() => setMode(value)}
-            className={`flex-1 rounded-md px-3 py-1.5 font-medium transition-colors ${
-              mode === value ? "bg-white shadow-sm" : "text-gray-600 hover:text-gray-900"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
+      <div className="mb-4">
+        <Tabs options={MODE_OPTIONS} value={mode} onChange={setMode} />
       </div>
 
-      {mode === "draw" && <DrawMap onDrawn={onGeometry} />}
+      {mode === "draw" && (
+        <div className="overflow-hidden rounded-lg border border-border">
+          <DrawMap onDrawn={onGeometry} />
+        </div>
+      )}
 
       {mode === "upload" && (
         <div>
@@ -71,7 +69,7 @@ export function GeometryInputTabs({ onGeometry }: { onGeometry: (feature: GeoJSO
             type="file"
             accept=".geojson,.json,.kml"
             onChange={handleFileChange}
-            className="block w-full text-sm text-gray-600"
+            className="block w-full text-sm text-text-secondary"
           />
         </div>
       )}
@@ -79,26 +77,27 @@ export function GeometryInputTabs({ onGeometry }: { onGeometry: (feature: GeoJSO
       {mode === "paste" && (
         <div>
           <FieldLabel>Paste GPS coordinates (one &quot;lat, lon&quot; pair per line, ≥3 required)</FieldLabel>
-          <textarea
+          <TextArea
             value={pasteText}
             onChange={(e) => setPasteText(e.target.value)}
             rows={6}
             placeholder={"23.70, 90.40\n23.71, 90.40\n23.71, 90.41\n23.70, 90.41"}
-            className="w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-sm focus:border-blue-500 focus:outline-none"
           />
-          <Button type="button" onClick={handlePasteSubmit} disabled={parseCoordinates.isPending} className="mt-2">
-            Parse Coordinates
+          <Button type="button" onClick={handlePasteSubmit} loading={parseCoordinates.isPending} className="mt-2" size="sm">
+            Parse coordinates
           </Button>
         </div>
       )}
 
       {activeMutation?.data?.error && (
-        <p className="mt-2 text-sm text-red-600">{activeMutation.data.error}</p>
+        <Alert tone="danger" className="mt-3">
+          {activeMutation.data.error}
+        </Alert>
       )}
       {activeMutation?.isError && (
-        <p className="mt-2 text-sm text-red-600">
+        <Alert tone="danger" className="mt-3">
           {(activeMutation.error as Error).message}
-        </p>
+        </Alert>
       )}
     </div>
   );

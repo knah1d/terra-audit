@@ -1,26 +1,343 @@
 @import "tailwindcss";
 
+/*
+ * ============================================================
+ * Terra Audit design tokens — Tailwind v4 CSS-first theming
+ * ============================================================
+ *
+ * IMPORTANT — naming rule. Raw values live on :root under a name WITHOUT
+ * the `--color-` prefix; `@theme inline` then maps them into the
+ * `--color-*` namespace that generates utilities. The two names must
+ * never match: `@theme inline { --color-surface: var(--color-surface) }`
+ * is circular, and Tailwind silently DROPS the token — no build error,
+ * no utility emitted. That bug shipped once here and made the whole app
+ * render unstyled, so keep raw/theme names distinct (the pattern the
+ * original --background/--color-background pair already used).
+ *
+ * Palette: Deep Pine green as a restrained ACCENT ONLY (buttons, active
+ * nav, links, focus rings, subtle tint fills) over cool neutral surfaces.
+ * No green washes, no gradients as decoration, no neon.
+ */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* --- Deep Pine ramp ------------------------------------- */
+  --pine-50: #f0faf4;
+  --pine-100: #dcf3e5;
+  --pine-200: #bae7cb;
+  --pine-300: #8ad4a9;
+  --pine-400: #55ba83;
+  --pine-500: #2f9e63;
+  --pine-600: #1f7f4e;
+  --pine-700: #186640;
+  --pine-800: #144f33;
+  --pine-900: #0f3b27;
+
+  /* Brand accent — light mode. #1F7F4E carries white text at 5.0:1 (AA). */
+  --brand-50: var(--pine-50);
+  --brand-100: var(--pine-100);
+  --brand-400: var(--pine-400);
+  --brand-500: var(--pine-500);
+  --brand-600: var(--pine-600);
+  --brand-700: var(--pine-700);
+
+  /* --- Neutrals: cool, so they don't fight the cool cast of blurred glass */
+  --background: #f7f8f7;
+  --foreground: #0a0a0a;
+
+  --surface: #ffffff;
+  --surface-muted: #fafafa;
+  --border-c: #e5e5e5;
+  --border-strong: #d4d4d4;
+
+  --text-primary: #0a0a0a;
+  --text-secondary: #5f6367;
+  --text-tertiary: #94969b;
+
+  /* --- Semantic (muted, never vivid) ---------------------- */
+  --success-50: #ecfdf5;
+  --success-600: #059669;
+  --success-700: #047857;
+  --warning-50: #fffbeb;
+  --warning-600: #d97706;
+  --warning-700: #b45309;
+  --danger-50: #fef2f2;
+  --danger-600: #dc2626;
+  --danger-700: #b91c1c;
+  --info-50: #f0f9ff;
+  --info-600: #0284c7;
+  --info-700: #0369a1;
+
+  /* --- Glass material ------------------------------------- */
+  --glass-bg: rgba(255, 255, 255, 0.66);
+  --glass-bg-strong: rgba(255, 255, 255, 0.78);
+  --glass-rim: rgba(255, 255, 255, 0.5);
+  --glass-specular: rgba(255, 255, 255, 0.62);
+  --glass-hairline: rgba(10, 10, 10, 0.07);
+
+  /* Ambient layer behind the glass — without something back here to
+   * refract, a translucent panel over flat white is just a white panel.
+   * Deliberately near-imperceptible on its own. */
+  --ambient-1: rgba(31, 127, 78, 0.10);
+  --ambient-2: rgba(47, 158, 99, 0.07);
+  --ambient-3: rgba(20, 79, 51, 0.05);
+  --grain-opacity: 0.025;
+
+  /* --- Elevation: layered contact + ambient, never one hard drop --- */
+  --shadow-rgb: 12 20 16;
+  --shadow-x: 0 1px 2px rgb(var(--shadow-rgb) / 0.05);
+  --shadow-s: 0 1px 2px rgb(var(--shadow-rgb) / 0.05), 0 2px 8px -2px rgb(var(--shadow-rgb) / 0.07);
+  --shadow-m: 0 1px 2px rgb(var(--shadow-rgb) / 0.05), 0 10px 28px -8px rgb(var(--shadow-rgb) / 0.13);
+  --shadow-l: 0 2px 4px rgb(var(--shadow-rgb) / 0.05), 0 20px 48px -12px rgb(var(--shadow-rgb) / 0.2);
+
+  /* --- Radius: concentric (inner = outer − padding) -------- */
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-xl: 20px;
+
+  /* --- Motion: spring-like settle, short durations --------- */
+  --curve-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --curve-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast: 120ms;
+  --dur-base: 180ms;
+  --dur-slow: 240ms;
 }
 
+/* Manual-toggle-aware dark mode: next-themes stamps data-theme on <html>,
+ * so `dark:` keys off that attribute rather than only prefers-color-scheme
+ * — that's what lets the sidebar toggle override the system default. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+[data-theme="dark"] {
+  /* Accent lightens on near-black: #55BA83 on #0A0A0A is 8.3:1. */
+  --brand-50: rgba(85, 186, 131, 0.12);
+  --brand-100: rgba(85, 186, 131, 0.18);
+  --brand-400: var(--pine-300);
+  --brand-500: var(--pine-400);
+  --brand-600: var(--pine-400);
+  --brand-700: var(--pine-300);
+
+  --background: #0a0a0a;
+  --foreground: #f5f5f5;
+
+  --surface: #141414;
+  --surface-muted: #1a1a1a;
+  --border-c: rgba(255, 255, 255, 0.09);
+  --border-strong: rgba(255, 255, 255, 0.16);
+
+  --text-primary: #f5f5f5;
+  --text-secondary: #a1a1a6;
+  --text-tertiary: #71717a;
+
+  --success-50: rgba(52, 211, 153, 0.12);
+  --success-600: #34d399;
+  --success-700: #6ee7b7;
+  --warning-50: rgba(251, 191, 36, 0.12);
+  --warning-600: #fbbf24;
+  --warning-700: #fcd34d;
+  --danger-50: rgba(248, 113, 113, 0.12);
+  --danger-600: #f87171;
+  --danger-700: #fca5a5;
+  --info-50: rgba(56, 189, 248, 0.12);
+  --info-600: #38bdf8;
+  --info-700: #7dd3fc;
+
+  --glass-bg: rgba(255, 255, 255, 0.055);
+  --glass-bg-strong: rgba(255, 255, 255, 0.085);
+  --glass-rim: rgba(255, 255, 255, 0.1);
+  --glass-specular: rgba(255, 255, 255, 0.14);
+  --glass-hairline: rgba(255, 255, 255, 0.08);
+
+  --ambient-1: rgba(85, 186, 131, 0.1);
+  --ambient-2: rgba(47, 158, 99, 0.08);
+  --ambient-3: rgba(15, 59, 39, 0.35);
+  --grain-opacity: 0.03;
+
+  --shadow-rgb: 0 0 0;
+  --shadow-x: 0 1px 2px rgb(var(--shadow-rgb) / 0.4);
+  --shadow-s: 0 1px 2px rgb(var(--shadow-rgb) / 0.35), 0 2px 8px -2px rgb(var(--shadow-rgb) / 0.4);
+  --shadow-m: 0 1px 2px rgb(var(--shadow-rgb) / 0.3), 0 10px 28px -8px rgb(var(--shadow-rgb) / 0.55);
+  --shadow-l: 0 2px 4px rgb(var(--shadow-rgb) / 0.3), 0 20px 48px -12px rgb(var(--shadow-rgb) / 0.7);
+}
+
+/*
+ * Theme mapping. `inline` makes each utility use the referenced value
+ * directly, so a token that swaps under [data-theme="dark"] is picked up
+ * without needing `dark:` variants on every component.
+ * Left side = --color-* (generates utilities). Right side = raw name.
+ */
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-border: var(--border-c);
+  --color-border-strong: var(--border-strong);
+
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-tertiary: var(--text-tertiary);
+
+  --color-brand-50: var(--brand-50);
+  --color-brand-100: var(--brand-100);
+  --color-brand-400: var(--brand-400);
+  --color-brand-500: var(--brand-500);
+  --color-brand-600: var(--brand-600);
+  --color-brand-700: var(--brand-700);
+
+  --color-success-50: var(--success-50);
+  --color-success-600: var(--success-600);
+  --color-success-700: var(--success-700);
+  --color-warning-50: var(--warning-50);
+  --color-warning-600: var(--warning-600);
+  --color-warning-700: var(--warning-700);
+  --color-danger-50: var(--danger-50);
+  --color-danger-600: var(--danger-600);
+  --color-danger-700: var(--danger-700);
+  --color-info-50: var(--info-50);
+  --color-info-600: var(--info-600);
+  --color-info-700: var(--info-700);
+
+  --radius-sm: var(--r-sm);
+  --radius-md: var(--r-md);
+  --radius-lg: var(--r-lg);
+  --radius-xl: var(--r-xl);
+
+  --shadow-xs: var(--shadow-x);
+  --shadow-sm: var(--shadow-s);
+  --shadow-md: var(--shadow-m);
+  --shadow-lg: var(--shadow-l);
+
+  --ease-out: var(--curve-out);
+  --ease-in-out: var(--curve-in-out);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* ============================================================
+ * Base
+ * ============================================================ */
+
+*,
+::before,
+::after {
+  border-color: var(--border-c);
+}
+
+html {
+  color-scheme: light;
+}
+html[data-theme="dark"] {
+  color-scheme: dark;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  transition: background-color var(--dur-slow) var(--curve-out),
+    color var(--dur-slow) var(--curve-out);
+}
+
+::selection {
+  background: var(--brand-100);
+  color: var(--text-primary);
+}
+
+/* ============================================================
+ * Glass material
+ *
+ * Chrome only — sidebar, sticky headers, popovers, auth card. Content
+ * surfaces stay opaque (.surface-card) so dense numeric data keeps
+ * maximum legibility, and so backdrop-filter (GPU-expensive, janks
+ * scrolling when applied per-row) never lands on list items.
+ * ============================================================ */
+
+.glass-chrome {
+  background: var(--glass-bg);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid var(--glass-hairline);
+  /* the specular top edge is what reads as *glass* rather than as a
+   * translucent div — real glass catches light on its rim */
+  box-shadow: inset 0 1px 0 var(--glass-specular), inset 0 0 0 1px var(--glass-rim),
+    var(--shadow-m);
+}
+
+.glass-chrome-strong {
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(32px) saturate(180%);
+  -webkit-backdrop-filter: blur(32px) saturate(180%);
+  border: 1px solid var(--glass-hairline);
+  box-shadow: inset 0 1px 0 var(--glass-specular), inset 0 0 0 1px var(--glass-rim),
+    var(--shadow-l);
+}
+
+/* Opaque content surface — refined border + layered shadow, no blur. */
+.surface-card {
+  background: var(--surface);
+  border: 1px solid var(--border-c);
+  box-shadow: var(--shadow-s);
+}
+
+/* ============================================================
+ * Ambient backdrop + grain (rendered by components/ui/AppBackground.tsx)
+ * ============================================================ */
+
+.app-ambient {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(48rem 32rem at 10% -10%, var(--ambient-1), transparent 68%),
+    radial-gradient(42rem 30rem at 94% 2%, var(--ambient-2), transparent 66%),
+    radial-gradient(56rem 38rem at 50% 108%, var(--ambient-3), transparent 70%);
+}
+
+/* Grain kills the "digital plastic" flatness — inline SVG, no asset file. */
+.app-grain {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: var(--grain-opacity);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ============================================================
+ * Motion
+ * ============================================================ */
+
+.press {
+  transition: transform var(--dur-fast) var(--curve-out),
+    background-color var(--dur-fast) var(--curve-out),
+    border-color var(--dur-fast) var(--curve-out), box-shadow var(--dur-base) var(--curve-out);
+}
+.press:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.lift {
+  transition: transform var(--dur-base) var(--curve-out),
+    box-shadow var(--dur-base) var(--curve-out), border-color var(--dur-base) var(--curve-out);
+}
+.lift:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-m);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .press:active:not(:disabled),
+  .lift:hover {
+    transform: none;
+  }
 }

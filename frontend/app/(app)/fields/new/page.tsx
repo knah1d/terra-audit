@@ -1,14 +1,17 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import { PenSquare, Save } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { GeometryInputTabs } from "@/components/fields/GeometryInputTabs";
 import { GeometryPreviewMap } from "@/components/map";
+import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { ErrorText, FieldLabel, Select, TextInput } from "@/components/ui/Field";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { useCreateField } from "@/hooks/use-fields";
 import { useComputedArea } from "@/hooks/use-geometry";
 import { FIELD_TYPE_OPTIONS, fieldCreateSchema, type FieldCreateForm } from "@/lib/schemas/field";
@@ -49,22 +52,26 @@ export default function NewFieldPage() {
 
   return (
     <div className="mx-auto max-w-2xl">
-      <h1 className="mb-6 text-2xl font-semibold">Register a Field</h1>
+      <PageHeader
+        title="Register a Field"
+        subtitle="Draw, upload, or paste a boundary, then confirm its details."
+      />
 
       <Card className="mb-6">
         {pendingFeature ? (
           <div>
             <GeometryPreviewMap feature={pendingFeature} />
-            <div className="mt-2 flex items-center justify-between text-sm">
-              <span className="text-gray-500">
-                Computed area: <strong>{areaData ? `${areaData.area_ha.toFixed(4)} ha` : "…"}</strong>
+            <div className="mt-3 flex items-center justify-between text-sm">
+              <span className="text-text-secondary">
+                Computed area: <strong className="font-mono text-text-primary">{areaData ? `${areaData.area_ha.toFixed(4)} ha` : "…"}</strong>
               </span>
               <button
                 type="button"
                 onClick={() => setPendingFeature(null)}
-                className="text-blue-600 hover:underline"
+                className="inline-flex items-center gap-1 font-medium text-brand-600 hover:text-brand-700"
               >
-                Redraw / choose a different boundary
+                <PenSquare className="size-3.5" />
+                Redraw
               </button>
             </div>
           </div>
@@ -100,14 +107,14 @@ export default function NewFieldPage() {
                   </option>
                 ))}
               </Select>
-              <p className="mt-1 text-xs text-gray-500">
+              <p className="mt-1 text-xs text-text-tertiary">
                 Immutable after creation — determines which methodology (and which subsequent
                 data-entry tabs) this field uses.
               </p>
             </div>
-            {serverError && <p className="text-sm text-red-600">{serverError}</p>}
-            <Button type="submit" disabled={isSubmitting || !areaData} className="w-full">
-              {isSubmitting ? "Saving…" : "💾 Save Field"}
+            {serverError && <Alert tone="danger">{serverError}</Alert>}
+            <Button type="submit" icon={Save} loading={isSubmitting} disabled={!areaData} className="w-full">
+              Save Field
             </Button>
           </form>
         </Card>

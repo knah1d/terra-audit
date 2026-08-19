@@ -1,29 +1,34 @@
 "use client";
 
+import { ArrowRight, History, Wallet } from "lucide-react";
 import Link from "next/link";
 import { useFieldContext } from "@/components/fields/FieldContext";
 import { CreditHistoryTable } from "@/components/ledger/CreditHistoryTable";
 import { LedgerAlmForm } from "@/components/ledger/LedgerAlmForm";
 import { LedgerRiceForm } from "@/components/ledger/LedgerRiceForm";
-import { Card } from "@/components/ui/Card";
+import { Alert } from "@/components/ui/Alert";
+import { Skeleton } from "@/components/ui/Skeleton";
 import { useAlmCompleteness } from "@/hooks/use-alm";
 
 function AlmLedger({ fieldId, defaultArea }: { fieldId: string; defaultArea: number }) {
   const { data: completeness, isLoading } = useAlmCompleteness(fieldId);
 
-  if (isLoading) return <p className="text-sm text-gray-500">Checking practice data…</p>;
+  if (isLoading) return <Skeleton className="h-32" />;
 
   if (!completeness?.ready) {
     return (
-      <Card className="border-amber-300 bg-amber-50">
-        <p className="mb-2 font-medium text-amber-800">Practice &amp; Soil Data incomplete</p>
-        <ul className="mb-3 list-inside list-disc text-sm text-amber-800">
+      <Alert tone="warning" title="Practice & Soil Data incomplete">
+        <ul className="mb-2 list-inside list-disc">
           {completeness?.problems.map((p) => <li key={p}>{p}</li>)}
         </ul>
-        <Link href={`/fields/${fieldId}/practice-data`} className="text-sm font-medium text-blue-600 hover:underline">
-          Go to Practice &amp; Soil Data →
+        <Link
+          href={`/fields/${fieldId}/practice-data`}
+          className="inline-flex items-center gap-1 font-medium text-warning-700 hover:underline"
+        >
+          Go to Practice &amp; Soil Data
+          <ArrowRight className="size-3.5" />
         </Link>
-      </Card>
+      </Alert>
     );
   }
 
@@ -36,8 +41,11 @@ export default function LedgerPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h2 className="text-lg font-semibold">💰 Carbon Asset Ledger</h2>
-        <p className="text-sm text-gray-500">
+        <h2 className="flex items-center gap-2 text-lg font-semibold text-text-primary">
+          <Wallet className="size-5 text-brand-600" />
+          Carbon Asset Ledger
+        </h2>
+        <p className="text-sm text-text-secondary">
           {field.field_type === "rice_awd"
             ? "VM0051 QA3 (Default Emission Factors) pathway."
             : "VM0042 — Improved Agricultural Land Management."}
@@ -51,7 +59,10 @@ export default function LedgerPage() {
       )}
 
       <div>
-        <h3 className="mb-2 text-sm font-semibold text-gray-700">🕘 Verification History</h3>
+        <h3 className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-text-secondary">
+          <History className="size-4" />
+          Verification History
+        </h3>
         <CreditHistoryTable fieldId={field.field_id} />
       </div>
     </div>

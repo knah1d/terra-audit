@@ -1,10 +1,12 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import { Save } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { useFieldContext } from "@/components/fields/FieldContext";
+import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { ErrorText, FieldLabel, TextInput } from "@/components/ui/Field";
@@ -51,13 +53,13 @@ export default function EditFieldPage() {
             <TextInput {...register("district")} />
             <ErrorText>{errors.district?.message}</ErrorText>
           </div>
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-text-tertiary">
             Field type and boundary are not editable here — they determine which cached data
             belongs to this field. Remove and re-register to change either.
           </p>
-          {serverError && <p className="text-sm text-red-600">{serverError}</p>}
-          <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? "Saving…" : "💾 Save"}
+          {serverError && <Alert tone="danger">{serverError}</Alert>}
+          <Button type="submit" icon={Save} loading={isSubmitting}>
+            Save
           </Button>
         </form>
       </Card>

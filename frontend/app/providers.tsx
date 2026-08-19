@@ -1,6 +1,7 @@
 "use client";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { ThemeProvider } from "next-themes";
 import { createContext, useContext, useState } from "react";
 import type { SessionClaims } from "@/lib/session";
 
@@ -27,8 +28,10 @@ export function Providers({
   );
 
   return (
-    <SessionContext.Provider value={session}>
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-    </SessionContext.Provider>
+    <ThemeProvider attribute="data-theme" defaultTheme="system" enableSystem>
+      <SessionContext.Provider value={session}>
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      </SessionContext.Provider>
+    </ThemeProvider>
   );
 }
