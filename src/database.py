@@ -200,26 +200,62 @@ def initialize_database():
             "VALUES ('default', 'Legacy Operator', 'legacy')"
         )
 
+        # ---------------------------------------------------------------
+        # Phase 2 of the multi-tenant plan: org_id lands on every data
+        # table, denormalized (no join) — consistent with this file's
+        # existing style (credit_history already duplicates field_type
+        # rather than joining fields; get_portfolio_summary() already
+        # merges two queries in Python rather than a SQL JOIN). Every
+        # pre-existing row backfills to 'default' so nothing breaks for
+        # the existing single-operator deployment.
+        # ---------------------------------------------------------------
+        for _table in (
+            "fields", "timeseries_cache", "alm_practice_schedule",
+            "alm_livestock_schedule", "soc_measurements", "credit_history",
+        ):
+            try:
+                conn.execute(
+                    f"ALTER TABLE {_table} ADD COLUMN org_id TEXT NOT NULL DEFAULT 'default'"
+                )
+            except Exception:
+                pass
+
+        # SQLite can't redefine a PRIMARY KEY via ALTER TABLE, so field_id
+        # stays the legacy PK for backward compatibility, but this unique
+        # index is the real going-forward invariant: field IDs only need
+        # to be unique per org, not globally.
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_fields_org_field "
+            "ON fields(org_id, field_id)"
+        )
+        for _table in (
+            "timeseries_cache", "alm_practice_schedule",
+            "alm_livestock_schedule", "soc_measurements", "credit_history",
+        ):
+            conn.execute(
+                f"CREATE INDEX IF NOT EXISTS idx_{_table}_org ON {_table}(org_id)"
+            )
+
         conn.commit()
     _DB_INITIALIZED = True
 
 
-def update_field_info(field_id: str, name: str, district: str):
+def update_field_info(org_id: str, field_id: str, name: str, district: str):
     """Updates a field's name/district in place. field_type and geometry are
     deliberately not editable here — changing methodology path or redrawing
     a boundary means the field's underlying data (SAR cache vs. practice/SOC
     rows) no longer matches, so those still require delete + re-register."""
     with get_db_connection() as conn:
         conn.execute(
-            "UPDATE fields SET name = ?, district = ? WHERE field_id = ?",
-            (name, district, field_id),
+            "UPDATE fields SET name = ?, district = ? WHERE org_id = ? AND field_id = ?",
+            (name, district, org_id, field_id),
         )
         conn.commit()
 
 
-def check_cache(field_id: str, window_start: str, window_end: str) -> pd.DataFrame:
+def check_cache(org_id: str, field_id: str, window_start: str, window_end: str) -> pd.DataFrame:
     """
-    Retrieves cached time-series records keyed to a specific field AND
+    Retrieves cached time-series records keyed to a specific org+field AND
     analysis window. Returns an empty DataFrame on a cache miss.
     """
     with get_db_connection() as conn:
@@ -227,19 +263,20 @@ def check_cache(field_id: str, window_start: str, window_end: str) -> pd.DataFra
             """
             SELECT observation_date AS date, vv, vh, cross_ratio, rvi
             FROM   timeseries_cache
-            WHERE  field_id     = ?
+            WHERE  org_id       = ?
+              AND  field_id     = ?
               AND  window_start = ?
               AND  window_end   = ?
             ORDER  BY date ASC
             """,
             conn,
-            params=(field_id, window_start, window_end),
+            params=(org_id, field_id, window_start, window_end),
         )
     return df
 
 
 def save_cache(
-    field_id: str, df: pd.DataFrame, window_start: str, window_end: str
+    org_id: str, field_id: str, df: pd.DataFrame, window_start: str, window_end: str
 ):
     """Commits a batch of EE-fetched observations into the local cache."""
     if df.empty:
@@ -247,6 +284,7 @@ def save_cache(
     with get_db_connection() as conn:
         rows = [
             (
+                org_id,
                 field_id,
                 row["date"],
                 window_start,
@@ -261,9 +299,9 @@ def save_cache(
         conn.executemany(
             """
             INSERT OR REPLACE INTO timeseries_cache
-                (field_id, observation_date, window_start, window_end,
+                (org_id, field_id, observation_date, window_start, window_end,
                  vv, vh, cross_ratio, rvi)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             rows,
         )
@@ -279,29 +317,30 @@ ALM_PRACTICE_COLUMNS = [
 ]
 
 
-def save_alm_practice_schedule(field_id: str, scenario: str, practices: dict):
+def save_alm_practice_schedule(org_id: str, field_id: str, scenario: str, practices: dict):
     """Upserts one baseline/project practice-schedule row for a field."""
     cols = ALM_PRACTICE_COLUMNS
     values = [practices.get(c) for c in cols]
     with get_db_connection() as conn:
         conn.execute(
             f"""
-            INSERT INTO alm_practice_schedule (field_id, scenario, {", ".join(cols)})
-            VALUES (?, ?, {", ".join("?" for _ in cols)})
+            INSERT INTO alm_practice_schedule (org_id, field_id, scenario, {", ".join(cols)})
+            VALUES (?, ?, ?, {", ".join("?" for _ in cols)})
             ON CONFLICT (field_id, scenario) DO UPDATE SET
                 {", ".join(f"{c} = excluded.{c}" for c in cols)},
                 updated_at = CURRENT_TIMESTAMP
             """,
-            (field_id, scenario, *values),
+            (org_id, field_id, scenario, *values),
         )
         conn.commit()
 
 
-def get_alm_practice_schedule(field_id: str) -> dict:
+def get_alm_practice_schedule(org_id: str, field_id: str) -> dict:
     """Returns {'baseline': {...} | None, 'project': {...} | None} for a field."""
     with get_db_connection() as conn:
         rows = conn.execute(
-            "SELECT * FROM alm_practice_schedule WHERE field_id = ?", (field_id,)
+            "SELECT * FROM alm_practice_schedule WHERE org_id = ? AND field_id = ?",
+            (org_id, field_id),
         ).fetchall()
     result = {"baseline": None, "project": None}
     for row in rows:
@@ -309,17 +348,17 @@ def get_alm_practice_schedule(field_id: str) -> dict:
     return result
 
 
-def save_alm_livestock_schedule(field_id: str, scenario: str, livestock: list):
+def save_alm_livestock_schedule(org_id: str, field_id: str, scenario: str, livestock: list):
     """Replaces all livestock rows for a (field, scenario) pair. `livestock`
     is a list of {"livestock_type", "population_head", "productivity_system"}
     dicts; entries with population_head <= 0 are dropped, not stored."""
     with get_db_connection() as conn:
         conn.execute(
-            "DELETE FROM alm_livestock_schedule WHERE field_id = ? AND scenario = ?",
-            (field_id, scenario),
+            "DELETE FROM alm_livestock_schedule WHERE org_id = ? AND field_id = ? AND scenario = ?",
+            (org_id, field_id, scenario),
         )
         rows = [
-            (field_id, scenario, e["livestock_type"], e["population_head"], e["productivity_system"])
+            (org_id, field_id, scenario, e["livestock_type"], e["population_head"], e["productivity_system"])
             for e in livestock
             if (e.get("population_head") or 0) > 0
         ]
@@ -327,15 +366,15 @@ def save_alm_livestock_schedule(field_id: str, scenario: str, livestock: list):
             conn.executemany(
                 """
                 INSERT INTO alm_livestock_schedule
-                    (field_id, scenario, livestock_type, population_head, productivity_system)
-                VALUES (?, ?, ?, ?, ?)
+                    (org_id, field_id, scenario, livestock_type, population_head, productivity_system)
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
                 rows,
             )
         conn.commit()
 
 
-def get_alm_livestock_schedule(field_id: str) -> dict:
+def get_alm_livestock_schedule(org_id: str, field_id: str) -> dict:
     """Returns {'baseline': [...], 'project': [...]} of livestock entries
     for a field, each a {"livestock_type", "population_head",
     "productivity_system"} dict."""
@@ -343,9 +382,9 @@ def get_alm_livestock_schedule(field_id: str) -> dict:
         rows = conn.execute(
             """
             SELECT scenario, livestock_type, population_head, productivity_system
-            FROM alm_livestock_schedule WHERE field_id = ?
+            FROM alm_livestock_schedule WHERE org_id = ? AND field_id = ?
             """,
-            (field_id,),
+            (org_id, field_id),
         ).fetchall()
     result = {"baseline": [], "project": []}
     for row in rows:
@@ -357,46 +396,47 @@ def get_alm_livestock_schedule(field_id: str) -> dict:
     return result
 
 
-def save_soc_measurements(field_id: str, site_type: str, timepoint: str, values: list):
+def save_soc_measurements(org_id: str, field_id: str, site_type: str, timepoint: str, values: list):
     """Replaces all sample rows for a (field, site_type, timepoint) triple."""
     with get_db_connection() as conn:
         conn.execute(
-            "DELETE FROM soc_measurements WHERE field_id = ? AND site_type = ? AND timepoint = ?",
-            (field_id, site_type, timepoint),
+            "DELETE FROM soc_measurements WHERE org_id = ? AND field_id = ? AND site_type = ? AND timepoint = ?",
+            (org_id, field_id, site_type, timepoint),
         )
         conn.executemany(
             """
             INSERT INTO soc_measurements
-                (field_id, site_type, timepoint, sample_index, soc_value_tco2e_ha)
-            VALUES (?, ?, ?, ?, ?)
+                (org_id, field_id, site_type, timepoint, sample_index, soc_value_tco2e_ha)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
-            [(field_id, site_type, timepoint, i, v) for i, v in enumerate(values)],
+            [(org_id, field_id, site_type, timepoint, i, v) for i, v in enumerate(values)],
         )
         conn.commit()
 
 
-def get_alm_cumulative_delta(field_id: str) -> float:
+def get_alm_cumulative_delta(org_id: str, field_id: str) -> float:
     """Cumulative project SOC change (t CO2) since project start, used by
     AlmCarbonEngine.calculate_credits()'s VM0042 Eq. 37/40 ER/CR classification
     indicator. Returns 0.0 for a field with no prior verification recorded."""
     with get_db_connection() as conn:
         row = conn.execute(
-            "SELECT alm_cumulative_delta_co2_wp FROM fields WHERE field_id = ?", (field_id,)
+            "SELECT alm_cumulative_delta_co2_wp FROM fields WHERE org_id = ? AND field_id = ?",
+            (org_id, field_id),
         ).fetchone()
     return float(row["alm_cumulative_delta_co2_wp"]) if row and row["alm_cumulative_delta_co2_wp"] is not None else 0.0
 
 
-def update_alm_cumulative_delta(field_id: str, value: float):
+def update_alm_cumulative_delta(org_id: str, field_id: str, value: float):
     """Persists the new cumulative total after a successful calculate_credits() call."""
     with get_db_connection() as conn:
         conn.execute(
-            "UPDATE fields SET alm_cumulative_delta_co2_wp = ? WHERE field_id = ?",
-            (value, field_id),
+            "UPDATE fields SET alm_cumulative_delta_co2_wp = ? WHERE org_id = ? AND field_id = ?",
+            (value, org_id, field_id),
         )
         conn.commit()
 
 
-def delete_field(field_id: str):
+def delete_field(org_id: str, field_id: str):
     """Deletes a field and every row keyed to it across all tables — the
     registry entry, cached timeseries, (for cropland_alm_vm0042 fields) the
     practice schedule, livestock schedule, and SOC measurements, and the
@@ -404,16 +444,16 @@ def delete_field(field_id: str):
     so this cascade is done explicitly rather than relying on ON DELETE
     CASCADE."""
     with get_db_connection() as conn:
-        conn.execute("DELETE FROM fields WHERE field_id = ?", (field_id,))
-        conn.execute("DELETE FROM timeseries_cache WHERE field_id = ?", (field_id,))
-        conn.execute("DELETE FROM alm_practice_schedule WHERE field_id = ?", (field_id,))
-        conn.execute("DELETE FROM alm_livestock_schedule WHERE field_id = ?", (field_id,))
-        conn.execute("DELETE FROM soc_measurements WHERE field_id = ?", (field_id,))
-        conn.execute("DELETE FROM credit_history WHERE field_id = ?", (field_id,))
+        conn.execute("DELETE FROM fields WHERE org_id = ? AND field_id = ?", (org_id, field_id))
+        conn.execute("DELETE FROM timeseries_cache WHERE org_id = ? AND field_id = ?", (org_id, field_id))
+        conn.execute("DELETE FROM alm_practice_schedule WHERE org_id = ? AND field_id = ?", (org_id, field_id))
+        conn.execute("DELETE FROM alm_livestock_schedule WHERE org_id = ? AND field_id = ?", (org_id, field_id))
+        conn.execute("DELETE FROM soc_measurements WHERE org_id = ? AND field_id = ?", (org_id, field_id))
+        conn.execute("DELETE FROM credit_history WHERE org_id = ? AND field_id = ?", (org_id, field_id))
         conn.commit()
 
 
-def save_credit_history(field_id: str, field_type: str, inputs: dict, result: dict):
+def save_credit_history(org_id: str, field_id: str, field_type: str, inputs: dict, result: dict):
     """Logs one calculate_credits() run so past calculations survive a
     session/page revisit — today only session_state holds this, so nothing
     persists once the user navigates away. Stores the full inputs/result
@@ -422,16 +462,16 @@ def save_credit_history(field_id: str, field_type: str, inputs: dict, result: di
     with get_db_connection() as conn:
         conn.execute(
             """
-            INSERT INTO credit_history (field_id, field_type, final_issuance, inputs_json, result_json)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO credit_history (org_id, field_id, field_type, final_issuance, inputs_json, result_json)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (field_id, field_type, float(result["final_issuance"]),
+            (org_id, field_id, field_type, float(result["final_issuance"]),
              json.dumps(inputs), json.dumps(result)),
         )
         conn.commit()
 
 
-def get_credit_history(field_id: str) -> list:
+def get_credit_history(org_id: str, field_id: str) -> list:
     """Returns this field's past calculate_credits() runs, most recent
     first, each as {'calculated_at', 'final_issuance', 'inputs', 'result'}."""
     with get_db_connection() as conn:
@@ -439,10 +479,10 @@ def get_credit_history(field_id: str) -> list:
             """
             SELECT calculated_at, final_issuance, inputs_json, result_json
             FROM credit_history
-            WHERE field_id = ?
+            WHERE org_id = ? AND field_id = ?
             ORDER BY calculated_at DESC, id DESC
             """,
-            (field_id,),
+            (org_id, field_id),
         ).fetchall()
     return [
         {
@@ -455,23 +495,26 @@ def get_credit_history(field_id: str) -> list:
     ]
 
 
-def get_portfolio_summary() -> list:
-    """One row per registered field — identity/area plus its latest
-    calculated credit (final_issuance/calculated_at are None if the field
-    has never had Calculate Carbon Credits run) — for a cross-field
-    aggregate view spanning both methodology paths."""
+def get_portfolio_summary(org_id: str) -> list:
+    """One row per registered field belonging to this org — identity/area
+    plus its latest calculated credit (final_issuance/calculated_at are
+    None if the field has never had Calculate Carbon Credits run) — for a
+    cross-field aggregate view spanning both methodology paths."""
     with get_db_connection() as conn:
         field_rows = conn.execute(
-            "SELECT field_id, name, district, field_type, area_ha FROM fields ORDER BY field_id"
+            "SELECT field_id, name, district, field_type, area_ha FROM fields "
+            "WHERE org_id = ? ORDER BY field_id",
+            (org_id,),
         ).fetchall()
         latest_rows = conn.execute(
             """
             SELECT field_id, final_issuance, calculated_at
             FROM credit_history
-            WHERE id IN (
-                SELECT MAX(id) FROM credit_history GROUP BY field_id
+            WHERE org_id = ? AND id IN (
+                SELECT MAX(id) FROM credit_history WHERE org_id = ? GROUP BY field_id
             )
-            """
+            """,
+            (org_id, org_id),
         ).fetchall()
     latest_by_field = {row["field_id"]: row for row in latest_rows}
 
@@ -490,17 +533,17 @@ def get_portfolio_summary() -> list:
     return summary
 
 
-def get_soc_measurements(field_id: str) -> dict:
+def get_soc_measurements(org_id: str, field_id: str) -> dict:
     """Returns {(site_type, timepoint): [values...]} for a field."""
     with get_db_connection() as conn:
         rows = conn.execute(
             """
             SELECT site_type, timepoint, soc_value_tco2e_ha
             FROM soc_measurements
-            WHERE field_id = ?
+            WHERE org_id = ? AND field_id = ?
             ORDER BY site_type, timepoint, sample_index
             """,
-            (field_id,),
+            (org_id, field_id),
         ).fetchall()
     result = {}
     for row in rows:

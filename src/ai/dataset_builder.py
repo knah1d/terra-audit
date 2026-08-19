@@ -26,10 +26,16 @@ _DATASET_COLUMNS = [
     "is_sowing", "is_harvest", "vh_diff", "label", "built_at",
 ]
 
+# org_id isn't in _DATASET_COLUMNS: build_dataset()'s returned DataFrame is
+# always for a single org (the caller already filtered to it via
+# _fetch_cache_groups(org_id)), so it's stamped on write in save_dataset()
+# rather than threaded through every intermediate DataFrame operation.
+
 
 def _ensure_ai_tables(conn) -> None:
     conn.execute(f"""
         CREATE TABLE IF NOT EXISTS {DATASET_TABLE} (
+            org_id       TEXT NOT NULL DEFAULT 'default',
             field_id     TEXT,
             district     TEXT,
             area_ha      REAL,
@@ -51,14 +57,21 @@ def _ensure_ai_tables(conn) -> None:
             vh_diff      REAL,
             label        TEXT,
             built_at     TEXT,
-            PRIMARY KEY (field_id, window_start, window_end, date)
+            PRIMARY KEY (org_id, field_id, window_start, window_end, date)
         )
     """)
+    # Migration for DBs created before org_id existed on this table.
+    try:
+        conn.execute(f"ALTER TABLE {DATASET_TABLE} ADD COLUMN org_id TEXT NOT NULL DEFAULT 'default'")
+    except Exception:
+        pass
     conn.commit()
 
 
-def _fetch_cache_groups() -> pd.DataFrame:
-    """All raw cached observations joined with their field's district/area."""
+def _fetch_cache_groups(org_id: str) -> pd.DataFrame:
+    """All raw cached observations for this org, joined with their field's
+    district/area. Scoped by org — without this, the training set would
+    silently mix data across tenants (see multi-tenant auth plan, Phase 2)."""
     with get_db_connection() as conn:
         return pd.read_sql_query(
             """
@@ -67,10 +80,12 @@ def _fetch_cache_groups() -> pd.DataFrame:
                    t.observation_date AS date,
                    t.vv, t.vh, t.cross_ratio, t.rvi
             FROM   timeseries_cache t
-            JOIN   fields f ON f.field_id = t.field_id
+            JOIN   fields f ON f.field_id = t.field_id AND f.org_id = t.org_id
+            WHERE  f.org_id = ?
             ORDER  BY t.field_id, t.window_start, t.window_end, t.observation_date
             """,
             conn,
+            params=(org_id,),
         )
 
 
@@ -82,16 +97,16 @@ def _label_row(row) -> str:
     return "dry"
 
 
-def build_dataset(gate: AdaptiveAWDGate | None = None) -> pd.DataFrame:
+def build_dataset(org_id: str, gate: AdaptiveAWDGate | None = None) -> pd.DataFrame:
     """
     Replays the same gate.extract_phenology(gate.analyze_irrigation_behavior(df))
     chain app.py uses, independently per (field_id, window_start, window_end)
     group — the z-score baseline is field/window-relative, matching how the
-    app computes it for a single run. Returns the combined labeled frame;
-    does not persist (see save_dataset).
+    app computes it for a single run. Returns the combined labeled frame for
+    this org only; does not persist (see save_dataset).
     """
     gate = gate or AdaptiveAWDGate()
-    raw = _fetch_cache_groups()
+    raw = _fetch_cache_groups(org_id)
     if raw.empty:
         return pd.DataFrame(columns=_DATASET_COLUMNS)
 
@@ -124,33 +139,44 @@ def build_dataset(gate: AdaptiveAWDGate | None = None) -> pd.DataFrame:
     return combined[_DATASET_COLUMNS]
 
 
-def save_dataset(df: pd.DataFrame) -> None:
-    """Full rebuild: the dataset is a pure function of timeseries_cache plus
-    gate parameters, so replacing it wholesale avoids incremental-merge bugs
-    if the gate's thresholds are ever recalibrated."""
+def save_dataset(org_id: str, df: pd.DataFrame) -> None:
+    """Full rebuild, scoped to this org only: the dataset is a pure function
+    of timeseries_cache plus gate parameters, so replacing it wholesale
+    avoids incremental-merge bugs if the gate's thresholds are ever
+    recalibrated. The DELETE is scoped by org_id — a rebuild for one org
+    must never wipe another org's rows (see multi-tenant auth plan, Phase 2;
+    a prior, pre-multi-tenant version of this function did an unscoped
+    full-table DELETE, which was already a red flag before org_id existed)."""
     with get_db_connection() as conn:
         _ensure_ai_tables(conn)
-        conn.execute(f"DELETE FROM {DATASET_TABLE}")
+        conn.execute(f"DELETE FROM {DATASET_TABLE} WHERE org_id = ?", (org_id,))
         if not df.empty:
-            df[_DATASET_COLUMNS].to_sql(DATASET_TABLE, conn, if_exists="append", index=False)
+            df = df.copy()
+            df["org_id"] = org_id
+            df[["org_id", *_DATASET_COLUMNS]].to_sql(DATASET_TABLE, conn, if_exists="append", index=False)
         conn.commit()
 
 
-def load_dataset() -> pd.DataFrame:
+def load_dataset(org_id: str) -> pd.DataFrame:
     with get_db_connection() as conn:
         _ensure_ai_tables(conn)
-        return pd.read_sql_query(f"SELECT * FROM {DATASET_TABLE}", conn)
+        return pd.read_sql_query(
+            f"SELECT * FROM {DATASET_TABLE} WHERE org_id = ?", conn, params=(org_id,)
+        )
 
 
-def main():
-    df = build_dataset()
-    save_dataset(df)
+def main(org_id: str = "default"):
+    df = build_dataset(org_id)
+    save_dataset(org_id, df)
     n_groups = df[["field_id", "window_start", "window_end"]].drop_duplicates().shape[0] if not df.empty else 0
-    print(f"Built dataset: {len(df)} rows across {n_groups} field/window group(s).")
+    print(f"Built dataset for org '{org_id}': {len(df)} rows across {n_groups} field/window group(s).")
     if not df.empty:
         print("Label distribution:")
         print(df["label"].value_counts().to_string())
 
 
 if __name__ == "__main__":
-    main()
+    import argparse
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--org-id", default="default")
+    main(parser.parse_args().org_id)
