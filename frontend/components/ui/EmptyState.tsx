@@ -28,7 +28,7 @@ export function EmptyState({
   motif?: boolean;
 }) {
   return (
-    <div className="relative flex flex-col items-center gap-2 overflow-hidden rounded-lg border border-dashed border-border px-6 py-10 text-center">
+    <div className="enter relative flex flex-col items-center gap-2 overflow-hidden rounded-lg border border-dashed border-border px-6 py-10 text-center">
       {motif && (
         <BotanicalMotif
           size="sm"

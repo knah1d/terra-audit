@@ -40,18 +40,24 @@
   --brand-600: var(--pine-600);
   --brand-700: var(--pine-700);
 
-  /* --- Neutrals: cool, so they don't fight the cool cast of blurred glass */
-  --background: #f7f8f7;
+  /* --- Neutrals: a perceptible cool-sage cast in light mode (was flat
+   * gray — "muddy off-white"), so a pure-white card visibly floats on a
+   * tinted canvas rather than blending into it. */
+  --background: #f2f8f4;
   --foreground: #0a0a0a;
 
   --surface: #ffffff;
-  --surface-muted: #fafafa;
-  --border-c: #e5e5e5;
-  --border-strong: #d4d4d4;
+  --surface-muted: #eaf3ee;
+  --border-c: #dbe8e0;
+  --border-strong: #c3d9cc;
 
   --text-primary: #0a0a0a;
   --text-secondary: #5f6367;
   --text-tertiary: #94969b;
+  /* Heading-only accent — deep slate-green instead of flat black, used by
+   * PageHeader's title. Not a replacement for --text-primary generally:
+   * body copy/labels/table text stay neutral for maximum legibility. */
+  --text-heading: #0f2a1c;
 
   /* --- Semantic (muted, never vivid) ---------------------- */
   --success-50: #ecfdf5;
@@ -81,11 +87,11 @@
    * a single faint wash. Still concentrated toward the edges, where
    * content is sparsest; the center third (where text sits) stays close
    * to clear. This is a fixed CSS gradient, not an image or JS parallax. */
-  --ambient-1: rgba(31, 127, 78, 0.14);
-  --ambient-2: rgba(47, 158, 99, 0.1);
-  --ambient-3: rgba(20, 79, 51, 0.07);
-  --ambient-4: rgba(138, 212, 169, 0.09);
-  --ambient-5: rgba(85, 186, 131, 0.06);
+  --ambient-1: rgba(31, 127, 78, 0.19);
+  --ambient-2: rgba(47, 158, 99, 0.14);
+  --ambient-3: rgba(20, 79, 51, 0.1);
+  --ambient-4: rgba(138, 212, 169, 0.13);
+  --ambient-5: rgba(85, 186, 131, 0.09);
   --grain-opacity: 0.025;
 
   /* --- Elevation: layered contact + ambient, never one hard drop --- */
@@ -102,9 +108,9 @@
    * instead of gray is a big part of what separates "premium SaaS" from
    * "generic dashboard" at a glance — used deliberately, not everywhere. */
   --glow-s: 0 1px 2px rgb(var(--shadow-rgb) / 0.05),
-    0 6px 16px -4px color-mix(in srgb, var(--pine-600) 35%, transparent);
+    0 6px 16px -4px color-mix(in srgb, var(--pine-600) 45%, transparent);
   --glow-m: 0 2px 4px rgb(var(--shadow-rgb) / 0.05),
-    0 16px 36px -10px color-mix(in srgb, var(--pine-600) 40%, transparent);
+    0 16px 36px -10px color-mix(in srgb, var(--pine-600) 52%, transparent);
 
   /* --- Radius: concentric (inner = outer − padding) -------- */
   --r-sm: 6px;
@@ -141,17 +147,22 @@
   --brand-600: var(--pine-400);
   --brand-700: var(--pine-300);
 
-  --background: #0a0a0a;
+  /* Pine-black, not neutral charcoal — the single biggest lever for
+   * "forest at night" over "gray dashboard in dark mode." */
+  --background: #0a120e;
   --foreground: #f5f5f5;
 
-  --surface: #141414;
-  --surface-muted: #1a1a1a;
-  --border-c: rgba(255, 255, 255, 0.09);
-  --border-strong: rgba(255, 255, 255, 0.16);
+  --surface: #0f1c16;
+  --surface-muted: #152420;
+  --border-c: rgba(133, 209, 167, 0.11);
+  --border-strong: rgba(133, 209, 167, 0.2);
 
-  --text-primary: #f5f5f5;
+  /* Barely-green-tinted off-white — stark #fff on a green-black surface
+   * reads as harsh; this keeps near-white legibility without the clash. */
+  --text-primary: #eef5f1;
   --text-secondary: #a1a1a6;
   --text-tertiary: #71717a;
+  --text-heading: var(--text-primary);
 
   --success-50: rgba(52, 211, 153, 0.12);
   --success-600: #34d399;
@@ -172,11 +183,11 @@
   --glass-specular: rgba(255, 255, 255, 0.14);
   --glass-hairline: rgba(255, 255, 255, 0.08);
 
-  --ambient-1: rgba(85, 186, 131, 0.13);
-  --ambient-2: rgba(47, 158, 99, 0.1);
-  --ambient-3: rgba(15, 59, 39, 0.4);
-  --ambient-4: rgba(138, 212, 169, 0.07);
-  --ambient-5: rgba(85, 186, 131, 0.08);
+  --ambient-1: rgba(85, 186, 131, 0.18);
+  --ambient-2: rgba(47, 158, 99, 0.14);
+  --ambient-3: rgba(15, 59, 39, 0.5);
+  --ambient-4: rgba(138, 212, 169, 0.1);
+  --ambient-5: rgba(85, 186, 131, 0.12);
   --grain-opacity: 0.03;
 
   --shadow-rgb: 0 0 0;
@@ -188,9 +199,9 @@
   /* Dark mode: pine-400 (lighter, more saturated) instead of pine-600 —
    * a dark-mode glow needs more chroma to read at all against near-black. */
   --glow-s: 0 1px 2px rgb(var(--shadow-rgb) / 0.4),
-    0 6px 18px -4px color-mix(in srgb, var(--pine-400) 45%, transparent);
+    0 6px 18px -4px color-mix(in srgb, var(--pine-400) 55%, transparent);
   --glow-m: 0 2px 4px rgb(var(--shadow-rgb) / 0.35),
-    0 18px 40px -10px color-mix(in srgb, var(--pine-400) 50%, transparent);
+    0 18px 40px -10px color-mix(in srgb, var(--pine-400) 62%, transparent);
 }
 
 /*
@@ -213,6 +224,7 @@
   --color-text-primary: var(--text-primary);
   --color-text-secondary: var(--text-secondary);
   --color-text-tertiary: var(--text-tertiary);
+  --color-text-heading: var(--text-heading);
 
   --color-brand-50: var(--brand-50);
   --color-brand-100: var(--brand-100);
@@ -398,9 +410,28 @@ body {
   animation: toast-in var(--dur-slow) var(--curve-out);
 }
 
+/* Generic mount-in — fade + a small rise, same family as sheet-in/toast-in
+ * but subtler (used for page headers, empty states, and staggered list
+ * rows rather than overlay chrome). Apply via className="enter" and,
+ * for a list, an inline animationDelay so rows cascade in briefly. */
+@keyframes enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.enter {
+  animation: enter var(--dur-slow) var(--curve-out) both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .sheet-panel,
-  .toast-in {
+  .toast-in,
+  .enter {
     animation: none;
   }
 }

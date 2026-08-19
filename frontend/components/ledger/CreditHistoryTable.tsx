@@ -59,7 +59,11 @@ export function CreditHistoryTable({ fieldId }: { fieldId: string }) {
           </thead>
           <tbody>
             {history.map((entry, i) => (
-              <tr key={i} className="border-t border-border/60 transition-colors duration-[var(--dur-fast)] hover:bg-surface-muted/60">
+              <tr
+                key={i}
+                className="enter border-t border-border/60 transition-colors duration-[var(--dur-fast)] hover:bg-surface-muted/60"
+                style={{ animationDelay: `${Math.min(i, 8) * 30}ms` }}
+              >
                 <td className="px-4 py-3.5 text-text-secondary">{entry.calculated_at}</td>
                 <td className="px-4 py-3.5 text-right font-mono tabular-nums text-text-primary">
                   {formatNumber(entry.final_issuance, "tco2e")}

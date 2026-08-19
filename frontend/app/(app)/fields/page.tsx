@@ -65,8 +65,13 @@ export default function FieldsPage() {
       )}
 
       <div className="grid gap-3">
-        {fields?.map((field) => (
-          <Link key={field.field_id} href={`/fields/${field.field_id}/ledger`}>
+        {fields?.map((field, i) => (
+          <Link
+            key={field.field_id}
+            href={`/fields/${field.field_id}/ledger`}
+            className="enter"
+            style={{ animationDelay: `${Math.min(i, 8) * 30}ms` }}
+          >
             <Card interactive className="flex items-center justify-between p-4">
               <div className="flex items-center gap-3">
                 <IconTile icon={FolderKanban} />
