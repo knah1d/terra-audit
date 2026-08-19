@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/Card";
 import { FieldLabel, TextArea, TextInput } from "@/components/ui/Field";
 import { RoleGate } from "@/components/ui/RoleGate";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { Switch } from "@/components/ui/Switch";
 import { usePracticeSchedule, useSocMeasurements } from "@/hooks/use-alm";
 import { useSavePracticeSchedule, useSaveSocMeasurements } from "@/hooks/use-practice-form";
 import type { PracticeScheduleEntry } from "@/types/api";
@@ -70,17 +71,14 @@ function PracticeScenarioForm({
           <TextInput type="number" value={values.crop_yield_t_ha ?? 0} onChange={(e) => set("crop_yield_t_ha", Number(e.target.value))} />
         </div>
       </div>
-      <div className="mt-3 flex flex-wrap gap-4 text-sm text-text-secondary">
+      <div className="mt-4 flex flex-wrap gap-x-6 gap-y-3">
         {(["crop_rotation", "cover_crops", "intercropping", "tillage", "residue_removed", "n_fixing_species"] as const).map((key) => (
-          <label key={key} className="flex items-center gap-1.5">
-            <input
-              type="checkbox"
-              checked={Boolean(values[key])}
-              onChange={(e) => set(key, e.target.checked)}
-              className="accent-brand-600"
-            />
-            {key.replace(/_/g, " ")}
-          </label>
+          <Switch
+            key={key}
+            checked={Boolean(values[key])}
+            onChange={(checked) => set(key, checked)}
+            label={key.replace(/_/g, " ")}
+          />
         ))}
       </div>
       <RoleGate allow={["admin", "analyst"]}>

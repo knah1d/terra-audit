@@ -24,7 +24,7 @@ export function SidebarNav({ session }: { session: SessionClaims | null }) {
             <Link
               key={href}
               href={href}
-              className={`press flex items-center gap-2.5 rounded-md px-3 py-2 font-medium ${
+              className={`press flex items-center gap-2.5 rounded-full px-3 py-2 font-medium ${
                 active
                   ? "bg-brand-50 text-brand-700"
                   : "text-text-secondary hover:bg-surface-muted hover:text-text-primary"
