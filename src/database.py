@@ -1,5 +1,6 @@
 import json
 import os
+import uuid
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -386,6 +387,39 @@ def _init_sqlite(conn):
     ):
         conn.execute(text(f"CREATE INDEX IF NOT EXISTS idx_{_table}_org ON {_table}(org_id)"))
 
+    _init_shared_extra_tables(conn)
+
+
+def _init_shared_extra_tables(conn):
+    """Tables added for the FastAPI backend (.claude/plans/misty-growing-yao.md
+    Part A) — identical DDL on both backends since neither predates org_id
+    or needs an ALTER-TABLE migration history, so this one function serves
+    both _init_sqlite and _init_postgres rather than being duplicated."""
+    conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS commit_idempotency_keys (
+            org_id          TEXT NOT NULL,
+            field_id        TEXT NOT NULL,
+            idempotency_key TEXT NOT NULL,
+            credit_history_id INTEGER,
+            created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (org_id, field_id, idempotency_key)
+        )
+    """))
+    conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS background_jobs (
+            job_id      TEXT PRIMARY KEY,
+            org_id      TEXT NOT NULL,
+            job_type    TEXT NOT NULL,
+            status      TEXT NOT NULL DEFAULT 'pending'
+                        CHECK (status IN ('pending', 'running', 'done', 'error')),
+            result_json TEXT,
+            error       TEXT,
+            created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            finished_at TIMESTAMP
+        )
+    """))
+    conn.execute(text("CREATE INDEX IF NOT EXISTS idx_background_jobs_org ON background_jobs(org_id)"))
+
 
 def _init_postgres(conn):
     """Fresh, final-shape schema — no ALTER-TABLE migration history to
@@ -511,6 +545,8 @@ def _init_postgres(conn):
         "alm_livestock_schedule", "soc_measurements", "credit_history",
     ):
         conn.execute(text(f"CREATE INDEX IF NOT EXISTS idx_{_table}_org ON {_table}(org_id)"))
+
+    _init_shared_extra_tables(conn)
 
 
 def update_field_info(org_id: str, field_id: str, name: str, district: str):
@@ -855,6 +891,197 @@ def get_soc_measurements(org_id: str, field_id: str) -> dict:
     for row in rows:
         key = (row["site_type"], row["timepoint"])
         result.setdefault(key, []).append(row["soc_value_tco2e_ha"])
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Additive functions for the FastAPI backend (.claude/plans/misty-growing-yao.md
+# Part A3) — app.py continues to do its own inline INSERT/SELECT for field
+# registration unchanged; these exist so backend/routers/fields.py has a
+# proper function to call instead of duplicating that SQL a second time.
+# ---------------------------------------------------------------------------
+
+def create_field(
+    org_id: str, field_id: str, name: str, district: str,
+    feature: dict, area_ha: float, field_type: str,
+):
+    """Registers a new field. `feature` is a single GeoJSON Feature (the
+    parsed/drawn geometry) — wrapped in a FeatureCollection before storage,
+    matching app.py's own `geojson_geometry` convention exactly, so rows
+    written via this function and rows written via app.py's inline SQL are
+    indistinguishable to every other reader (get_field, list_fields, the
+    Streamlit sidebar's own SELECT)."""
+    fc = {"type": "FeatureCollection", "features": [feature]}
+    with get_db_connection() as conn:
+        conn.execute(
+            text("INSERT INTO fields "
+                 "(org_id, field_id, name, district, geojson_geometry, area_ha, field_type) "
+                 "VALUES (:org_id, :field_id, :name, :district, :geojson_geometry, :area_ha, :field_type)"),
+            {"org_id": org_id, "field_id": field_id, "name": name, "district": district,
+             "geojson_geometry": json.dumps(fc), "area_ha": area_ha, "field_type": field_type},
+        )
+        conn.commit()
+
+
+def get_field(org_id: str, field_id: str) -> dict | None:
+    """Returns one field's full record (including geojson_geometry, parsed
+    back into a dict) or None if it doesn't exist / belongs to another org."""
+    with get_db_connection() as conn:
+        row = conn.execute(
+            text("SELECT field_id, name, district, geojson_geometry, area_ha, "
+                 "field_type, created_at, alm_cumulative_delta_co2_wp FROM fields "
+                 "WHERE org_id = :org_id AND field_id = :field_id"),
+            {"org_id": org_id, "field_id": field_id},
+        ).mappings().fetchone()
+    if row is None:
+        return None
+    result = dict(row)
+    result["geojson_geometry"] = json.loads(result["geojson_geometry"])
+    return result
+
+
+def list_fields(org_id: str) -> list[dict]:
+    """Returns every field belonging to this org (summary columns only —
+    no geojson_geometry, matching the Streamlit sidebar's own listing query;
+    callers needing geometry should follow up with get_field)."""
+    with get_db_connection() as conn:
+        rows = conn.execute(
+            text("SELECT field_id, name, district, area_ha, field_type, created_at "
+                 "FROM fields WHERE org_id = :org_id ORDER BY field_id"),
+            {"org_id": org_id},
+        ).mappings().fetchall()
+    return [dict(r) for r in rows]
+
+
+def commit_carbon_credit_result(
+    org_id: str, field_id: str, idempotency_key: str, field_type: str,
+    inputs: dict, result: dict, new_cumulative_delta: float | None = None,
+) -> dict:
+    """Atomically persists one Calculate-Carbon-Credits run: the
+    credit_history row, the idempotency-key record, and (for ALM,
+    when new_cumulative_delta is given) the cumulative SOC delta bump —
+    all in ONE connection/ONE commit, unlike calling save_credit_history +
+    update_alm_cumulative_delta back-to-back from a router (two separate
+    connections, two separate commits), which would leave the two writes
+    non-atomic under a crash or a concurrent duplicate request. A retried
+    request with the same idempotency_key returns the original result
+    instead of double-accruing the cumulative delta — the whole reason
+    this function exists rather than just being save_credit_history called
+    twice: a single browser tab (today's only client) never raced this;
+    multiple people hitting the API concurrently can.
+
+    Returns {"final_issuance": ..., "already_committed": bool} — the
+    caller (backend/routers/carbon.py) uses `already_committed` to decide
+    whether to return 200 (idempotent replay) vs 201 (new commit).
+    """
+    with get_db_connection() as conn:
+        existing = conn.execute(
+            text("SELECT credit_history_id FROM commit_idempotency_keys "
+                 "WHERE org_id = :org_id AND field_id = :field_id AND idempotency_key = :key"),
+            {"org_id": org_id, "field_id": field_id, "key": idempotency_key},
+        ).mappings().fetchone()
+        if existing is not None:
+            prior = conn.execute(
+                text("SELECT final_issuance FROM credit_history WHERE id = :id"),
+                {"id": existing["credit_history_id"]},
+            ).mappings().fetchone()
+            return {
+                "final_issuance": prior["final_issuance"] if prior else None,
+                "already_committed": True,
+            }
+
+        insert_result = conn.execute(
+            text("""
+                INSERT INTO credit_history (org_id, field_id, field_type, final_issuance, inputs_json, result_json)
+                VALUES (:org_id, :field_id, :field_type, :final_issuance, :inputs_json, :result_json)
+            """),
+            {
+                "org_id": org_id, "field_id": field_id, "field_type": field_type,
+                "final_issuance": float(result["final_issuance"]),
+                "inputs_json": json.dumps(inputs), "result_json": json.dumps(result),
+            },
+        )
+        credit_history_id = insert_result.lastrowid if is_sqlite() else conn.execute(
+            text("SELECT MAX(id) FROM credit_history WHERE org_id = :org_id AND field_id = :field_id"),
+            {"org_id": org_id, "field_id": field_id},
+        ).scalar()
+
+        conn.execute(
+            text("INSERT INTO commit_idempotency_keys (org_id, field_id, idempotency_key, credit_history_id) "
+                 "VALUES (:org_id, :field_id, :key, :chid)"),
+            {"org_id": org_id, "field_id": field_id, "key": idempotency_key, "chid": credit_history_id},
+        )
+
+        if new_cumulative_delta is not None:
+            conn.execute(
+                text("UPDATE fields SET alm_cumulative_delta_co2_wp = :value "
+                     "WHERE org_id = :org_id AND field_id = :field_id"),
+                {"value": new_cumulative_delta, "org_id": org_id, "field_id": field_id},
+            )
+
+        conn.commit()
+    return {"final_issuance": float(result["final_issuance"]), "already_committed": False}
+
+
+def create_job(org_id: str, job_type: str) -> str:
+    """Creates a pending background_jobs row, returns its job_id. Used by
+    the GEE signal-run and AI-training background-task endpoints
+    (Part A4) — a plain DB-backed table rather than Celery/RQ, since this
+    app's whole operating model is 'one process + SQLite/Postgres' and a
+    broker+worker is real new infra not justified at this scale."""
+    job_id = uuid.uuid4().hex
+    with get_db_connection() as conn:
+        conn.execute(
+            text("INSERT INTO background_jobs (job_id, org_id, job_type) VALUES (:j, :o, :t)"),
+            {"j": job_id, "o": org_id, "t": job_type},
+        )
+        conn.commit()
+    return job_id
+
+
+def mark_job_running(job_id: str):
+    with get_db_connection() as conn:
+        conn.execute(
+            text("UPDATE background_jobs SET status = 'running' WHERE job_id = :j"),
+            {"j": job_id},
+        )
+        conn.commit()
+
+
+def mark_job_done(job_id: str, result: dict):
+    with get_db_connection() as conn:
+        conn.execute(
+            text("UPDATE background_jobs SET status = 'done', result_json = :r, "
+                 "finished_at = CURRENT_TIMESTAMP WHERE job_id = :j"),
+            {"r": json.dumps(result, default=str), "j": job_id},
+        )
+        conn.commit()
+
+
+def mark_job_error(job_id: str, error: str):
+    with get_db_connection() as conn:
+        conn.execute(
+            text("UPDATE background_jobs SET status = 'error', error = :e, "
+                 "finished_at = CURRENT_TIMESTAMP WHERE job_id = :j"),
+            {"e": error, "j": job_id},
+        )
+        conn.commit()
+
+
+def get_job(org_id: str, job_id: str) -> dict | None:
+    """Org-scoped lookup — a job_id from another org 404s rather than
+    leaking its status/result, same tenant-isolation discipline as every
+    other function in this file."""
+    with get_db_connection() as conn:
+        row = conn.execute(
+            text("SELECT job_id, job_type, status, result_json, error, created_at, finished_at "
+                 "FROM background_jobs WHERE org_id = :org_id AND job_id = :job_id"),
+            {"org_id": org_id, "job_id": job_id},
+        ).mappings().fetchone()
+    if row is None:
+        return None
+    result = dict(row)
+    result["result"] = json.loads(result.pop("result_json")) if result["result_json"] else None
     return result
 
 
