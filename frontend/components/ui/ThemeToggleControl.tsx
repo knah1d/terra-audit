@@ -23,7 +23,7 @@ export default function ThemeToggleControl() {
   const { theme, setTheme } = useTheme();
 
   return (
-    <div className="inline-flex gap-0.5 rounded-md bg-surface-muted p-0.5">
+    <div className="inline-flex gap-0.5 rounded-full bg-surface-muted p-0.5">
       {OPTIONS.map(({ value, label, icon: Icon }) => (
         <button
           key={value}
@@ -31,7 +31,7 @@ export default function ThemeToggleControl() {
           aria-label={label}
           aria-pressed={theme === value}
           onClick={() => setTheme(value)}
-          className={`press flex size-7 items-center justify-center rounded-sm ${
+          className={`press flex size-7 items-center justify-center rounded-full ${
             theme === value
               ? "bg-surface text-text-primary shadow-xs"
               : "text-text-tertiary hover:text-text-secondary"

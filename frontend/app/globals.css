@@ -94,6 +94,13 @@
   --r-md: 10px;
   --r-lg: 14px;
   --r-xl: 20px;
+  --r-2xl: 28px; /* floating shell panels — sidebar, sheets */
+
+  /* --- Elevation (z-index): ambient(-1) < content(0) <
+   * floating chrome/toolbar(20) < sheet/modal + its backdrop(50/51) --- */
+  --z-chrome: 20;
+  --z-backdrop: 50;
+  --z-sheet: 51;
 
   /* --- Motion: spring-like settle, short durations --------- */
   --curve-out: cubic-bezier(0.22, 1, 0.36, 1);
@@ -205,6 +212,11 @@
   --radius-md: var(--r-md);
   --radius-lg: var(--r-lg);
   --radius-xl: var(--r-xl);
+  --radius-2xl: var(--r-2xl);
+
+  --z-index-chrome: var(--z-chrome);
+  --z-index-backdrop: var(--z-backdrop);
+  --z-index-sheet: var(--z-sheet);
 
   --shadow-xs: var(--shadow-x);
   --shadow-sm: var(--shadow-s);
@@ -266,8 +278,12 @@ body {
 
 .glass-chrome-strong {
   background: var(--glass-bg-strong);
-  backdrop-filter: blur(32px) saturate(180%);
-  -webkit-backdrop-filter: blur(32px) saturate(180%);
+  /* Higher saturation than .glass-chrome: this variant is used on the
+   * floating sidebar/sheets, which sit directly over the ambient color
+   * layer — vibrancy (more color coming through, not more blur) is what
+   * separates "Liquid Glass" from a plain frosted panel. */
+  backdrop-filter: blur(32px) saturate(200%);
+  -webkit-backdrop-filter: blur(32px) saturate(200%);
   border: 1px solid var(--glass-hairline);
   box-shadow: inset 0 1px 0 var(--glass-specular), inset 0 0 0 1px var(--glass-rim),
     var(--shadow-l);
@@ -303,6 +319,46 @@ body {
   pointer-events: none;
   opacity: var(--grain-opacity);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Dimmed backdrop behind a Sheet/modal — deliberately not glass itself
+ * (a blurred backdrop would blur the sheet's own edge into it). */
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-index-backdrop);
+  background: color-mix(in srgb, var(--foreground) 32%, transparent);
+}
+
+@keyframes sheet-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+.sheet-panel {
+  animation: sheet-in var(--dur-slow) var(--curve-out);
+}
+@media (prefers-reduced-motion: reduce) {
+  .sheet-panel {
+    animation: none;
+  }
+}
+
+/* Subtle inset top highlight on recessed controls (text inputs) — the
+ * same specular-edge idea .glass-chrome uses on its top edge, scaled down
+ * so a field reads as a recessed glass surface rather than a flat box.
+ * Light-mode only: on a near-black dark surface the equivalent highlight
+ * would just look like a border, not a light catch. */
+.field-inset {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+[data-theme="dark"] .field-inset {
+  box-shadow: none;
 }
 
 /* ============================================================

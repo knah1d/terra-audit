@@ -4,8 +4,11 @@ export function FieldLabel({ children }: { children: React.ReactNode }) {
   return <label className="mb-1.5 block text-sm font-medium text-text-primary">{children}</label>;
 }
 
+// field-inset gives text fields a light-mode top highlight (same specular
+// idea as .glass-chrome's rim, scaled down) so they read as a recessed
+// surface rather than a flat box — see app/globals.css.
 const FIELD_BASE =
-  "w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text-primary placeholder:text-text-tertiary transition-colors focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600/25 disabled:bg-surface-muted disabled:text-text-tertiary";
+  "field-inset w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-primary placeholder:text-text-tertiary transition-colors focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600/25 disabled:bg-surface-muted disabled:text-text-tertiary";
 
 export function TextInput(props: InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className={`${FIELD_BASE} ${props.className ?? ""}`} />;
