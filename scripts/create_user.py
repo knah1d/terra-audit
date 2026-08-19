@@ -3,10 +3,11 @@
 Bootstrap a login for terra-audit — Phase 1 of the multi-tenant auth plan
 (.claude/plans/misty-growing-yao.md).
 
-This is a plain CLI script, not part of the Streamlit app: there's no
-in-app signup/invite flow yet (that's Phase 4), so the very first admin
-per organization has to be created out-of-band by the operator. Run it
-once per person who needs a login.
+This is a plain CLI script, not part of the Streamlit app. As of Phase 4
+there IS an in-app "Team" invite flow (app.py, admin-only) for adding
+teammates within an *existing* org — but this script is still how the
+very first org+admin gets created in the first place, since nobody can
+log in yet to use that in-app flow. Run it once per new organization.
 
 Usage:
     python scripts/create_user.py --email you@org.com --password '...' \\
@@ -15,24 +16,19 @@ Usage:
 
 import argparse
 import sys
-import uuid
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.database import get_db_connection, initialize_database
-from src.auth import hash_password, get_user_by_email
-
-VALID_ROLES = ("admin", "analyst", "viewer")
+from src.auth import create_org_user, VALID_ROLES
 
 
 def create_user(email: str, password: str, org_id: str, role: str) -> str:
-    email = email.strip().lower()
-    if role not in VALID_ROLES:
-        raise ValueError(f"role must be one of {VALID_ROLES}, got {role!r}")
-    if get_user_by_email(email) is not None:
-        raise ValueError(f"a user with email {email!r} already exists")
-
+    """Ensures the org row exists (this script is also how a brand-new org
+    gets created, unlike the in-app Team flow which only adds users to an
+    org that already has an admin), then delegates the actual user-row
+    creation to src.auth.create_org_user so this logic lives in one place."""
     with get_db_connection() as conn:
         org = conn.execute(
             "SELECT org_id FROM organizations WHERE org_id = ?", (org_id,)
@@ -42,16 +38,8 @@ def create_user(email: str, password: str, org_id: str, role: str) -> str:
                 "INSERT INTO organizations (org_id, name) VALUES (?, ?)",
                 (org_id, org_id),
             )
-        user_id = uuid.uuid4().hex
-        conn.execute(
-            """
-            INSERT INTO users (user_id, org_id, email, password_hash, role)
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            (user_id, org_id, email, hash_password(password), role),
-        )
-        conn.commit()
-    return user_id
+            conn.commit()
+    return create_org_user(org_id, email, password, role)
 
 
 def main():
@@ -59,7 +47,7 @@ def main():
     parser.add_argument("--email", required=True)
     parser.add_argument("--password", required=True)
     parser.add_argument("--org-id", required=True, help="Existing or new organization id (e.g. 'default', 'acme')")
-    parser.add_argument("--role", default="analyst", choices=VALID_ROLES)
+    parser.add_argument("--role", default="analyst", choices=sorted(VALID_ROLES))
     args = parser.parse_args()
 
     initialize_database()
