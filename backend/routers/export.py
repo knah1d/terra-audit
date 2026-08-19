@@ -1,10 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from sqlalchemy import text
 
-from backend.deps import get_current_user
+from backend.deps import get_current_user, get_owned_field
 from src.database import (
     get_alm_livestock_schedule, get_alm_practice_schedule, get_credit_history,
-    get_db_connection, get_field, get_job, get_soc_measurements,
+    get_soc_measurements, list_completed_jobs,
 )
 from src.report_generator import (
     generate_audit_json, generate_audit_json_alm, generate_alm_data_csv,
@@ -14,12 +13,7 @@ import pandas as pd
 
 router = APIRouter(tags=["export"])
 
-
-def _require_field(org_id: str, field_id: str) -> dict:
-    field = get_field(org_id, field_id)
-    if field is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Field not found")
-    return field
+_field = get_owned_field()
 
 
 def _latest_signal_result(org_id: str, field_id: str) -> dict | None:
@@ -27,17 +21,9 @@ def _latest_signal_result(org_id: str, field_id: str) -> dict | None:
     Streamlit's export_* session_state keys (see plan Part A5) — export
     endpoints read the most recent completed run for this field rather
     than depending on anything held client-side."""
-    with get_db_connection() as conn:
-        rows = conn.execute(
-            text("SELECT job_id, result_json FROM background_jobs WHERE org_id = :o "
-                 "AND job_type = 'signal_run' AND status = 'done' ORDER BY finished_at DESC"),
-            {"o": org_id},
-        ).mappings().fetchall()
-    import json
-    for row in rows:
-        result = json.loads(row["result_json"])
-        if result.get("field_id") == field_id:
-            return result
+    for job in list_completed_jobs(org_id, "signal_run"):
+        if job["result"] and job["result"].get("field_id") == field_id:
+            return job["result"]
     return None
 
 
@@ -60,9 +46,8 @@ def _latest_or_specified_credit(org_id: str, field_id: str, credit_history_id: i
 
 @router.get("/fields/{field_id}/export/pdf")
 def export_pdf(field_id: str, credit_history_id: int | None = Query(None),
-               user: dict = Depends(get_current_user)):
+               user: dict = Depends(get_current_user), field: dict = Depends(_field)):
     org_id = user["org_id"]
-    field = _require_field(org_id, field_id)
     credit = _latest_or_specified_credit(org_id, field_id, credit_history_id)
     field_info = {"field_id": field_id, "name": field["name"], "district": field["district"],
                   "area_ha": field["area_ha"]}
@@ -92,9 +77,8 @@ def export_pdf(field_id: str, credit_history_id: int | None = Query(None),
 
 @router.get("/fields/{field_id}/export/json")
 def export_json(field_id: str, credit_history_id: int | None = Query(None),
-                 user: dict = Depends(get_current_user)):
+                 user: dict = Depends(get_current_user), field: dict = Depends(_field)):
     org_id = user["org_id"]
-    field = _require_field(org_id, field_id)
     credit = _latest_or_specified_credit(org_id, field_id, credit_history_id)
     field_info = {"field_id": field_id, "name": field["name"], "district": field["district"],
                   "area_ha": field["area_ha"]}
@@ -127,9 +111,9 @@ def export_json(field_id: str, credit_history_id: int | None = Query(None),
 
 
 @router.get("/fields/{field_id}/export/csv")
-def export_csv(field_id: str, user: dict = Depends(get_current_user)):
+def export_csv(field_id: str, user: dict = Depends(get_current_user),
+               field: dict = Depends(_field)):
     org_id = user["org_id"]
-    field = _require_field(org_id, field_id)
 
     if field["field_type"] == "rice_awd":
         signal = _latest_signal_result(org_id, field_id)

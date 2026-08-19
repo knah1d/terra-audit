@@ -1,16 +1,19 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
 
-from backend.deps import get_current_user, require_admin, require_writer
+from backend.deps import get_current_user, get_owned_field, require_admin, require_writer
 from backend.schemas.fields import (
     AreaResponse, FieldCreate, FieldDetailOut, FieldOut, FieldUpdate,
     GeometryParseResponse, ParseContentRequest, ParseCoordinatesRequest,
 )
 from src.database import create_field, delete_field, get_field, list_fields, update_field_info
+from src.field_types.registry import FIELD_TYPES
 from src.geo_utils import (
     compute_area_ha, parse_coordinate_text, parse_geojson_upload, parse_kml_upload,
 )
 
 router = APIRouter(tags=["fields"])
+
+_field = get_owned_field()
 
 
 @router.post("/fields/parse/geojson", response_model=GeometryParseResponse)
@@ -62,16 +65,27 @@ def list_org_fields(user: dict = Depends(get_current_user)):
 
 
 @router.get("/fields/{field_id}", response_model=FieldDetailOut)
-def get_org_field(field_id: str, user: dict = Depends(get_current_user)):
-    field = get_field(user["org_id"], field_id)
-    if field is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Field not found")
+def get_org_field(field_id: str, user: dict = Depends(get_current_user),
+                  field: dict = Depends(_field)):
     return FieldDetailOut(**field)
 
 
 @router.post("/fields", response_model=FieldDetailOut, status_code=status.HTTP_201_CREATED)
 def register_field(body: FieldCreate, user: dict = Depends(require_writer)):
     org_id = user["org_id"]
+    # field_type was previously accepted unvalidated (a plain `str` on the
+    # schema, with the FIELD_TYPES tuple sitting unused), so any string
+    # persisted — into a column that is deliberately immutable after
+    # registration, and that build_methodology() later KeyErrors on.
+    # Validated here at request time rather than as a schema Literal, so
+    # this stays decoupled from whether the registry is populated at
+    # schema-definition/import time.
+    if body.field_type not in FIELD_TYPES:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            f"Unknown field_type '{body.field_type}'. Must be one of "
+            f"{sorted(FIELD_TYPES)}.",
+        )
     if get_field(org_id, body.field_id) is not None:
         raise HTTPException(status.HTTP_409_CONFLICT, f"Field ID '{body.field_id}' already exists")
     try:
@@ -84,20 +98,18 @@ def register_field(body: FieldCreate, user: dict = Depends(require_writer)):
 
 
 @router.patch("/fields/{field_id}", response_model=FieldDetailOut)
-def edit_field(field_id: str, body: FieldUpdate, user: dict = Depends(require_writer)):
+def edit_field(field_id: str, body: FieldUpdate, user: dict = Depends(require_writer),
+               field: dict = Depends(_field)):
     org_id = user["org_id"]
-    if get_field(org_id, field_id) is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Field not found")
     update_field_info(org_id, field_id, body.name.strip(), body.district.strip())
     return FieldDetailOut(**get_field(org_id, field_id))
 
 
 @router.delete("/fields/{field_id}", status_code=status.HTTP_204_NO_CONTENT)
-def remove_field(field_id: str, user: dict = Depends(require_admin)):
+def remove_field(field_id: str, user: dict = Depends(require_admin),
+                 field: dict = Depends(_field)):
     """Admin-only, per app.py's own _can_delete() split from _can_write()
     — deletion is irreversible and cascades across 6 tables."""
     org_id = user["org_id"]
-    if get_field(org_id, field_id) is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Field not found")
     delete_field(org_id, field_id)
     return None

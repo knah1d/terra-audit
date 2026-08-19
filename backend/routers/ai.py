@@ -6,7 +6,10 @@ from src.ai.dataset_builder import build_dataset, save_dataset, load_dataset
 from src.ai.feature_engineering import build_features
 from src.ai.models import save_model, train_and_evaluate
 from src.ai import evaluate as ai_evaluate
-from src.database import create_job, get_job, mark_job_done, mark_job_error, mark_job_running
+from src.database import (
+    create_job, get_job, list_completed_jobs,
+    mark_job_done, mark_job_error, mark_job_running,
+)
 
 router = APIRouter(tags=["ai-validation"])
 
@@ -85,20 +88,12 @@ def get_last_validation(model_key: str, user: dict = Depends(get_current_user)):
     evaluate.py's functions can't be re-derived from load_model() alone.
     This is a deliberate design correction, not an oversight."""
     org_id = user["org_id"]
-    # No dedicated "latest job by type+model_key" query exists yet — for
-    # now this scans org jobs client-side; if this becomes a hot path,
-    # add a proper indexed query to src/database.py rather than optimizing
-    # prematurely here.
-    from sqlalchemy import text
-    from src.database import get_db_connection
-    with get_db_connection() as conn:
-        rows = conn.execute(
-            text("SELECT job_id FROM background_jobs WHERE org_id = :o AND job_type = 'ai_train' "
-                 "AND status = 'done' ORDER BY finished_at DESC"),
-            {"o": org_id},
-        ).mappings().fetchall()
-    for row in rows:
-        job = get_job(org_id, row["job_id"])
-        if job and job["result"] and job["result"]["summary"]["model_name"] == f"{org_id}_{model_key}":
-            return job["result"]
+    # Scans this org's completed training jobs newest-first and returns the
+    # first whose stored metrics belong to the requested model. The scan is
+    # caller-side because the predicate lives inside the opaque result
+    # payload; the query itself now belongs to src/database.py.
+    for job in list_completed_jobs(org_id, "ai_train"):
+        result = job["result"]
+        if result and result.get("summary", {}).get("model_name") == f"{org_id}_{model_key}":
+            return result
     raise HTTPException(status.HTTP_404_NOT_FOUND, f"No completed training run found for '{model_key}'")
