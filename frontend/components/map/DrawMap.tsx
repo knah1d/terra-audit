@@ -2,6 +2,13 @@
 
 import L from "leaflet";
 import "leaflet-draw";
+// The plugin's own stylesheet — without it the draw toolbar has no icon
+// sprites/sizing and its buttons fall back to raw, overlapping title
+// text (a real bug: only `leaflet/dist/leaflet.css`, leaflet-draw's own
+// base, was ever imported — not leaflet-draw's). Scoped to this
+// component (the only leaflet-draw consumer) rather than the root
+// layout, matching where the plugin's JS import already lives.
+import "leaflet-draw/dist/leaflet.draw.css";
 import { useEffect, useRef } from "react";
 import { MapContainer, TileLayer, useMap } from "react-leaflet";
 

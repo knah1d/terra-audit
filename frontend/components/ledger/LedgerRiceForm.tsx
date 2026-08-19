@@ -9,8 +9,10 @@ import { DerivationTrail, type DerivationStep } from "@/components/ledger/Deriva
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { StatCard } from "@/components/ui/Card";
+import { FinalIssuanceStat } from "@/components/ledger/FinalIssuanceStat";
 import { ErrorText, FieldLabel, Select, TextInput } from "@/components/ui/Field";
 import { RoleGate } from "@/components/ui/RoleGate";
+import { useToast } from "@/components/ui/Toast";
 import { useCommitCarbonCredits, usePreviewCarbonCredits } from "@/hooks/use-carbon";
 import { formatNumber } from "@/lib/format";
 import { AMENDMENT_TYPE_OPTIONS, ledgerRiceSchema, type LedgerRiceForm as FormValues } from "@/lib/schemas/ledger";
@@ -89,6 +91,7 @@ export function LedgerRiceForm({
   const [committed, setCommitted] = useState(false);
   const preview = usePreviewCarbonCredits(fieldId);
   const commit = useCommitCarbonCredits(fieldId);
+  const { show } = useToast();
 
   const {
     register,
@@ -135,6 +138,7 @@ export function LedgerRiceForm({
     if (cr.qa3_pathway_valid === false) return; // blocked — don't attempt commit
     await commit.mutateAsync({ body, idempotencyKey: crypto.randomUUID() });
     setCommitted(true);
+    show("Carbon credits saved to history", "success");
   }
 
   return (
@@ -176,7 +180,8 @@ export function LedgerRiceForm({
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
           </Select>
-          <TextInput type="number" step="0.1" className="mt-1" {...register("baseline_amendment_rate")} placeholder="Rate (t/ha)" />
+          <FieldLabel className="mt-2">Application rate (t/ha)</FieldLabel>
+          <TextInput type="number" step="0.1" {...register("baseline_amendment_rate")} />
         </div>
         <div>
           <FieldLabel>Project organic amendment</FieldLabel>
@@ -185,7 +190,8 @@ export function LedgerRiceForm({
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
           </Select>
-          <TextInput type="number" step="0.1" className="mt-1" {...register("project_amendment_rate")} placeholder="Rate (t/ha)" />
+          <FieldLabel className="mt-2">Application rate (t/ha)</FieldLabel>
+          <TextInput type="number" step="0.1" {...register("project_amendment_rate")} />
         </div>
 
         <div className="col-span-full flex gap-3">
@@ -215,7 +221,7 @@ export function LedgerRiceForm({
       {result && result.qa3_pathway_valid !== false && (
         <>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <StatCard label="Final Issuance" value={`${formatNumber(result.final_issuance, "tco2e")} tCO2e`} tone="success" />
+            <FinalIssuanceStat value={result.final_issuance} />
             <StatCard label="Gross ΔCH4" value={`${formatNumber(result.delta_e_co2e as number, "tco2e")} tCO2e`} />
             <StatCard label="N2O Penalty" value={`${formatNumber(result.pe_n2o_tco2e as number, "tco2e")} tCO2e`} />
             <StatCard label="Uncertainty Deduction" value={`${formatNumber(result.unc_deduction_pct as number, "%")}%`} />

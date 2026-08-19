@@ -23,7 +23,7 @@ export default function ThemeToggleControl() {
   const { theme, setTheme } = useTheme();
 
   return (
-    <div className="inline-flex gap-0.5 rounded-full bg-surface-muted p-0.5">
+    <div className="inline-flex gap-0.5 rounded-full bg-surface p-0.5 shadow-xs">
       {OPTIONS.map(({ value, label, icon: Icon }) => (
         <button
           key={value}
@@ -33,11 +33,17 @@ export default function ThemeToggleControl() {
           onClick={() => setTheme(value)}
           className={`press flex size-7 items-center justify-center rounded-full ${
             theme === value
-              ? "bg-surface text-text-primary shadow-xs"
+              ? "bg-brand-50 text-brand-700"
               : "text-text-tertiary hover:text-text-secondary"
           }`}
         >
-          <Icon className="size-3.5" />
+          {/* A selected icon settling in with a small rotate is a nicer
+           * "this just switched" cue than a flat color swap alone. */}
+          <Icon
+            className={`size-3.5 transition-transform duration-[var(--dur-slow)] ease-[var(--curve-out)] ${
+              theme === value ? "rotate-0" : "rotate-[-25deg]"
+            }`}
+          />
         </button>
       ))}
     </div>

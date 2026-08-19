@@ -9,8 +9,10 @@ import { DerivationTrail, type DerivationStep } from "@/components/ledger/Deriva
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { StatCard } from "@/components/ui/Card";
+import { FinalIssuanceStat } from "@/components/ledger/FinalIssuanceStat";
 import { ErrorText, FieldLabel, TextInput } from "@/components/ui/Field";
 import { RoleGate } from "@/components/ui/RoleGate";
+import { useToast } from "@/components/ui/Toast";
 import { useCommitCarbonCredits, usePreviewCarbonCredits } from "@/hooks/use-carbon";
 import { formatNumber } from "@/lib/format";
 import { ledgerAlmSchema, type LedgerAlmForm as FormValues } from "@/lib/schemas/ledger";
@@ -82,6 +84,7 @@ export function LedgerAlmForm({ fieldId, defaultArea }: { fieldId: string; defau
   const [committed, setCommitted] = useState(false);
   const preview = usePreviewCarbonCredits(fieldId);
   const commit = useCommitCarbonCredits(fieldId);
+  const { show } = useToast();
 
   const {
     register,
@@ -104,6 +107,7 @@ export function LedgerAlmForm({ fieldId, defaultArea }: { fieldId: string; defau
     if (cr.production_decline_leakage_blocked) return;
     await commit.mutateAsync({ body: values, idempotencyKey: crypto.randomUUID() });
     setCommitted(true);
+    show("Carbon credits saved to history", "success");
   }
 
   return (
@@ -146,7 +150,7 @@ export function LedgerAlmForm({ fieldId, defaultArea }: { fieldId: string; defau
       {result && !result.production_decline_leakage_blocked && (
         <>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <StatCard label="Final Issuance" value={`${formatNumber(result.final_issuance, "tco2e")} tCO2e`} tone="success" />
+            <FinalIssuanceStat value={result.final_issuance} />
             <StatCard
               label="Cumulative SOC Δ"
               value={`${formatNumber(result.cumulative_delta_co2_wp as number, "tco2e")} tCO2e`}

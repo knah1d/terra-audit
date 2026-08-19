@@ -6,15 +6,18 @@ import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { RoleGate } from "@/components/ui/RoleGate";
 import { Sheet } from "@/components/ui/Sheet";
+import { useToast } from "@/components/ui/Toast";
 import { useDeleteField } from "@/hooks/use-fields";
 
 export function DeleteFieldButton({ fieldId, fieldName }: { fieldId: string; fieldName: string }) {
   const [confirming, setConfirming] = useState(false);
   const router = useRouter();
   const deleteField = useDeleteField();
+  const { show } = useToast();
 
   async function handleDelete() {
     await deleteField.mutateAsync(fieldId);
+    show(`${fieldName} removed`, "info");
     router.push("/fields");
   }
 

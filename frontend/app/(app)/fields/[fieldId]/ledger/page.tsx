@@ -7,6 +7,7 @@ import { CreditHistoryTable } from "@/components/ledger/CreditHistoryTable";
 import { LedgerAlmForm } from "@/components/ledger/LedgerAlmForm";
 import { LedgerRiceForm } from "@/components/ledger/LedgerRiceForm";
 import { Alert } from "@/components/ui/Alert";
+import { IconTile } from "@/components/ui/IconTile";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useAlmCompleteness } from "@/hooks/use-alm";
 
@@ -41,8 +42,8 @@ export default function LedgerPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h2 className="flex items-center gap-2 text-lg font-semibold text-text-primary">
-          <Wallet className="size-5 text-brand-600" />
+        <h2 className="flex items-center gap-2.5 text-lg font-semibold text-text-primary">
+          <IconTile icon={Wallet} size="sm" />
           Carbon Asset Ledger
         </h2>
         <p className="text-sm text-text-secondary">

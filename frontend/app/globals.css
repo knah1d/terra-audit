@@ -76,10 +76,16 @@
 
   /* Ambient layer behind the glass — without something back here to
    * refract, a translucent panel over flat white is just a white panel.
-   * Deliberately near-imperceptible on its own. */
-  --ambient-1: rgba(31, 127, 78, 0.10);
-  --ambient-2: rgba(47, 158, 99, 0.07);
-  --ambient-3: rgba(20, 79, 51, 0.05);
+   * Five layers now (was three): a "bokeh through leaves" quality — soft
+   * overlapping out-of-focus light in a few pine/sage tones — rather than
+   * a single faint wash. Still concentrated toward the edges, where
+   * content is sparsest; the center third (where text sits) stays close
+   * to clear. This is a fixed CSS gradient, not an image or JS parallax. */
+  --ambient-1: rgba(31, 127, 78, 0.14);
+  --ambient-2: rgba(47, 158, 99, 0.1);
+  --ambient-3: rgba(20, 79, 51, 0.07);
+  --ambient-4: rgba(138, 212, 169, 0.09);
+  --ambient-5: rgba(85, 186, 131, 0.06);
   --grain-opacity: 0.025;
 
   /* --- Elevation: layered contact + ambient, never one hard drop --- */
@@ -88,6 +94,17 @@
   --shadow-s: 0 1px 2px rgb(var(--shadow-rgb) / 0.05), 0 2px 8px -2px rgb(var(--shadow-rgb) / 0.07);
   --shadow-m: 0 1px 2px rgb(var(--shadow-rgb) / 0.05), 0 10px 28px -8px rgb(var(--shadow-rgb) / 0.13);
   --shadow-l: 0 2px 4px rgb(var(--shadow-rgb) / 0.05), 0 20px 48px -12px rgb(var(--shadow-rgb) / 0.2);
+
+  /* Pine-tinted ("glow") shadows — reserved for elements that ARE the
+   * brand (primary button, the floating sidebar/toolbar, an interactive
+   * card's hover state), never for content surfaces (tables, forms),
+   * which keep the neutral shadows above. A faint brand-colored shadow
+   * instead of gray is a big part of what separates "premium SaaS" from
+   * "generic dashboard" at a glance — used deliberately, not everywhere. */
+  --glow-s: 0 1px 2px rgb(var(--shadow-rgb) / 0.05),
+    0 6px 16px -4px color-mix(in srgb, var(--pine-600) 35%, transparent);
+  --glow-m: 0 2px 4px rgb(var(--shadow-rgb) / 0.05),
+    0 16px 36px -10px color-mix(in srgb, var(--pine-600) 40%, transparent);
 
   /* --- Radius: concentric (inner = outer − padding) -------- */
   --r-sm: 6px;
@@ -155,9 +172,11 @@
   --glass-specular: rgba(255, 255, 255, 0.14);
   --glass-hairline: rgba(255, 255, 255, 0.08);
 
-  --ambient-1: rgba(85, 186, 131, 0.1);
-  --ambient-2: rgba(47, 158, 99, 0.08);
-  --ambient-3: rgba(15, 59, 39, 0.35);
+  --ambient-1: rgba(85, 186, 131, 0.13);
+  --ambient-2: rgba(47, 158, 99, 0.1);
+  --ambient-3: rgba(15, 59, 39, 0.4);
+  --ambient-4: rgba(138, 212, 169, 0.07);
+  --ambient-5: rgba(85, 186, 131, 0.08);
   --grain-opacity: 0.03;
 
   --shadow-rgb: 0 0 0;
@@ -165,6 +184,13 @@
   --shadow-s: 0 1px 2px rgb(var(--shadow-rgb) / 0.35), 0 2px 8px -2px rgb(var(--shadow-rgb) / 0.4);
   --shadow-m: 0 1px 2px rgb(var(--shadow-rgb) / 0.3), 0 10px 28px -8px rgb(var(--shadow-rgb) / 0.55);
   --shadow-l: 0 2px 4px rgb(var(--shadow-rgb) / 0.3), 0 20px 48px -12px rgb(var(--shadow-rgb) / 0.7);
+
+  /* Dark mode: pine-400 (lighter, more saturated) instead of pine-600 —
+   * a dark-mode glow needs more chroma to read at all against near-black. */
+  --glow-s: 0 1px 2px rgb(var(--shadow-rgb) / 0.4),
+    0 6px 18px -4px color-mix(in srgb, var(--pine-400) 45%, transparent);
+  --glow-m: 0 2px 4px rgb(var(--shadow-rgb) / 0.35),
+    0 18px 40px -10px color-mix(in srgb, var(--pine-400) 50%, transparent);
 }
 
 /*
@@ -222,6 +248,8 @@
   --shadow-sm: var(--shadow-s);
   --shadow-md: var(--shadow-m);
   --shadow-lg: var(--shadow-l);
+  --shadow-glow-sm: var(--glow-s);
+  --shadow-glow-md: var(--glow-m);
 
   --ease-out: var(--curve-out);
   --ease-in-out: var(--curve-in-out);
@@ -271,9 +299,11 @@ body {
   -webkit-backdrop-filter: blur(24px) saturate(180%);
   border: 1px solid var(--glass-hairline);
   /* the specular top edge is what reads as *glass* rather than as a
-   * translucent div — real glass catches light on its rim */
+   * translucent div — real glass catches light on its rim. Glow shadow:
+   * this class is brand chrome (Toolbar) — see .glass-chrome-strong's
+   * comment above for why that gets a pine tint instead of neutral. */
   box-shadow: inset 0 1px 0 var(--glass-specular), inset 0 0 0 1px var(--glass-rim),
-    var(--shadow-m);
+    var(--glow-s);
 }
 
 .glass-chrome-strong {
@@ -285,8 +315,11 @@ body {
   backdrop-filter: blur(32px) saturate(200%);
   -webkit-backdrop-filter: blur(32px) saturate(200%);
   border: 1px solid var(--glass-hairline);
+  /* Glow, not neutral shadow: this variant IS the brand chrome (floating
+   * sidebar, sheets) — a pine-tinted ambient shadow is what makes it read
+   * as "floating over atmosphere" rather than "gray panel on gray page." */
   box-shadow: inset 0 1px 0 var(--glass-specular), inset 0 0 0 1px var(--glass-rim),
-    var(--shadow-l);
+    var(--glow-m);
 }
 
 /* Opaque content surface — refined border + layered shadow, no blur. */
@@ -305,10 +338,17 @@ body {
   inset: 0;
   z-index: -1;
   pointer-events: none;
+  /* Fixed positioning already means this stays put while foreground
+   * content scrolls past it — a free depth-of-field cue, no JS parallax
+   * needed. Five overlapping blobs read as soft bokeh rather than a
+   * single flat wash; sized/placed so the densest overlap sits at the
+   * corners and the reading column in the middle stays nearly clear. */
   background:
     radial-gradient(48rem 32rem at 10% -10%, var(--ambient-1), transparent 68%),
     radial-gradient(42rem 30rem at 94% 2%, var(--ambient-2), transparent 66%),
-    radial-gradient(56rem 38rem at 50% 108%, var(--ambient-3), transparent 70%);
+    radial-gradient(56rem 38rem at 50% 108%, var(--ambient-3), transparent 70%),
+    radial-gradient(38rem 38rem at -6% 55%, var(--ambient-4), transparent 62%),
+    radial-gradient(34rem 34rem at 104% 70%, var(--ambient-5), transparent 60%);
 }
 
 /* Grain kills the "digital plastic" flatness — inline SVG, no asset file. */
@@ -343,8 +383,24 @@ body {
 .sheet-panel {
   animation: sheet-in var(--dur-slow) var(--curve-out);
 }
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.toast-in {
+  animation: toast-in var(--dur-slow) var(--curve-out);
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .sheet-panel {
+  .sheet-panel,
+  .toast-in {
     animation: none;
   }
 }
@@ -380,7 +436,11 @@ body {
 }
 .lift:hover {
   transform: translateY(-1px);
-  box-shadow: var(--shadow-m);
+  /* Glow, not neutral: .lift is only used by Card's `interactive` prop
+   * (clickable nav-style cards, e.g. the fields list), which is "brand"
+   * chrome in the sense that matters here — never applied to dense
+   * data/table rows. */
+  box-shadow: var(--glow-m);
 }
 
 @media (prefers-reduced-motion: reduce) {
