@@ -17,6 +17,28 @@ Set `JWT_SECRET` in `.env` before running this anywhere but a local
 laptop — without it, a loud `UserWarning` fires and an insecure
 development-only default is used so `uvicorn` still boots.
 
+### Self-serve signup (OTP email)
+
+`POST /auth/register/request-otp` + `POST /auth/register/verify-otp`
+(see `.claude/plans/misty-growing-yao.md`) let anyone create a brand-new
+org + become its first admin, verified via a 6-digit email code. Add to
+`.env` to send real email via SMTP:
+
+```
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_USER=
+SMTP_PASSWORD=
+SMTP_FROM=no-reply@terra-audit.local
+OTP_EXPIRE_MINUTES=10
+OTP_MAX_ATTEMPTS=5
+OTP_RESEND_COOLDOWN_SECONDS=60
+```
+
+Without `SMTP_HOST`/`SMTP_USER`/`SMTP_PASSWORD` set, a `UserWarning`
+fires at startup and the OTP is instead logged to stdout prefixed
+`[DEV-ONLY OTP]` — fine for local dev, not for any real deployment.
+
 ## Tests
 
 ```bash

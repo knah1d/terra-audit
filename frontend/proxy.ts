@@ -12,14 +12,15 @@ import { SESSION_COOKIE } from "@/lib/session";
  */
 export function proxy(request: NextRequest) {
   const token = request.cookies.get(SESSION_COOKIE)?.value;
-  const isLoginPage = request.nextUrl.pathname.startsWith("/login");
+  const isPublicAuthPage =
+    request.nextUrl.pathname.startsWith("/login") || request.nextUrl.pathname.startsWith("/register");
 
-  if (!token && !isLoginPage) {
+  if (!token && !isPublicAuthPage) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("next", request.nextUrl.pathname);
     return NextResponse.redirect(loginUrl);
   }
-  if (token && isLoginPage) {
+  if (token && isPublicAuthPage) {
     return NextResponse.redirect(new URL("/fields", request.url));
   }
   return NextResponse.next();

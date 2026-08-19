@@ -22,7 +22,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import src.field_types  # noqa: F401
 from src.database import initialize_database
 
-from backend.routers import ai, alm, auth, carbon, export, fields, portfolio, signal
+from backend.routers import ai, alm, auth, carbon, export, fields, portfolio, registration, signal
 
 
 @asynccontextmanager
@@ -57,7 +57,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-for router in (auth.router, fields.router, alm.router, carbon.router,
+for router in (auth.router, registration.router, fields.router, alm.router, carbon.router,
                signal.router, ai.router, portfolio.router, export.router):
     app.include_router(router)
 
