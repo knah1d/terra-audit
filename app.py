@@ -93,7 +93,9 @@ engine, init_error = init_modules()
 # ---------------------------------------------------------------------------
 with get_db_connection() as conn:
     fields = conn.execute(
-        "SELECT field_id, name, district, field_type FROM fields ORDER BY field_id"
+        "SELECT field_id, name, district, field_type FROM fields "
+        "WHERE org_id = ? ORDER BY field_id",
+        (org_id,),
     ).fetchall()
 
 field_display = {f["field_id"]: f for f in fields}
@@ -214,7 +216,9 @@ if init_error:
 # ---------------------------------------------------------------------------
 with get_db_connection() as conn:
     fields = conn.execute(
-        "SELECT field_id, name, district, field_type FROM fields ORDER BY field_id"
+        "SELECT field_id, name, district, field_type FROM fields "
+        "WHERE org_id = ? ORDER BY field_id",
+        (org_id,),
     ).fetchall()
 
 field_display = {f["field_id"]: f for f in fields}
@@ -242,7 +246,9 @@ with st.sidebar:
         with get_db_connection() as conn:
             existing_ids = [
                 r["field_id"]
-                for r in conn.execute("SELECT field_id FROM fields").fetchall()
+                for r in conn.execute(
+                    "SELECT field_id FROM fields WHERE org_id = ?", (org_id,)
+                ).fetchall()
             ]
         nums = []
         for fid in existing_ids:
@@ -282,9 +288,9 @@ with st.sidebar:
                 with get_db_connection() as conn:
                     conn.execute(
                         "INSERT INTO fields "
-                        "(field_id, name, district, geojson_geometry, area_ha, field_type) "
-                        "VALUES (?,?,?,?,?,?)",
-                        (new_fid, new_fname.strip(), new_district.strip(),
+                        "(org_id, field_id, name, district, geojson_geometry, area_ha, field_type) "
+                        "VALUES (?,?,?,?,?,?,?)",
+                        (org_id, new_fid, new_fname.strip(), new_district.strip(),
                          json.dumps(fc), computed_ha, new_ftype),
                     )
                     conn.commit()
@@ -347,7 +353,7 @@ with st.sidebar:
                 if not edit_name.strip() or not edit_district.strip():
                     st.error("Name and district are required.")
                 else:
-                    update_field_info(selected_id, edit_name.strip(), edit_district.strip())
+                    update_field_info(org_id, selected_id, edit_name.strip(), edit_district.strip())
                     st.session_state.pop(_edit_key, None)
                     st.rerun()
             if _col_cancel.button("Cancel", use_container_width=True, key=f"cancel_edit_{selected_id}"):
@@ -367,7 +373,7 @@ with st.sidebar:
             )
             _col_yes, _col_no = st.columns(2)
             if _col_yes.button("Yes, delete", type="primary", use_container_width=True):
-                delete_field(selected_id)
+                delete_field(org_id, selected_id)
                 for _k in [
                     "signal_df", "signal_field_id", "signal_cache_source",
                     "signal_total_awd", "signal_sowing_date", "signal_harvest_date",
@@ -424,7 +430,8 @@ with st.sidebar:
 if selected_id:
     with get_db_connection() as conn:
         row = conn.execute(
-            "SELECT geojson_geometry, area_ha FROM fields WHERE field_id = ?", (selected_id,)
+            "SELECT geojson_geometry, area_ha FROM fields WHERE org_id = ? AND field_id = ?",
+            (org_id, selected_id),
         ).fetchone()
     geom       = json.loads(row["geojson_geometry"])
     field_area = float(row["area_ha"]) if row["area_ha"] else 1.0
@@ -682,13 +689,13 @@ def render_signal_analytics_tab():
 
         with st.spinner("Resolving spatial asset data timeline..."):
             if not force_refresh:
-                df_processed = check_cache(selected_id, sd_str, ed_str)
+                df_processed = check_cache(org_id, selected_id, sd_str, ed_str)
             if df_processed.empty:
                 cache_source = "Live Google Earth Engine Core API"
                 df_raw = engine.extract_clean_timeseries(geom, sd_str, ed_str)
                 if not df_raw.empty:
-                    save_cache(selected_id, df_raw, sd_str, ed_str)
-                    df_processed = check_cache(selected_id, sd_str, ed_str)
+                    save_cache(org_id, selected_id, df_raw, sd_str, ed_str)
+                    df_processed = check_cache(org_id, selected_id, sd_str, ed_str)
 
         if not df_processed.empty:
             df_final             = gate.analyze_irrigation_behavior(df_processed)
@@ -699,7 +706,7 @@ def render_signal_analytics_tab():
                 try:
                     district = field_display[selected_id]["district"]
                     df_final = predict_awd_states(
-                        df_final, detector_key, selected_id, district,
+                        df_final, f"{org_id}_{detector_key}", selected_id, district,
                         field_area_ha, sd_str, ed_str,
                     )
                 except FileNotFoundError:
@@ -1114,8 +1121,8 @@ def render_practice_tab():
     )
     st.markdown("---")
 
-    existing_practices = get_alm_practice_schedule(selected_id)
-    existing_livestock = get_alm_livestock_schedule(selected_id)
+    existing_practices = get_alm_practice_schedule(org_id, selected_id)
+    existing_livestock = get_alm_livestock_schedule(org_id, selected_id)
 
     st.markdown("### 📋 Practice Schedule")
     col_bsl, col_wp = st.columns(2)
@@ -1131,10 +1138,10 @@ def render_practice_tab():
         )
 
     if st.button("💾 Save Practice Schedule", type="primary"):
-        save_alm_practice_schedule(selected_id, "baseline", bsl_practices)
-        save_alm_practice_schedule(selected_id, "project", wp_practices)
-        save_alm_livestock_schedule(selected_id, "baseline", bsl_livestock)
-        save_alm_livestock_schedule(selected_id, "project", wp_livestock)
+        save_alm_practice_schedule(org_id, selected_id, "baseline", bsl_practices)
+        save_alm_practice_schedule(org_id, selected_id, "project", wp_practices)
+        save_alm_livestock_schedule(org_id, selected_id, "baseline", bsl_livestock)
+        save_alm_livestock_schedule(org_id, selected_id, "project", wp_livestock)
         st.success("Practice schedule saved.")
         st.rerun()
 
@@ -1146,7 +1153,7 @@ def render_practice_tab():
         "period. At least 3 samples per cell are required (Eqs. 46-47, 70-71)."
     )
 
-    existing_soc = get_soc_measurements(selected_id)
+    existing_soc = get_soc_measurements(org_id, selected_id)
     soc_inputs = {}
     soc_labels = {
         ("project", "t_start"): "Project site — start of period",
@@ -1170,7 +1177,7 @@ def render_practice_tab():
 
     if st.button("💾 Save SOC Measurements", type="primary"):
         for (site_type, timepoint), values in soc_inputs.items():
-            save_soc_measurements(selected_id, site_type, timepoint, values)
+            save_soc_measurements(org_id, selected_id, site_type, timepoint, values)
         st.success("SOC measurements saved.")
         st.rerun()
 
@@ -1208,7 +1215,7 @@ def _render_credit_history_panel(field_id: str):
     """Every Calculate Carbon Credits click is logged to credit_history —
     this surfaces that log so past runs survive a session/page revisit
     instead of vanishing once export_cr falls out of session_state."""
-    history = get_credit_history(field_id)
+    history = get_credit_history(org_id, field_id)
     if not history:
         return
 
@@ -1340,7 +1347,7 @@ def render_carbon_tab_rice_awd():
         st.session_state["export_carbon_awd"]    = carbon_awd
 
         if run_carbon:
-            save_credit_history(selected_id, "rice_awd", {
+            save_credit_history(org_id, selected_id, "rice_awd", {
                 "season_length_days": carbon_season,
                 "area_ha": carbon_area,
                 "awd_events": carbon_awd,
@@ -1641,7 +1648,7 @@ def render_carbon_tab_alm():
     run_carbon = st.button("⚡ Calculate Carbon Credits", type="primary", key="alm_run_carbon")
 
     if run_carbon or st.session_state.get("alm_carbon_ready"):
-        _prior_cumulative = get_alm_cumulative_delta(selected_id)
+        _prior_cumulative = get_alm_cumulative_delta(org_id, selected_id)
         cr = carbon_engine.calculate_credits(
             practice_schedule=practice_schedule,
             soc_measurements=soc_measurements,
@@ -1661,8 +1668,8 @@ def render_carbon_tab_alm():
             st.stop()
 
         if run_carbon:
-            update_alm_cumulative_delta(selected_id, cr["cumulative_delta_co2_wp"])
-            save_credit_history(selected_id, "cropland_alm_vm0042", {
+            update_alm_cumulative_delta(org_id, selected_id, cr["cumulative_delta_co2_wp"])
+            save_credit_history(org_id, selected_id, "cropland_alm_vm0042", {
                 "area_ha": carbon_area,
                 "verification_years": verification_years,
                 "non_permanence_risk_pct": non_permanence_risk_pct,
@@ -1862,8 +1869,8 @@ with tab_validation:
 
     with col_build:
         if st.button("📦 Build / Rebuild Dataset", use_container_width=True):
-            _built_df = build_dataset()
-            save_dataset(_built_df)
+            _built_df = build_dataset(org_id)
+            save_dataset(org_id, _built_df)
             if _built_df.empty:
                 st.warning(
                     "No cached field timeseries found — run Signal Analytics "
@@ -1889,12 +1896,18 @@ with tab_validation:
         )
         _train_model_key = _TRAIN_MODEL_CHOICES[_train_model_label]
         if st.button(f"🎯 Train & Save {_train_model_label}", use_container_width=True):
-            _train_df = load_dataset()
+            _train_df = load_dataset(org_id)
             if _train_df.empty:
                 st.warning("No training dataset found. Click **Build / Rebuild Dataset** first.")
             else:
                 _train_X, _train_y = build_features(_train_df)
                 _train_result = train_and_evaluate(_train_model_key, _train_X, _train_y)
+                # Namespace the saved artifact per org — otherwise one org's
+                # classifier would be trained on/served to another's data
+                # (see multi-tenant auth plan, Phase 2). MODEL_REGISTRY
+                # lookups above still use the bare key; only the persisted
+                # filename gets the org prefix.
+                _train_result["model_name"] = f"{org_id}_{_train_model_key}"
                 _saved_path = save_model(_train_result)
                 st.success(f"Trained and saved to `data/ai_models/{_saved_path.name}`.")
                 _existing_results = dict(st.session_state.get("validation_results") or {})
@@ -1908,7 +1921,7 @@ with tab_validation:
     run_validation = st.button("Run Validation", type="primary")
 
     if run_validation:
-        _val_dataset = load_dataset()
+        _val_dataset = load_dataset(org_id)
         if _val_dataset.empty:
             st.warning(
                 "No training dataset found. Run `python -m src.ai.dataset_builder` "
@@ -2044,7 +2057,7 @@ with tab_portfolio:
     )
     st.markdown("---")
 
-    _portfolio = get_portfolio_summary()
+    _portfolio = get_portfolio_summary(org_id)
 
     if not _portfolio:
         st.info("No fields registered yet. Add one in the **Spatial Asset Inspection** tab.")
