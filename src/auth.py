@@ -24,6 +24,7 @@ import uuid
 
 import bcrypt
 import streamlit as st
+from sqlalchemy import text
 
 from src.database import get_db_connection
 
@@ -47,17 +48,17 @@ def verify_password(plain: str, hashed: str) -> bool:
 def get_user_by_email(email: str) -> dict | None:
     with get_db_connection() as conn:
         row = conn.execute(
-            "SELECT * FROM users WHERE email = ? AND is_active = 1",
-            (email,),
-        ).fetchone()
+            text("SELECT * FROM users WHERE email = :email AND is_active = 1"),
+            {"email": email},
+        ).mappings().fetchone()
     return dict(row) if row else None
 
 
 def _touch_last_login(user_id: str):
     with get_db_connection() as conn:
         conn.execute(
-            "UPDATE users SET last_login_at = CURRENT_TIMESTAMP WHERE user_id = ?",
-            (user_id,),
+            text("UPDATE users SET last_login_at = CURRENT_TIMESTAMP WHERE user_id = :user_id"),
+            {"user_id": user_id},
         )
         conn.commit()
 
@@ -143,9 +144,10 @@ def create_org_user(org_id: str, email: str, password: str, role: str) -> str:
     user_id = uuid.uuid4().hex
     with get_db_connection() as conn:
         conn.execute(
-            "INSERT INTO users (user_id, org_id, email, password_hash, role) "
-            "VALUES (?, ?, ?, ?, ?)",
-            (user_id, org_id, email, hash_password(password), role),
+            text("INSERT INTO users (user_id, org_id, email, password_hash, role) "
+                 "VALUES (:user_id, :org_id, :email, :password_hash, :role)"),
+            {"user_id": user_id, "org_id": org_id, "email": email,
+             "password_hash": hash_password(password), "role": role},
         )
         conn.commit()
     return user_id
@@ -156,8 +158,8 @@ def list_org_users(org_id: str) -> list[dict]:
     ordered by creation time."""
     with get_db_connection() as conn:
         rows = conn.execute(
-            "SELECT user_id, email, role, is_active, created_at, last_login_at "
-            "FROM users WHERE org_id = ? ORDER BY created_at ASC",
-            (org_id,),
-        ).fetchall()
+            text("SELECT user_id, email, role, is_active, created_at, last_login_at "
+                 "FROM users WHERE org_id = :org_id ORDER BY created_at ASC"),
+            {"org_id": org_id},
+        ).mappings().fetchall()
     return [dict(r) for r in rows]

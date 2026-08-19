@@ -13,8 +13,9 @@ metrics should be read as model-vs-threshold-gate agreement, not accuracy.
 import datetime
 
 import pandas as pd
+from sqlalchemy import text
 
-from src.database import get_db_connection
+from src.database import get_db_connection, is_sqlite
 from src.threshold_gate import AdaptiveAWDGate
 
 DATASET_TABLE = "ai_dataset_rows"
@@ -33,7 +34,7 @@ _DATASET_COLUMNS = [
 
 
 def _ensure_ai_tables(conn) -> None:
-    conn.execute(f"""
+    conn.execute(text(f"""
         CREATE TABLE IF NOT EXISTS {DATASET_TABLE} (
             org_id       TEXT NOT NULL DEFAULT 'default',
             field_id     TEXT,
@@ -59,12 +60,17 @@ def _ensure_ai_tables(conn) -> None:
             built_at     TEXT,
             PRIMARY KEY (org_id, field_id, window_start, window_end, date)
         )
-    """)
+    """))
     # Migration for DBs created before org_id existed on this table.
-    try:
-        conn.execute(f"ALTER TABLE {DATASET_TABLE} ADD COLUMN org_id TEXT NOT NULL DEFAULT 'default'")
-    except Exception:
-        pass
+    # SQLite-only: a fresh Postgres deployment never predates org_id (the
+    # CREATE TABLE above already includes it), and unlike SQLite, a failed
+    # ALTER TABLE on Postgres aborts the whole transaction — a caller-visible
+    # difference, not just a cosmetic one, so this must not run there.
+    if is_sqlite():
+        try:
+            conn.execute(text(f"ALTER TABLE {DATASET_TABLE} ADD COLUMN org_id TEXT NOT NULL DEFAULT 'default'"))
+        except Exception:
+            pass
     conn.commit()
 
 
@@ -74,18 +80,18 @@ def _fetch_cache_groups(org_id: str) -> pd.DataFrame:
     silently mix data across tenants (see multi-tenant auth plan, Phase 2)."""
     with get_db_connection() as conn:
         return pd.read_sql_query(
-            """
-            SELECT t.field_id, f.district, f.area_ha,
-                   t.window_start, t.window_end,
-                   t.observation_date AS date,
-                   t.vv, t.vh, t.cross_ratio, t.rvi
-            FROM   timeseries_cache t
-            JOIN   fields f ON f.field_id = t.field_id AND f.org_id = t.org_id
-            WHERE  f.org_id = ?
-            ORDER  BY t.field_id, t.window_start, t.window_end, t.observation_date
-            """,
+            text("""
+                SELECT t.field_id, f.district, f.area_ha,
+                       t.window_start, t.window_end,
+                       t.observation_date AS date,
+                       t.vv, t.vh, t.cross_ratio, t.rvi
+                FROM   timeseries_cache t
+                JOIN   fields f ON f.field_id = t.field_id AND f.org_id = t.org_id
+                WHERE  f.org_id = :org_id
+                ORDER  BY t.field_id, t.window_start, t.window_end, t.observation_date
+            """),
             conn,
-            params=(org_id,),
+            params={"org_id": org_id},
         )
 
 
@@ -149,7 +155,7 @@ def save_dataset(org_id: str, df: pd.DataFrame) -> None:
     full-table DELETE, which was already a red flag before org_id existed)."""
     with get_db_connection() as conn:
         _ensure_ai_tables(conn)
-        conn.execute(f"DELETE FROM {DATASET_TABLE} WHERE org_id = ?", (org_id,))
+        conn.execute(text(f"DELETE FROM {DATASET_TABLE} WHERE org_id = :org_id"), {"org_id": org_id})
         if not df.empty:
             df = df.copy()
             df["org_id"] = org_id
@@ -161,7 +167,7 @@ def load_dataset(org_id: str) -> pd.DataFrame:
     with get_db_connection() as conn:
         _ensure_ai_tables(conn)
         return pd.read_sql_query(
-            f"SELECT * FROM {DATASET_TABLE} WHERE org_id = ?", conn, params=(org_id,)
+            text(f"SELECT * FROM {DATASET_TABLE} WHERE org_id = :org_id"), conn, params={"org_id": org_id}
         )
 
 
