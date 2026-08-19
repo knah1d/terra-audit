@@ -1,8 +1,15 @@
 "use client";
 
+import { AlertCircle, FolderKanban, MapPin, Plus } from "lucide-react";
 import Link from "next/link";
-import { useFields } from "@/hooks/use-fields";
+import { Alert } from "@/components/ui/Alert";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { useFields } from "@/hooks/use-fields";
 
 const FIELD_TYPE_LABELS: Record<string, string> = {
   rice_awd: "Rice — AWD (VM0051)",
@@ -14,41 +21,71 @@ export default function FieldsPage() {
 
   return (
     <div className="mx-auto max-w-4xl">
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Fields</h1>
-        <Link href="/fields/new" className="text-sm font-medium text-blue-600 hover:underline">
-          + Register a field
-        </Link>
-      </div>
+      <PageHeader
+        title="Fields"
+        subtitle="Registered field boundaries and their carbon-credit methodology."
+        actions={
+          <Link href="/fields/new">
+            <Button icon={Plus} size="sm">
+              Register a field
+            </Button>
+          </Link>
+        }
+      />
 
-      {isLoading && <p className="text-sm text-gray-500">Loading…</p>}
-      {error && <p className="text-sm text-red-600">Failed to load fields: {error.message}</p>}
+      {isLoading && (
+        <div className="grid gap-3">
+          <Skeleton className="h-[68px]" />
+          <Skeleton className="h-[68px]" />
+          <Skeleton className="h-[68px]" />
+        </div>
+      )}
+
+      {error && (
+        <Alert tone="danger" title="Failed to load fields">
+          {error.message}
+        </Alert>
+      )}
 
       {fields && fields.length === 0 && (
-        <Card className="text-center text-sm text-gray-500">
-          No fields registered yet.{" "}
-          <Link href="/fields/new" className="text-blue-600 hover:underline">
-            Register your first field
-          </Link>
-          .
-        </Card>
+        <EmptyState
+          icon={FolderKanban}
+          title="No fields registered yet"
+          description="Register your first field boundary to start tracking carbon credits."
+          action={
+            <Link href="/fields/new">
+              <Button icon={Plus} size="sm">
+                Register a field
+              </Button>
+            </Link>
+          }
+        />
       )}
 
       <div className="grid gap-3">
         {fields?.map((field) => (
           <Link key={field.field_id} href={`/fields/${field.field_id}/ledger`}>
-            <Card className="flex items-center justify-between transition-shadow hover:shadow-md">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-sm text-gray-500">{field.field_id}</span>
-                  <span className="font-medium">{field.name}</span>
+            <Card interactive className="flex items-center justify-between p-4">
+              <div className="flex items-center gap-3">
+                <div className="flex size-9 items-center justify-center rounded-md bg-brand-50 text-brand-700">
+                  <FolderKanban className="size-4" />
                 </div>
-                <p className="text-sm text-gray-500">
-                  📍 {field.district} · {FIELD_TYPE_LABELS[field.field_type] ?? field.field_type}
-                </p>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-text-primary">{field.name}</span>
+                    <span className="font-mono text-xs text-text-tertiary">{field.field_id}</span>
+                  </div>
+                  <div className="mt-0.5 flex items-center gap-2 text-sm text-text-secondary">
+                    <span className="inline-flex items-center gap-1">
+                      <MapPin className="size-3.5" />
+                      {field.district}
+                    </span>
+                    <Badge tone="brand">{FIELD_TYPE_LABELS[field.field_type] ?? field.field_type}</Badge>
+                  </div>
+                </div>
               </div>
-              <span className="font-mono text-sm tabular-nums text-gray-700">
-                {field.area_ha?.toFixed(2) ?? "—"} ha
+              <span className="font-mono text-sm tabular-nums text-text-secondary">
+                {field.area_ha?.toFixed(2) ?? <AlertCircle className="size-4 text-text-tertiary" />} ha
               </span>
             </Card>
           </Link>

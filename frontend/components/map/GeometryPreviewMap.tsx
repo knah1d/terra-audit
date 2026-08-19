@@ -18,19 +18,20 @@ function FitBounds({ feature }: { feature: GeoJSON.Feature }) {
  * for displaying an already-saved field's boundary. */
 export default function GeometryPreviewMap({ feature }: { feature: GeoJSON.Feature }) {
   return (
-    <MapContainer
-      center={[23.685, 90.3563]}
-      zoom={7}
-      style={{ height: "300px", width: "100%" }}
-      className="rounded-md"
-      scrollWheelZoom={false}
-    >
-      <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-      />
-      <GeoJSONLayer data={feature} style={{ color: "#2563eb", weight: 2, fillOpacity: 0.15 }} />
-      <FitBounds feature={feature} />
-    </MapContainer>
+    <div className="overflow-hidden rounded-lg border border-border">
+      <MapContainer
+        center={[23.685, 90.3563]}
+        zoom={7}
+        style={{ height: "300px", width: "100%" }}
+        scrollWheelZoom={false}
+      >
+        <TileLayer
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        />
+        <GeoJSONLayer data={feature} style={{ color: "#4f46e5", weight: 2, fillOpacity: 0.12 }} />
+        <FitBounds feature={feature} />
+      </MapContainer>
+    </div>
   );
 }

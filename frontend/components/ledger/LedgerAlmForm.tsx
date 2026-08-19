@@ -1,10 +1,12 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import { Sparkles } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import type { z } from "zod";
 import { DerivationTrail, type DerivationStep } from "@/components/ledger/DerivationTrail";
+import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { StatCard } from "@/components/ui/Card";
 import { ErrorText, FieldLabel, TextInput } from "@/components/ui/Field";
@@ -124,21 +126,21 @@ export function LedgerAlmForm({ fieldId, defaultArea }: { fieldId: string; defau
         </div>
 
         <div className="col-span-full flex gap-3">
-          <Button type="submit" disabled={preview.isPending} variant="secondary">
-            {preview.isPending ? "Calculating…" : "Calculate (preview)"}
+          <Button type="submit" variant="secondary" loading={preview.isPending}>
+            Calculate (preview)
           </Button>
           <RoleGate allow={["admin", "analyst"]}>
-            <Button type="button" onClick={handleSubmit(onCommit)} disabled={preview.isPending || commit.isPending}>
-              {commit.isPending ? "Committing…" : "⚡ Calculate & Save Carbon Credits"}
+            <Button type="button" icon={Sparkles} onClick={handleSubmit(onCommit)} loading={commit.isPending} disabled={preview.isPending}>
+              Calculate &amp; Save Carbon Credits
             </Button>
           </RoleGate>
         </div>
       </form>
 
       {result?.production_decline_leakage_blocked && (
-        <div className="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-800">
-          🚫 <strong>Issuance blocked.</strong> {result.leakage_block_reason as string}
-        </div>
+        <Alert tone="danger" title="Issuance blocked">
+          {result.leakage_block_reason as string}
+        </Alert>
       )}
 
       {result && !result.production_decline_leakage_blocked && (
@@ -160,7 +162,7 @@ export function LedgerAlmForm({ fieldId, defaultArea }: { fieldId: string; defau
             />
           </div>
           <DerivationTrail steps={buildSteps(result)} />
-          {committed && <p className="text-sm text-emerald-700">✓ Saved to credit history.</p>}
+          {committed && <Alert tone="success">Saved to credit history.</Alert>}
         </>
       )}
     </div>

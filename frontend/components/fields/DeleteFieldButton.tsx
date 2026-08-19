@@ -1,5 +1,6 @@
 "use client";
 
+import { Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
@@ -19,18 +20,18 @@ export function DeleteFieldButton({ fieldId, fieldName }: { fieldId: string; fie
   return (
     <RoleGate allow={["admin"]}>
       {confirming ? (
-        <div className="flex items-center gap-2 text-sm">
-          <span>Delete {fieldName}? This cannot be undone.</span>
-          <Button variant="danger" onClick={handleDelete} disabled={deleteField.isPending}>
+        <div className="flex items-center gap-2 text-sm text-text-secondary">
+          <span>Delete {fieldName}?</span>
+          <Button variant="danger" size="sm" loading={deleteField.isPending} onClick={handleDelete}>
             Yes, delete
           </Button>
-          <Button variant="secondary" onClick={() => setConfirming(false)}>
+          <Button variant="ghost" size="sm" onClick={() => setConfirming(false)}>
             Cancel
           </Button>
         </div>
       ) : (
-        <Button variant="danger" onClick={() => setConfirming(true)}>
-          🗑️ Remove field
+        <Button variant="secondary" size="sm" icon={Trash2} onClick={() => setConfirming(true)}>
+          Remove field
         </Button>
       )}
     </RoleGate>

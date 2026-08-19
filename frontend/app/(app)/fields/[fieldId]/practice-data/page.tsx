@@ -1,11 +1,13 @@
 "use client";
 
+import { FlaskConical, Save } from "lucide-react";
 import { useState } from "react";
 import { useFieldContext } from "@/components/fields/FieldContext";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { FieldLabel, TextInput } from "@/components/ui/Field";
+import { FieldLabel, TextArea, TextInput } from "@/components/ui/Field";
 import { RoleGate } from "@/components/ui/RoleGate";
+import { Skeleton } from "@/components/ui/Skeleton";
 import { usePracticeSchedule, useSocMeasurements } from "@/hooks/use-alm";
 import { useSavePracticeSchedule, useSaveSocMeasurements } from "@/hooks/use-practice-form";
 import type { PracticeScheduleEntry } from "@/types/api";
@@ -37,7 +39,7 @@ function PracticeScenarioForm({
 
   return (
     <Card>
-      <h3 className="mb-3 font-medium capitalize">{scenario} scenario</h3>
+      <h3 className="mb-3 font-medium capitalize text-text-primary">{scenario} scenario</h3>
       <div className="grid grid-cols-2 gap-3">
         <div>
           <FieldLabel>Crop type</FieldLabel>
@@ -68,26 +70,22 @@ function PracticeScenarioForm({
           <TextInput type="number" value={values.crop_yield_t_ha ?? 0} onChange={(e) => set("crop_yield_t_ha", Number(e.target.value))} />
         </div>
       </div>
-      <div className="mt-3 flex flex-wrap gap-4 text-sm">
+      <div className="mt-3 flex flex-wrap gap-4 text-sm text-text-secondary">
         {(["crop_rotation", "cover_crops", "intercropping", "tillage", "residue_removed", "n_fixing_species"] as const).map((key) => (
           <label key={key} className="flex items-center gap-1.5">
             <input
               type="checkbox"
               checked={Boolean(values[key])}
               onChange={(e) => set(key, e.target.checked)}
+              className="accent-brand-600"
             />
             {key.replace(/_/g, " ")}
           </label>
         ))}
       </div>
       <RoleGate allow={["admin", "analyst"]}>
-        <Button
-          className="mt-4"
-          variant="secondary"
-          onClick={() => save.mutate({ scenario, practices: values })}
-          disabled={save.isPending}
-        >
-          {save.isPending ? "Saving…" : "Save"}
+        <Button className="mt-4" variant="secondary" size="sm" icon={Save} loading={save.isPending} onClick={() => save.mutate({ scenario, practices: values })}>
+          Save
         </Button>
       </RoleGate>
     </Card>
@@ -105,11 +103,7 @@ function SocMeasurementsForm({ fieldId }: { fieldId: string }) {
   const { data: soc, isLoading } = useSocMeasurements(fieldId);
 
   if (isLoading || !soc) {
-    return (
-      <Card>
-        <p className="text-sm text-gray-500">Loading SOC measurements…</p>
-      </Card>
-    );
+    return <Skeleton className="h-48" />;
   }
 
   return <SocMeasurementsFormBody fieldId={fieldId} soc={soc} />;
@@ -139,8 +133,11 @@ function SocMeasurementsFormBody({
 
   return (
     <Card>
-      <h3 className="mb-1 font-medium">🧫 Soil Organic Carbon Samples</h3>
-      <p className="mb-3 text-sm text-gray-500">
+      <h3 className="mb-1 flex items-center gap-1.5 font-medium text-text-primary">
+        <FlaskConical className="size-4 text-brand-600" />
+        Soil Organic Carbon Samples
+      </h3>
+      <p className="mb-3 text-sm text-text-secondary">
         Paired lab measurements (tCO2e/ha) — at least 3 samples per cell required (Eqs. 46-47, 70-71).
       </p>
       <div className="grid grid-cols-2 gap-4">
@@ -149,16 +146,17 @@ function SocMeasurementsFormBody({
           return (
             <div key={l.key}>
               <FieldLabel>{l.label}</FieldLabel>
-              <textarea
+              <TextArea
                 value={texts[l.key] ?? ""}
                 onChange={(e) => setTexts((t) => ({ ...t, [l.key]: e.target.value }))}
                 rows={4}
                 placeholder={"40.2\n41.8\n39.5"}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-sm focus:border-blue-500 focus:outline-none"
               />
-              <p className="mt-1 text-xs text-gray-500">{count} sample(s){count < 3 ? " — need ≥ 3" : " ✓"}</p>
+              <p className={`mt-1 text-xs ${count < 3 ? "text-warning-700" : "text-text-tertiary"}`}>
+                {count} sample(s){count < 3 ? " — need ≥ 3" : " ✓"}
+              </p>
               <RoleGate allow={["admin", "analyst"]}>
-                <Button variant="secondary" className="mt-1" onClick={() => handleSave(l)} disabled={save.isPending}>
+                <Button variant="secondary" size="sm" icon={Save} className="mt-1" loading={save.isPending} onClick={() => handleSave(l)}>
                   Save
                 </Button>
               </RoleGate>
@@ -176,11 +174,15 @@ export default function PracticeDataPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h2 className="text-lg font-semibold">🧪 Practice &amp; Soil Data</h2>
+      <h2 className="flex items-center gap-2 text-lg font-semibold text-text-primary">
+        <FlaskConical className="size-5 text-brand-600" />
+        Practice &amp; Soil Data
+      </h2>
       {isLoading ? (
-        <Card>
-          <p className="text-sm text-gray-500">Loading practice schedule…</p>
-        </Card>
+        <div className="grid grid-cols-2 gap-4">
+          <Skeleton className="h-64" />
+          <Skeleton className="h-64" />
+        </div>
       ) : (
         <div className="grid grid-cols-2 gap-4">
           <PracticeScenarioForm fieldId={field.field_id} scenario="baseline" initial={schedule?.baseline ?? null} />

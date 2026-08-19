@@ -1,10 +1,12 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import { Sparkles } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import type { z } from "zod";
 import { DerivationTrail, type DerivationStep } from "@/components/ledger/DerivationTrail";
+import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { StatCard } from "@/components/ui/Card";
 import { ErrorText, FieldLabel, Select, TextInput } from "@/components/ui/Field";
@@ -187,25 +189,27 @@ export function LedgerRiceForm({
         </div>
 
         <div className="col-span-full flex gap-3">
-          <Button type="submit" disabled={preview.isPending} variant="secondary">
-            {preview.isPending ? "Calculating…" : "Calculate (preview)"}
+          <Button type="submit" variant="secondary" loading={preview.isPending}>
+            Calculate (preview)
           </Button>
           <RoleGate allow={["admin", "analyst"]}>
             <Button
               type="button"
+              icon={Sparkles}
               onClick={handleSubmit(onCommit)}
-              disabled={preview.isPending || commit.isPending}
+              loading={commit.isPending}
+              disabled={preview.isPending}
             >
-              {commit.isPending ? "Committing…" : "⚡ Calculate & Save Carbon Credits"}
+              Calculate &amp; Save Carbon Credits
             </Button>
           </RoleGate>
         </div>
       </form>
 
       {result && result.qa3_pathway_valid === false && (
-        <div className="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-800">
-          🚫 <strong>Issuance blocked.</strong> {result.qa3_block_reason as string}
-        </div>
+        <Alert tone="danger" title="Issuance blocked">
+          {result.qa3_block_reason as string}
+        </Alert>
       )}
 
       {result && result.qa3_pathway_valid !== false && (
@@ -217,9 +221,7 @@ export function LedgerRiceForm({
             <StatCard label="Uncertainty Deduction" value={`${formatNumber(result.unc_deduction_pct as number, "%")}%`} />
           </div>
           <DerivationTrail steps={buildSteps(result)} />
-          {committed && (
-            <p className="text-sm text-emerald-700">✓ Saved to credit history.</p>
-          )}
+          {committed && <Alert tone="success">Saved to credit history.</Alert>}
         </>
       )}
     </div>

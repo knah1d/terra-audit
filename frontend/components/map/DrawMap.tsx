@@ -57,7 +57,6 @@ export default function DrawMap({ onDrawn }: { onDrawn: (feature: GeoJSON.Featur
       center={DEFAULT_CENTER}
       zoom={DEFAULT_ZOOM}
       style={{ height: "400px", width: "100%" }}
-      className="rounded-md"
     >
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
