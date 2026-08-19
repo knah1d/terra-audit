@@ -20,12 +20,15 @@ does NOT survive a hard refresh/new tab, unlike a cookie-based session.
 That's an accepted trade-off for Phase 1's simplicity, not an oversight.
 """
 
+import uuid
+
 import bcrypt
 import streamlit as st
 
 from src.database import get_db_connection
 
 SESSION_KEY = "auth_user"
+VALID_ROLES = {"admin", "analyst", "viewer"}
 
 
 def hash_password(plain: str) -> str:
@@ -107,8 +110,54 @@ def logout():
     st.session_state.pop(SESSION_KEY, None)
 
 
-# NOTE: role enforcement (require_role) is deliberately deferred to Phase 4
-# of the multi-tenant plan, once org self-serve invites exist and there's
-# more than one role in practice to enforce against. Keeping Phase 1
-# scoped to "does a login work at all" avoids shipping an unused/untested
-# guard function.
+def require_role(user: dict, allowed_roles: set[str]):
+    """Guard for mutating UI actions (field registration, every save_*/
+    delete_field call site, team invites) — call at the top of the
+    handler, before any DB write. Raises PermissionError rather than
+    silently no-op'ing, so a caller that forgets the check fails loudly
+    in testing rather than quietly letting a viewer write data.
+
+    Kept in src/auth.py, not src/database.py — database.py stays a pure
+    data layer with no notion of "who is calling," and role enforcement
+    belongs in the app layer that already has `auth_user` in scope.
+    """
+    if user.get("role") not in allowed_roles:
+        raise PermissionError(
+            f"Role '{user.get('role')}' is not permitted to perform this action "
+            f"(requires one of {sorted(allowed_roles)})."
+        )
+
+
+def create_org_user(org_id: str, email: str, password: str, role: str) -> str:
+    """Creates a new user within an existing org — used by the admin-only
+    Team UI (app.py) so onboarding teammates doesn't require CLI/operator
+    involvement beyond the very first admin per org (scripts/create_user.py).
+    Raises ValueError if the email is already taken (any org) or the role
+    is invalid."""
+    email = email.strip().lower()
+    if role not in VALID_ROLES:
+        raise ValueError(f"role must be one of {sorted(VALID_ROLES)}, got {role!r}")
+    if get_user_by_email(email) is not None:
+        raise ValueError(f"a user with email {email!r} already exists")
+
+    user_id = uuid.uuid4().hex
+    with get_db_connection() as conn:
+        conn.execute(
+            "INSERT INTO users (user_id, org_id, email, password_hash, role) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (user_id, org_id, email, hash_password(password), role),
+        )
+        conn.commit()
+    return user_id
+
+
+def list_org_users(org_id: str) -> list[dict]:
+    """Returns every user in this org (for the admin Team UI's roster),
+    ordered by creation time."""
+    with get_db_connection() as conn:
+        rows = conn.execute(
+            "SELECT user_id, email, role, is_active, created_at, last_login_at "
+            "FROM users WHERE org_id = ? ORDER BY created_at ASC",
+            (org_id,),
+        ).fetchall()
+    return [dict(r) for r in rows]

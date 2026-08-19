@@ -51,7 +51,7 @@ from src.ai.dataset_builder import build_dataset, save_dataset, load_dataset
 from src.ai.feature_engineering import build_features
 from src.ai.models import train_and_evaluate, save_model
 from src.ai import evaluate as ai_evaluate
-from src.auth import login_form, logout
+from src.auth import login_form, logout, require_role, create_org_user, list_org_users, VALID_ROLES
 
 # ---------------------------------------------------------------------------
 # Page config
@@ -78,6 +78,32 @@ org_id = auth_user["org_id"]
 # session's stale per-field figures rendered as if freshly computed for
 # their own field, since several of these (carbon_ready et al.) are read
 # back with only a soft "if present" check, not a hard field-id match.
+def _can_write() -> bool:
+    """Viewer role is read-only (Phase 4 of the multi-tenant plan) — every
+    mutating action (field registration/edit/delete, practice/SOC/livestock
+    saves, Calculate Carbon Credits) must check this before writing.
+    Delegates to src.auth.require_role rather than re-implementing the
+    check, and turns its PermissionError into a UI error instead of an
+    uncaught exception."""
+    try:
+        require_role(auth_user, {"admin", "analyst"})
+        return True
+    except PermissionError as exc:
+        st.error(f"🔒 {exc}")
+        return False
+
+
+def _can_delete() -> bool:
+    """Deleting a field is irreversible (cascades across every table for
+    that field_id) — restricted to admin only, not analysts."""
+    try:
+        require_role(auth_user, {"admin"})
+        return True
+    except PermissionError as exc:
+        st.error(f"🔒 {exc}")
+        return False
+
+
 SESSION_KEYS_TO_CLEAR_ON_FIELD_CHANGE = [
     "signal_df", "signal_field_id", "signal_cache_source",
     "signal_total_awd", "signal_sowing_date", "signal_harvest_date",
@@ -305,7 +331,7 @@ with st.sidebar:
         new_ftype = FIELD_TYPE_CHOICES[new_ftype_label]
         st.markdown("")
 
-        if st.button("💾 Save Field", type="primary", use_container_width=True):
+        if st.button("💾 Save Field", type="primary", use_container_width=True) and _can_write():
             if not new_fname.strip() or not new_district.strip():
                 st.error("Name and district are required.")
             elif new_fid in existing_ids:
@@ -376,7 +402,7 @@ with st.sidebar:
                 "to change either."
             )
             _col_save, _col_cancel = st.columns(2)
-            if _col_save.button("💾 Save", type="primary", use_container_width=True, key=f"save_edit_{selected_id}"):
+            if _col_save.button("💾 Save", type="primary", use_container_width=True, key=f"save_edit_{selected_id}") and _can_write():
                 if not edit_name.strip() or not edit_district.strip():
                     st.error("Name and district are required.")
                 else:
@@ -399,7 +425,7 @@ with st.sidebar:
                 "This cannot be undone."
             )
             _col_yes, _col_no = st.columns(2)
-            if _col_yes.button("Yes, delete", type="primary", use_container_width=True):
+            if _col_yes.button("Yes, delete", type="primary", use_container_width=True) and _can_delete():
                 delete_field(org_id, selected_id)
                 for _k in [*SESSION_KEYS_TO_CLEAR_ON_FIELD_CHANGE, _confirm_key]:
                     st.session_state.pop(_k, None)
@@ -1156,7 +1182,7 @@ def render_practice_tab():
             existing_livestock.get("project"), key_prefix="wp",
         )
 
-    if st.button("💾 Save Practice Schedule", type="primary"):
+    if st.button("💾 Save Practice Schedule", type="primary") and _can_write():
         save_alm_practice_schedule(org_id, selected_id, "baseline", bsl_practices)
         save_alm_practice_schedule(org_id, selected_id, "project", wp_practices)
         save_alm_livestock_schedule(org_id, selected_id, "baseline", bsl_livestock)
@@ -1194,7 +1220,7 @@ def render_practice_tab():
             soc_inputs[key] = values
             st.caption(f"{len(values)} sample(s)" + (" — need ≥ 3" if len(values) < 3 else " ✓"))
 
-    if st.button("💾 Save SOC Measurements", type="primary"):
+    if st.button("💾 Save SOC Measurements", type="primary") and _can_write():
         for (site_type, timepoint), values in soc_inputs.items():
             save_soc_measurements(org_id, selected_id, site_type, timepoint, values)
         st.success("SOC measurements saved.")
@@ -1372,7 +1398,10 @@ def render_carbon_tab_rice_awd():
         st.session_state["export_carbon_season"] = carbon_season
         st.session_state["export_carbon_awd"]    = carbon_awd
 
-        if run_carbon:
+        # A viewer can still trigger the (read-only, no side effects)
+        # calculation above and see the result — only persisting it to
+        # credit_history is an actual write, so only that is role-gated.
+        if run_carbon and _can_write():
             save_credit_history(org_id, selected_id, "rice_awd", {
                 "season_length_days": carbon_season,
                 "area_ha": carbon_area,
@@ -1693,7 +1722,10 @@ def render_carbon_tab_alm():
             st.error("🚫 **Issuance blocked.** " + cr["leakage_block_reason"])
             st.stop()
 
-        if run_carbon:
+        # Same viewer carve-out as the rice path: viewing a live calculation
+        # is read-only; persisting it (cumulative delta + credit_history) is
+        # the actual write and is what gets role-gated.
+        if run_carbon and _can_write():
             update_alm_cumulative_delta(org_id, selected_id, cr["cumulative_delta_co2_wp"])
             save_credit_history(org_id, selected_id, "cropland_alm_vm0042", {
                 "area_ha": carbon_area,
@@ -2160,3 +2192,52 @@ with tab_portfolio:
             for p in _portfolio
         ]
         st.dataframe(pd.DataFrame(_table_rows), use_container_width=True, hide_index=True)
+
+    # -----------------------------------------------------------------
+    # Team management — admin-only (Phase 4 of the multi-tenant plan).
+    # Replaces CLI-only bootstrapping (scripts/create_user.py) for
+    # everything beyond the very first admin per org: once that admin
+    # exists and can log in, they invite the rest of their team here.
+    # -----------------------------------------------------------------
+    if auth_user["role"] == "admin":
+        st.markdown("---")
+        st.markdown("#### 👥 Team")
+        st.caption(f"Everyone with a login in your organization ({org_id}).")
+
+        _team = list_org_users(org_id)
+        st.dataframe(
+            pd.DataFrame([
+                {
+                    "Email": u["email"],
+                    "Role": u["role"],
+                    "Active": "Yes" if u["is_active"] else "No",
+                    "Last Login": u["last_login_at"] or "Never",
+                    "Created": u["created_at"],
+                }
+                for u in _team
+            ]),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+        with st.expander("➕ Invite a teammate"):
+            with st.form("invite_form", clear_on_submit=True):
+                _inv_email = st.text_input("Email")
+                _inv_password = st.text_input(
+                    "Temporary password", type="password",
+                    help="Share this with them directly — there's no email "
+                         "delivery yet. They can't change it in-app either; "
+                         "that's a later addition.",
+                )
+                _inv_role = st.selectbox("Role", options=sorted(VALID_ROLES), index=1)
+                _inv_submitted = st.form_submit_button("Create login", use_container_width=True)
+            if _inv_submitted:
+                if not _inv_email.strip() or not _inv_password:
+                    st.error("Email and password are required.")
+                else:
+                    try:
+                        create_org_user(org_id, _inv_email, _inv_password, _inv_role)
+                        st.success(f"Created login for {_inv_email.strip().lower()}.")
+                        st.rerun()
+                    except ValueError as exc:
+                        st.error(str(exc))
