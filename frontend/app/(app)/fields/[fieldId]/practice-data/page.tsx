@@ -6,6 +6,7 @@ import { useFieldContext } from "@/components/fields/FieldContext";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { FieldLabel, TextArea, TextInput } from "@/components/ui/Field";
+import { IconTile } from "@/components/ui/IconTile";
 import { RoleGate } from "@/components/ui/RoleGate";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Switch } from "@/components/ui/Switch";
@@ -172,8 +173,8 @@ export default function PracticeDataPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h2 className="flex items-center gap-2 text-lg font-semibold text-text-primary">
-        <FlaskConical className="size-5 text-brand-600" />
+      <h2 className="flex items-center gap-2.5 text-lg font-semibold text-text-primary">
+        <IconTile icon={FlaskConical} size="sm" />
         Practice &amp; Soil Data
       </h2>
       {isLoading ? (

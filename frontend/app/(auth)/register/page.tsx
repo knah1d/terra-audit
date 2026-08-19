@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Alert } from "@/components/ui/Alert";
+import { BotanicalMotif } from "@/components/ui/BotanicalMotif";
 import { Button } from "@/components/ui/Button";
 import { ErrorText, FieldLabel, TextInput } from "@/components/ui/Field";
 import {
@@ -71,10 +72,14 @@ export default function RegisterPage() {
   }
 
   return (
-    <main className="flex min-h-screen flex-1 items-center justify-center px-4">
-      <div className="w-full max-w-sm">
+    <main className="relative flex min-h-screen flex-1 items-center justify-center overflow-hidden px-4">
+      <BotanicalMotif
+        size="lg"
+        className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
+      />
+      <div className="relative w-full max-w-sm">
         <div className="mb-6 flex flex-col items-center gap-2.5">
-          <div className="flex size-10 items-center justify-center rounded-lg bg-brand-600 text-white shadow-sm">
+          <div className="flex size-10 items-center justify-center rounded-lg bg-brand-600 text-white shadow-glow-sm">
             <Leaf className="size-5" />
           </div>
           <span className="font-semibold tracking-tight text-text-primary">Terra Audit</span>

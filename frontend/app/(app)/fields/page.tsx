@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { IconTile } from "@/components/ui/IconTile";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useFields } from "@/hooks/use-fields";
@@ -50,6 +51,7 @@ export default function FieldsPage() {
       {fields && fields.length === 0 && (
         <EmptyState
           icon={FolderKanban}
+          motif
           title="No fields registered yet"
           description="Register your first field boundary to start tracking carbon credits."
           action={
@@ -67,9 +69,7 @@ export default function FieldsPage() {
           <Link key={field.field_id} href={`/fields/${field.field_id}/ledger`}>
             <Card interactive className="flex items-center justify-between p-4">
               <div className="flex items-center gap-3">
-                <div className="flex size-9 items-center justify-center rounded-md bg-brand-50 text-brand-700">
-                  <FolderKanban className="size-4" />
-                </div>
+                <IconTile icon={FolderKanban} />
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="font-medium text-text-primary">{field.name}</span>

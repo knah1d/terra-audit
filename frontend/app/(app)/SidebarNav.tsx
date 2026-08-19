@@ -37,8 +37,11 @@ export function SidebarNav({ session }: { session: SessionClaims | null }) {
         })}
       </nav>
 
-      <div className="mt-auto flex flex-col gap-3 border-t border-border pt-4">
-        <div className="flex items-center justify-between px-1">
+      {/* Its own tinted card — a "control center" corner rather than
+       * profile info + a toggle just sitting loose above the logout
+       * button. */}
+      <div className="mt-auto flex flex-col gap-3 rounded-xl bg-surface-muted/60 p-3">
+        <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
             {session && (
               <>
