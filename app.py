@@ -53,7 +53,8 @@ from src.ai.dataset_builder import build_dataset, save_dataset, load_dataset
 from src.ai.feature_engineering import build_features
 from src.ai.models import train_and_evaluate, save_model
 from src.ai import evaluate as ai_evaluate
-from src.auth import login_form, logout, require_role, create_org_user, list_org_users, VALID_ROLES
+from src.auth import require_role, create_org_user, list_org_users, VALID_ROLES
+from src.auth_streamlit import login_form, logout
 
 # ---------------------------------------------------------------------------
 # Page config

@@ -1,11 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import text
 
 from backend.config import JWT_EXPIRE_MINUTES, JWT_SECRET
 from backend.deps import get_current_user
 from backend.schemas.auth import LoginRequest, TokenResponse, UserOut
 from backend.security import authenticate, create_access_token
-from src.database import get_db_connection
+from src.auth import touch_last_login
 
 router = APIRouter(tags=["auth"])
 
@@ -15,15 +14,10 @@ def login(body: LoginRequest):
     user = authenticate(body.email, body.password)
     if user is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid email or password")
-    # Inlined rather than promoting src.auth's private _touch_last_login to
-    # public — a two-line UPDATE isn't worth even a cosmetic diff to that
-    # file, per the plan's "don't touch src/auth.py" default.
-    with get_db_connection() as conn:
-        conn.execute(
-            text("UPDATE users SET last_login_at = CURRENT_TIMESTAMP WHERE user_id = :uid"),
-            {"uid": user["user_id"]},
-        )
-        conn.commit()
+    # src.auth.touch_last_login is now public (it was private, so this
+    # router kept its own inline copy of the same UPDATE). Both clients'
+    # login paths share the one implementation.
+    touch_last_login(user["user_id"])
     token = create_access_token(user, JWT_SECRET, JWT_EXPIRE_MINUTES)
     return TokenResponse(access_token=token)
 

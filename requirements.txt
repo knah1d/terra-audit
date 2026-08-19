@@ -1,23 +1,41 @@
-streamlit>=1.35.0
+# Core library (src/) + FastAPI backend.
+#
+# Deliberately excludes the Streamlit UI stack — see requirements-ui.txt.
+# Installing this alone is enough to run `uvicorn backend.main:app`, which
+# is asserted by tests/backend/test_no_streamlit_in_api.py. For local
+# development of both clients, install both files.
+
+# --- data / numerics (shared by src/ and both clients) ---
 pandas>=2.2.0
 numpy>=1.26.0
-plotly>=5.22.0
-folium>=0.16.0
-streamlit-folium>=0.16.0
+scipy>=1.12.0
+
+# --- geometry, remote sensing ---
+shapely>=2.0.0
+earthengine-api>=0.1.400
+
+# --- ML (src/ai) ---
 scikit-learn>=1.4.0
 xgboost>=2.0.0
 joblib>=1.3.0
-earthengine-api>=0.1.400
-shapely>=2.0.0
-scipy>=1.12.0
-python-dotenv>=1.0.0
-fpdf2>=2.7.0
-pytest>=8.0.0
-bcrypt>=4.1.0
+
+# --- persistence ---
 sqlalchemy>=2.0
 psycopg2-binary>=2.9
+
+# --- reporting ---
+fpdf2>=2.7.0
+
+# --- auth / config ---
+bcrypt>=4.1.0
+pyjwt>=2.8
+python-dotenv>=1.0.0
+
+# --- API ---
 fastapi>=0.110
 uvicorn[standard]>=0.29
-pyjwt>=2.8
 python-multipart>=0.0.9
+
+# --- test ---
+pytest>=8.0.0
 httpx>=0.27
