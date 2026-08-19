@@ -14,6 +14,12 @@ def get_db_connection():
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
+    # WAL lets readers proceed while a writer holds the file, and the busy
+    # timeout gives a second writer a chance to retry instead of raising
+    # "database is locked" immediately — both matter once more than one
+    # tenant's session can write concurrently (see multi-tenant auth plan).
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=5000")
     try:
         yield conn
     finally:
@@ -158,6 +164,42 @@ def initialize_database():
                 result_json    TEXT NOT NULL
             )
         """)
+
+        # ---------------------------------------------------------------
+        # Multi-tenancy foundation (Phase 0 of the auth/multi-tenant plan).
+        # These two tables are additive only in this phase — nothing else
+        # reads/writes them yet, so this is a no-op for the existing
+        # single-operator deployment. org_id columns land on the data
+        # tables in Phase 2, once login (Phase 1) exists to supply one.
+        # ---------------------------------------------------------------
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS organizations (
+                org_id     TEXT PRIMARY KEY,
+                name       TEXT NOT NULL,
+                plan       TEXT NOT NULL DEFAULT 'trial',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                user_id       TEXT PRIMARY KEY,
+                org_id        TEXT NOT NULL,
+                email         TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
+                role          TEXT NOT NULL DEFAULT 'analyst'
+                              CHECK (role IN ('admin', 'analyst', 'viewer')),
+                is_active     INTEGER NOT NULL DEFAULT 1,
+                created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_login_at TIMESTAMP
+            )
+        """)
+        # Legacy/default org — gives every pre-existing row (and Phase 2's
+        # org_id backfill) a home without forcing an immediate data migration.
+        conn.execute(
+            "INSERT OR IGNORE INTO organizations (org_id, name, plan) "
+            "VALUES ('default', 'Legacy Operator', 'legacy')"
+        )
+
         conn.commit()
     _DB_INITIALIZED = True
 
