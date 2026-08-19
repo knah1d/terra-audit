@@ -220,13 +220,133 @@ def initialize_database():
             except Exception:
                 pass
 
-        # SQLite can't redefine a PRIMARY KEY via ALTER TABLE, so field_id
-        # stays the legacy PK for backward compatibility, but this unique
-        # index is the real going-forward invariant: field IDs only need
-        # to be unique per org, not globally.
+        # CORRECTION: a supplementary UNIQUE INDEX on (org_id, field_id) is
+        # NOT sufficient — SQLite still enforces each table's original
+        # PRIMARY KEY (field_id alone, or field_id+scenario, etc.)
+        # independently, so a second org registering the same field_id
+        # raised "UNIQUE constraint failed" at the DB level regardless of
+        # any index added on top. ALTER TABLE can't redefine a PRIMARY KEY
+        # in SQLite, so this rebuilds each affected table (standard SQLite
+        # create-new/copy/drop-old/rename pattern) with org_id folded into
+        # the real PK. Guarded by checking whether org_id is already part
+        # of the PK, so this only runs once per DB.
+        _PK_REBUILDS = {
+            "fields": (
+                """
+                CREATE TABLE fields (
+                    org_id           TEXT NOT NULL DEFAULT 'default',
+                    field_id         TEXT NOT NULL,
+                    name             TEXT NOT NULL,
+                    district         TEXT NOT NULL,
+                    geojson_geometry TEXT NOT NULL,
+                    area_ha          REAL,
+                    field_type       TEXT NOT NULL DEFAULT 'rice_awd',
+                    created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    alm_cumulative_delta_co2_wp REAL DEFAULT 0.0,
+                    PRIMARY KEY (org_id, field_id)
+                )
+                """,
+                "org_id, field_id, name, district, geojson_geometry, area_ha, "
+                "field_type, created_at, alm_cumulative_delta_co2_wp",
+            ),
+            "timeseries_cache": (
+                """
+                CREATE TABLE timeseries_cache (
+                    org_id           TEXT NOT NULL DEFAULT 'default',
+                    field_id         TEXT,
+                    observation_date TEXT,
+                    window_start     TEXT,
+                    window_end       TEXT,
+                    vv               REAL,
+                    vh               REAL,
+                    cross_ratio      REAL,
+                    rvi              REAL,
+                    PRIMARY KEY (org_id, field_id, observation_date, window_start, window_end)
+                )
+                """,
+                "org_id, field_id, observation_date, window_start, window_end, "
+                "vv, vh, cross_ratio, rvi",
+            ),
+            "alm_practice_schedule": (
+                """
+                CREATE TABLE alm_practice_schedule (
+                    org_id                  TEXT NOT NULL DEFAULT 'default',
+                    field_id                TEXT NOT NULL,
+                    scenario                TEXT NOT NULL CHECK (scenario IN ('baseline', 'project')),
+                    crop_type               TEXT,
+                    crop_rotation           INTEGER,
+                    cover_crops             INTEGER,
+                    intercropping           INTEGER,
+                    tillage                 INTEGER,
+                    tillage_depth_cm        REAL,
+                    residue_removed         INTEGER,
+                    residue_burned_kg_ha    REAL,
+                    synthetic_n_rate_kg_ha  REAL,
+                    organic_n_rate_kg_ha    REAL,
+                    n_fixing_species        INTEGER,
+                    n_fixing_dry_matter_kg_ha REAL,
+                    fuel_use_l_ha           REAL,
+                    crop_yield_t_ha         REAL,
+                    updated_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (org_id, field_id, scenario)
+                )
+                """,
+                "org_id, field_id, scenario, crop_type, crop_rotation, cover_crops, "
+                "intercropping, tillage, tillage_depth_cm, residue_removed, "
+                "residue_burned_kg_ha, synthetic_n_rate_kg_ha, organic_n_rate_kg_ha, "
+                "n_fixing_species, n_fixing_dry_matter_kg_ha, fuel_use_l_ha, "
+                "crop_yield_t_ha, updated_at",
+            ),
+            "alm_livestock_schedule": (
+                """
+                CREATE TABLE alm_livestock_schedule (
+                    org_id              TEXT NOT NULL DEFAULT 'default',
+                    field_id            TEXT NOT NULL,
+                    scenario            TEXT NOT NULL CHECK (scenario IN ('baseline', 'project')),
+                    livestock_type      TEXT NOT NULL,
+                    population_head     REAL NOT NULL,
+                    productivity_system TEXT NOT NULL CHECK (productivity_system IN ('high', 'low')),
+                    updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (org_id, field_id, scenario, livestock_type)
+                )
+                """,
+                "org_id, field_id, scenario, livestock_type, population_head, "
+                "productivity_system, updated_at",
+            ),
+            "soc_measurements": (
+                """
+                CREATE TABLE soc_measurements (
+                    org_id              TEXT NOT NULL DEFAULT 'default',
+                    field_id            TEXT NOT NULL,
+                    site_type           TEXT NOT NULL CHECK (site_type IN ('project', 'control')),
+                    timepoint           TEXT NOT NULL CHECK (timepoint IN ('t_start', 't_final')),
+                    sample_index        INTEGER NOT NULL,
+                    soc_value_tco2e_ha  REAL NOT NULL,
+                    measured_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (org_id, field_id, site_type, timepoint, sample_index)
+                )
+                """,
+                "org_id, field_id, site_type, timepoint, sample_index, "
+                "soc_value_tco2e_ha, measured_at",
+            ),
+        }
+        for _table, (_create_sql, _cols) in _PK_REBUILDS.items():
+            _pk_cols = [
+                r[1] for r in conn.execute(f"PRAGMA table_info({_table})").fetchall()
+                if r[5] > 0
+            ]
+            if "org_id" in _pk_cols:
+                continue  # already migrated
+            conn.execute(f"ALTER TABLE {_table} RENAME TO {_table}_old")
+            conn.execute(_create_sql)
+            conn.execute(f"INSERT INTO {_table} ({_cols}) SELECT {_cols} FROM {_table}_old")
+            conn.execute(f"DROP TABLE {_table}_old")
+
+        # credit_history doesn't need this treatment — its PK is a plain
+        # AUTOINCREMENT id, not a natural key built from field_id, so it was
+        # never at risk of the cross-org collision the tables above had.
         conn.execute(
-            "CREATE UNIQUE INDEX IF NOT EXISTS idx_fields_org_field "
-            "ON fields(org_id, field_id)"
+            "CREATE INDEX IF NOT EXISTS idx_fields_org ON fields(org_id)"
         )
         for _table in (
             "timeseries_cache", "alm_practice_schedule",
@@ -326,7 +446,7 @@ def save_alm_practice_schedule(org_id: str, field_id: str, scenario: str, practi
             f"""
             INSERT INTO alm_practice_schedule (org_id, field_id, scenario, {", ".join(cols)})
             VALUES (?, ?, ?, {", ".join("?" for _ in cols)})
-            ON CONFLICT (field_id, scenario) DO UPDATE SET
+            ON CONFLICT (org_id, field_id, scenario) DO UPDATE SET
                 {", ".join(f"{c} = excluded.{c}" for c in cols)},
                 updated_at = CURRENT_TIMESTAMP
             """,
