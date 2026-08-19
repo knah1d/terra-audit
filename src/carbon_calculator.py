@@ -102,8 +102,23 @@ class CarbonAssetEngine:
         VM0051 §8.2.3, Eq. 7 — SC_o = (1 + sum(ROA_a * CFOA_a))^0.59.
         amendments: iterable of (amendment_type, rate_t_ha) pairs; amendment_type
         keys into CFOA_TABLE.
+
+        Raises ValueError on an unrecognized amendment_type rather than
+        letting a bare KeyError escape — the API takes this value from a
+        request body, and an uncaught KeyError there surfaced as a 500
+        instead of a 4xx. Matches _preseason_scaling_factor's existing
+        ValueError contract, which callers already translate.
         """
-        total = sum(rate * self.CFOA_TABLE[amendment_type] for amendment_type, rate in amendments)
+        total = 0.0
+        for amendment_type, rate in amendments:
+            try:
+                cfoa = self.CFOA_TABLE[amendment_type]
+            except KeyError:
+                raise ValueError(
+                    f"Unknown amendment_type {amendment_type!r}. Must be one of "
+                    f"{sorted(self.CFOA_TABLE)}."
+                ) from None
+            total += rate * cfoa
         return (1 + total) ** 0.59
 
     def _n2o_irrigation_penalty(self, q_n_kg_per_ha: float, area_ha: float) -> float:

@@ -110,3 +110,41 @@ def test_malformed_carbon_body_is_422_not_500(client, auth_headers, rice_field):
                     json={"season_length_days": "not-a-number"},
                     headers=auth_headers["admin"])
     assert r.status_code == 422, f"expected 422, got {r.status_code}: {r.text}"
+
+
+# --- engine domain-validation errors were 500s --------------------------
+
+def test_unknown_amendment_type_is_422_not_500(client, auth_headers, rice_field):
+    """CFOA_TABLE[amendment_type] was a bare dict index over 5 keys, so a
+    bad value raised KeyError inside the engine and escaped as a 500. Only
+    the frontend <select> prevented it."""
+    r = client.post(f"/fields/{rice_field}/carbon-credits/preview", json={
+        "season_length_days": 120, "area_ha": 1.0, "awd_events": 2,
+        "q_n_kg_per_ha": 100.0, "preseason_category": "short",
+        "baseline_amendments": [["not_a_real_amendment", 5.0]],
+        "project_amendments": [["straw_shortly_before", 5.0]],
+    }, headers=auth_headers["admin"])
+    assert r.status_code == 422, f"got {r.status_code}: {r.text}"
+    assert "Unknown amendment_type" in r.text
+
+
+def test_unknown_preseason_category_is_422_not_500(client, auth_headers, rice_field):
+    r = client.post(f"/fields/{rice_field}/carbon-credits/preview", json={
+        "season_length_days": 120, "area_ha": 1.0, "awd_events": 2,
+        "q_n_kg_per_ha": 100.0, "preseason_category": "sideways",
+        "baseline_amendments": [["straw_shortly_before", 5.0]],
+        "project_amendments": [["straw_shortly_before", 5.0]],
+    }, headers=auth_headers["admin"])
+    assert r.status_code == 422, f"got {r.status_code}: {r.text}"
+
+
+def test_valid_amendment_types_still_calculate(client, auth_headers, rice_field):
+    """The ValueError->422 handler must not have swallowed the happy path."""
+    r = client.post(f"/fields/{rice_field}/carbon-credits/preview", json={
+        "season_length_days": 120, "area_ha": 1.0, "awd_events": 2,
+        "q_n_kg_per_ha": 100.0, "preseason_category": "short",
+        "baseline_amendments": [["straw_shortly_before", 5.0]],
+        "project_amendments": [["compost", 3.0]],
+    }, headers=auth_headers["admin"])
+    assert r.status_code == 200, r.text
+    assert r.json()["final_issuance"] >= 0
