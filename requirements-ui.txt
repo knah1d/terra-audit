@@ -1,0 +1,16 @@
+# Streamlit UI stack — needed only to run `streamlit run app.py`.
+#
+# Verified as used exclusively by app.py and src/ui_theme.py (and, for
+# streamlit itself, src/auth_streamlit.py). The FastAPI backend does not
+# import any of these; tests/backend/test_no_streamlit_in_api.py asserts
+# that boundary holds so this file can't quietly become mandatory again.
+#
+#   API only:  pip install -r requirements.txt
+#   Both:      pip install -r requirements.txt -r requirements-ui.txt
+
+-r requirements.txt
+
+streamlit>=1.35.0
+streamlit-folium>=0.16.0
+folium>=0.16.0
+plotly>=5.22.0
