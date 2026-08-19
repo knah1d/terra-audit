@@ -35,7 +35,7 @@ def render_preview_map(feature: dict, key: str, height: int = 400):
     st_folium(m, height=height, use_container_width=True, key=key, returned_objects=[])
 
 from src.database import (
-    get_db_connection, check_cache, save_cache, delete_field, update_field_info,
+    initialize_database, get_db_connection, check_cache, save_cache, delete_field, update_field_info,
     save_alm_practice_schedule, get_alm_practice_schedule,
     save_soc_measurements, get_soc_measurements, ALM_PRACTICE_COLUMNS,
     get_alm_cumulative_delta,
@@ -63,6 +63,15 @@ st.set_page_config(layout="wide", page_title="Terra Audit Platform")
 
 _theme_mode = get_theme_mode()
 inject_theme(_theme_mode)
+
+# Schema creation/migration. Called explicitly here rather than as an
+# import-time side effect of src.database (which is what it used to be):
+# importing a module should not create directories, open a connection and
+# run DDL, and doing so latched DATABASE_URL at first import — which is
+# why the test fixtures had to reset two private module globals by hand
+# to point at a temp database. Idempotent via its own guard, so the
+# backend's lifespan calling it too is fine.
+initialize_database()
 
 # ---------------------------------------------------------------------------
 # Auth gate — must come before init_modules()/any DB read below, so no
