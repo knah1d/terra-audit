@@ -79,6 +79,22 @@ async def _pydantic_validation_handler(request: Request, exc: PydanticValidation
     return JSONResponse(status_code=422, content={"detail": jsonable_encoder(exc.errors())})
 
 
+@app.exception_handler(ValueError)
+async def _value_error_handler(request: Request, exc: ValueError):
+    """The calculation engines validate their own domain inputs by raising
+    ValueError (unknown preseason_category, unknown amendment_type, ...).
+    Those values arrive in request bodies, so an unhandled ValueError meant
+    a client could provoke a 500 with a plausible-looking payload. They
+    are client errors, so: 422.
+
+    Registered after NonIssuableResultError's handler below has no effect
+    on dispatch order — FastAPI picks the most specific registered
+    exception class, so NonIssuableResultError (a ValueError subclass)
+    still gets its own handler.
+    """
+    return JSONResponse(status_code=422, content={"detail": str(exc)})
+
+
 @app.exception_handler(NonIssuableResultError)
 async def _non_issuable_handler(request: Request, exc: NonIssuableResultError):
     """Backstop for the issuance gate (src/issuance.py). Routers check
