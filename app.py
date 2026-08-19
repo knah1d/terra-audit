@@ -51,6 +51,7 @@ from src.ai.dataset_builder import build_dataset, save_dataset, load_dataset
 from src.ai.feature_engineering import build_features
 from src.ai.models import train_and_evaluate, save_model
 from src.ai import evaluate as ai_evaluate
+from src.auth import login_form, logout
 
 # ---------------------------------------------------------------------------
 # Page config
@@ -61,7 +62,20 @@ _theme_mode = get_theme_mode()
 inject_theme(_theme_mode)
 
 # ---------------------------------------------------------------------------
-# Module initialisation (cached for the lifetime of the Streamlit process)
+# Auth gate — must come before init_modules()/any DB read below, so no
+# GEE/DB work happens for an unauthenticated session (Phase 1 of the
+# multi-tenant plan; see .claude/plans/misty-growing-yao.md).
+# ---------------------------------------------------------------------------
+auth_user = login_form()
+if auth_user is None:
+    st.stop()
+org_id = auth_user["org_id"]
+
+# ---------------------------------------------------------------------------
+# Module initialisation (cached for the lifetime of the Streamlit process,
+# shared across every org — safe because SpatialDataEngine holds no
+# per-request state and every GEE call takes the field geometry as an
+# explicit per-call argument, not something cached on the engine itself).
 # Moved above the hero so the hero can show real engine status on first paint.
 # ---------------------------------------------------------------------------
 @st.cache_resource
@@ -209,6 +223,12 @@ field_display = {f["field_id"]: f for f in fields}
 # Sidebar — Field Selector or Registration Form
 # ---------------------------------------------------------------------------
 with st.sidebar:
+    st.caption(f"Signed in as {auth_user['email']} ({auth_user['role']})")
+    if st.button("Log out", use_container_width=True):
+        logout()
+        st.rerun()
+    st.markdown("---")
+
     pending_sidebar = st.session_state.get("pending_field_geom")
 
     if pending_sidebar:
