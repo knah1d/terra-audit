@@ -2,11 +2,12 @@ from typing import Any
 
 from pydantic import BaseModel
 
-# The two registry.py keys — kept as a plain tuple here rather than
-# importing src.field_types.registry.FIELD_TYPES at schema-definition
-# time, so this file has zero import-order dependency on the registry
-# being populated yet (see backend/main.py's lifespan).
-FIELD_TYPES = ("rice_awd", "cropland_alm_vm0042")
+# NOTE: field_type validation deliberately does NOT live here. Declaring
+# it as a Literal (or checking against a tuple copied from the registry)
+# would either duplicate the registry or depend on it being populated at
+# schema-definition time. backend/routers/fields.py validates against
+# src.field_types.registry.FIELD_TYPES at request time instead, so the
+# registry stays the single source of truth.
 
 
 class ParseContentRequest(BaseModel):

@@ -1122,6 +1122,32 @@ def get_job(org_id: str, job_id: str) -> dict | None:
     return result
 
 
+def list_completed_jobs(org_id: str, job_type: str) -> list[dict]:
+    """Completed jobs of one type for this org, most recently finished
+    first, each with its `result` already JSON-decoded.
+
+    Exists because both backend/routers/export.py and backend/routers/ai.py
+    had hand-written raw SQL for "latest completed job of type T" inside
+    the router (one of them with function-local imports), which put a
+    query in the HTTP layer and meant a third job type would be a third
+    copy. Callers still post-filter in Python on something inside the
+    result payload (field_id, model_name) — that stays caller-side because
+    the predicate differs per job type and the payload is opaque JSON.
+    """
+    with get_db_connection() as conn:
+        rows = conn.execute(
+            text("SELECT job_id, result_json FROM background_jobs "
+                 "WHERE org_id = :org_id AND job_type = :job_type AND status = 'done' "
+                 "ORDER BY finished_at DESC"),
+            {"org_id": org_id, "job_type": job_type},
+        ).mappings().fetchall()
+    return [
+        {"job_id": r["job_id"],
+         "result": json.loads(r["result_json"]) if r["result_json"] else None}
+        for r in rows
+    ]
+
+
 def upsert_pending_registration(
     registration_id: str, email: str, org_name: str, password_hash: str, otp_hash: str,
     expires_at: str, resend_cooldown_seconds: int, max_attempts: int,

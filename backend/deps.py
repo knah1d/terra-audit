@@ -9,6 +9,8 @@ from fastapi.security import OAuth2PasswordBearer
 from backend.config import JWT_SECRET
 from backend.security import decode_access_token
 from src.auth import require_role as _require_role
+from src.database import get_field
+from src.field_types.registry import field_uses_sar
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
@@ -52,6 +54,56 @@ def require_roles(*allowed: str):
 
 require_writer = require_roles("admin", "analyst")
 require_admin = require_roles("admin")
+
+
+def get_owned_field(expect_type: str | None = None, require_sar: bool = False):
+    """Loads the path's {field_id} scoped to the caller's org, 404ing if it
+    doesn't exist or belongs to another tenant.
+
+    Replaces a `_require_field` helper that was defined identically in
+    three routers and inlined in two more (16 call sites), so the
+    load-or-404 preamble now exists once.
+
+    `expect_type` / `require_sar` close two real holes the per-router
+    copies left open, because they only ever checked existence and
+    ownership — never that the field was the *kind* of field the endpoint
+    is for:
+      - the ALM practice/livestock/SOC endpoints would happily write ALM
+        rows onto a rice field
+      - POST /fields/{id}/signal-runs ran the rice SAR detector against
+        cropland_alm_vm0042 fields, which have no timeseries at all
+        (app.py has always guarded this via field_uses_sar; the API
+        dropped the guard)
+    Mismatches are 422, not 404: the field genuinely exists and the
+    caller may read it, the *request* is what's wrong.
+    """
+    def _dependency(field_id: str, user: dict = Depends(get_current_user)) -> dict:
+        field = get_field(user["org_id"], field_id)
+        if field is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Field not found")
+
+        field_type = field["field_type"]
+        if expect_type is not None and field_type != expect_type:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                f"Field '{field_id}' is of type '{field_type}'; this endpoint "
+                f"requires '{expect_type}'.",
+            )
+        if require_sar:
+            try:
+                uses_sar = field_uses_sar(field_type)
+            except KeyError as exc:
+                raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc))
+            if not uses_sar:
+                raise HTTPException(
+                    status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    f"Field type '{field_type}' is not satellite-driven — it has "
+                    "no Sentinel-1 timeseries to analyze. Enter its practice and "
+                    "soil data instead.",
+                )
+        return field
+
+    return _dependency
 
 
 def get_spatial_engine(request: Request):

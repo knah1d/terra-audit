@@ -3,10 +3,10 @@ import datetime
 import pandas as pd
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status
 
-from backend.deps import get_current_user, get_spatial_engine
+from backend.deps import get_current_user, get_owned_field, get_spatial_engine
 from backend.schemas.signal import JobStatusOut, SignalRunAccepted, SignalResult, SignalRunRequest
 from src.ai.predictor import predict_awd_states
-from src.database import check_cache, get_field, get_job, save_cache
+from src.database import check_cache, get_job, save_cache
 from src.database import create_job, mark_job_done, mark_job_error, mark_job_running
 from src.threshold_gate import AdaptiveAWDGate
 
@@ -98,12 +98,14 @@ def _run_signal_job(job_id: str, org_id: str, field_id: str, field: dict, req: S
 def submit_signal_run(
     field_id: str, body: SignalRunRequest, background_tasks: BackgroundTasks,
     response: Response,
-    user: dict = Depends(get_current_user), engine=Depends(get_spatial_engine),
+    user: dict = Depends(get_current_user),
+    # require_sar rejects cropland_alm_vm0042 (and any future non-satellite
+    # field type) with a 422 instead of silently running the rice AWD
+    # detector against a field that has no timeseries.
+    field: dict = Depends(get_owned_field(require_sar=True)),
+    engine=Depends(get_spatial_engine),
 ):
     org_id = user["org_id"]
-    field = get_field(org_id, field_id)
-    if field is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Field not found")
 
     if not body.force_refresh:
         df_processed = check_cache(org_id, field_id, body.window_start, body.window_end)
