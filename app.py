@@ -71,6 +71,31 @@ if auth_user is None:
     st.stop()
 org_id = auth_user["org_id"]
 
+# Every session_state key that's derived from a specific field's data — used
+# both when a field is deleted (its cached results must not survive) and on
+# logout (Phase 3 of the multi-tenant plan): without clearing these, a
+# different user logging into the same browser tab could see the previous
+# session's stale per-field figures rendered as if freshly computed for
+# their own field, since several of these (carbon_ready et al.) are read
+# back with only a soft "if present" check, not a hard field-id match.
+SESSION_KEYS_TO_CLEAR_ON_FIELD_CHANGE = [
+    "signal_df", "signal_field_id", "signal_cache_source",
+    "signal_total_awd", "signal_sowing_date", "signal_harvest_date",
+    "signal_season_length", "signal_from_phenology",
+    "signal_detector_used", "signal_model_fallback_msg", "signal_last_run_at",
+    "carbon_ready", "carbon_field_id", "carbon_total_awd",
+    "carbon_season_length", "carbon_area_ha", "season_from_phenology",
+    "export_df", "export_cr", "export_sowing", "export_harvest",
+    "export_window_start", "export_window_end", "export_season_label",
+    "export_field_id", "export_field_name", "export_district",
+    "export_area_ha", "export_n_obs", "export_vv_mean", "export_vv_std",
+    "export_awd_dates", "export_from_phenology", "export_carbon_area",
+    "export_carbon_awd", "export_carbon_season", "export_q_n",
+    "alm_data_field_id", "alm_practice_schedule", "alm_soc_measurements",
+    "alm_area_ha", "alm_livestock_schedule", "alm_carbon_ready",
+    "validation_results",
+]
+
 # ---------------------------------------------------------------------------
 # Module initialisation (cached for the lifetime of the Streamlit process,
 # shared across every org — safe because SpatialDataEngine holds no
@@ -230,6 +255,8 @@ with st.sidebar:
     st.caption(f"Signed in as {auth_user['email']} ({auth_user['role']})")
     if st.button("Log out", use_container_width=True):
         logout()
+        for _k in SESSION_KEYS_TO_CLEAR_ON_FIELD_CHANGE:
+            st.session_state.pop(_k, None)
         st.rerun()
     st.markdown("---")
 
@@ -374,16 +401,7 @@ with st.sidebar:
             _col_yes, _col_no = st.columns(2)
             if _col_yes.button("Yes, delete", type="primary", use_container_width=True):
                 delete_field(org_id, selected_id)
-                for _k in [
-                    "signal_df", "signal_field_id", "signal_cache_source",
-                    "signal_total_awd", "signal_sowing_date", "signal_harvest_date",
-                    "signal_season_length", "signal_from_phenology",
-                    "carbon_ready", "carbon_total_awd", "carbon_season_length",
-                    "carbon_area_ha", "season_from_phenology",
-                    "export_df", "export_cr", _confirm_key,
-                    "alm_data_field_id", "alm_practice_schedule", "alm_soc_measurements",
-                    "alm_area_ha", "alm_livestock_schedule", "alm_carbon_ready",
-                ]:
+                for _k in [*SESSION_KEYS_TO_CLEAR_ON_FIELD_CHANGE, _confirm_key]:
                     st.session_state.pop(_k, None)
                 st.session_state["map_version"] = st.session_state.get("map_version", 0) + 1
                 st.rerun()
@@ -745,6 +763,7 @@ def render_signal_analytics_tab():
             st.session_state["signal_model_fallback_msg"] = model_fallback_msg
 
             st.session_state["carbon_ready"]          = True
+            st.session_state["carbon_field_id"]       = selected_id
             st.session_state["carbon_total_awd"]      = total_awd
             st.session_state["carbon_season_length"]  = season_length_val
             st.session_state["carbon_area_ha"]        = field_area_ha
@@ -1250,12 +1269,19 @@ def render_carbon_tab_rice_awd():
     )
     st.markdown("---")
 
-    default_season  = int(st.session_state.get("carbon_season_length", 120))
-    default_awd     = int(st.session_state.get("carbon_total_awd", 0))
-    default_area    = float(st.session_state.get("carbon_area_ha", 1.0))
-    from_phenology  = st.session_state.get("season_from_phenology", False)
+    # Gate every carbon_* read behind carbon_field_id matching the currently
+    # selected field — otherwise a stale result from a previously selected
+    # field (or, once multiple tenants can share a browser tab, a previous
+    # user's session) would silently render as this field's/this user's own
+    # figures. Mirrors how signal_field_id already gates the Signal
+    # Analytics tab's own session-state reads (see app.py:785-787).
+    _carbon_valid   = st.session_state.get("carbon_field_id") == selected_id
+    default_season  = int(st.session_state.get("carbon_season_length", 120)) if _carbon_valid else 120
+    default_awd     = int(st.session_state.get("carbon_total_awd", 0)) if _carbon_valid else 0
+    default_area    = float(st.session_state.get("carbon_area_ha", 1.0)) if _carbon_valid else 1.0
+    from_phenology  = st.session_state.get("season_from_phenology", False) if _carbon_valid else False
 
-    if not from_phenology and st.session_state.get("carbon_ready"):
+    if not from_phenology and _carbon_valid and st.session_state.get("carbon_ready"):
         st.warning(
             "⚠️ Season length was not detected from phenology — "
             f"the value **{default_season} days** is a fallback estimate. "
@@ -1330,7 +1356,7 @@ def render_carbon_tab_rice_awd():
 
     run_carbon = st.button("⚡ Calculate Carbon Credits", type="primary")
 
-    if run_carbon or st.session_state.get("carbon_ready"):
+    if run_carbon or (_carbon_valid and st.session_state.get("carbon_ready")):
         cr = carbon_engine.calculate_credits(
             awd_events=carbon_awd,
             season_length_days=carbon_season,
