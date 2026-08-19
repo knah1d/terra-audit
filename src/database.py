@@ -7,6 +7,8 @@ from pathlib import Path
 import pandas as pd
 from sqlalchemy import create_engine, text
 
+from src.issuance import NonIssuableResultError, result_is_issuable
+
 DB_PATH = Path(__file__).parent.parent / "data" / "project_store.db"
 _DB_INITIALIZED = False
 _ENGINE = None
@@ -993,10 +995,22 @@ def commit_carbon_credit_result(
     twice: a single browser tab (today's only client) never raced this;
     multiple people hitting the API concurrently can.
 
-    Returns {"final_issuance": ..., "already_committed": bool} — the
-    caller (backend/routers/carbon.py) uses `already_committed` to decide
-    whether to return 200 (idempotent replay) vs 201 (new commit).
+    Returns {"final_issuance": ..., "already_committed": bool}.
+
+    Refuses to persist a result that its methodology has blocked from
+    issuance (raises NonIssuableResultError). This guard lives here, at
+    the single write path, rather than in each caller — the two clients
+    previously each implemented "gate then persist" and app.py had them
+    in the wrong order, so blocked calculations were still recorded as
+    issuance rows. See src/issuance.py.
     """
+    issuable, block_reason = result_is_issuable(result)
+    if not issuable:
+        raise NonIssuableResultError(
+            f"refusing to persist a non-issuable calculation for field "
+            f"{field_id!r}: {block_reason}"
+        )
+
     with get_db_connection() as conn:
         existing = conn.execute(
             text("SELECT credit_history_id FROM commit_idempotency_keys "

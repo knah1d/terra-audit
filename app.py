@@ -3,6 +3,7 @@ os.environ["USE_FOLIUM"] = "1"
 
 import datetime
 import json
+import uuid
 
 import pandas as pd
 import streamlit as st
@@ -37,9 +38,9 @@ from src.database import (
     get_db_connection, check_cache, save_cache, delete_field, update_field_info,
     save_alm_practice_schedule, get_alm_practice_schedule,
     save_soc_measurements, get_soc_measurements, ALM_PRACTICE_COLUMNS,
-    get_alm_cumulative_delta, update_alm_cumulative_delta,
+    get_alm_cumulative_delta,
     save_alm_livestock_schedule, get_alm_livestock_schedule,
-    save_credit_history, get_credit_history, get_portfolio_summary,
+    commit_carbon_credit_result, get_credit_history, get_portfolio_summary,
 )
 from src.data_engine import SpatialDataEngine
 from src.field_types import build_detector, build_methodology, field_uses_sar
@@ -1400,24 +1401,36 @@ def render_carbon_tab_rice_awd():
         st.session_state["export_carbon_season"] = carbon_season
         st.session_state["export_carbon_awd"]    = carbon_awd
 
-        # A viewer can still trigger the (read-only, no side effects)
-        # calculation above and see the result — only persisting it to
-        # credit_history is an actual write, so only that is role-gated.
-        if run_carbon and _can_write():
-            save_credit_history(org_id, selected_id, "rice_awd", {
-                "season_length_days": carbon_season,
-                "area_ha": carbon_area,
-                "awd_events": carbon_awd,
-                "q_n_kg_per_ha": q_n_kg_per_ha,
-            }, cr)
-
         st.markdown("---")
 
+        # The QA3 gate MUST be checked before persisting. This used to write
+        # credit_history first and only then block, so a project failing the
+        # §8.6.3 project-size gate still left an issuance record behind —
+        # exactly the rows an auditor would treat as issued credits. The API
+        # path (backend/routers/carbon.py) always gated first; this is the
+        # Streamlit side catching up so both clients agree on what gets
+        # persisted.
         if not cr.get("qa3_pathway_valid", True):
             st.error(
                 "🚫 **QA3 pathway not valid for this project.** " + cr["qa3_block_reason"]
             )
             st.stop()
+
+        # A viewer can still trigger the (read-only, no side effects)
+        # calculation above and see the result — only persisting it to
+        # credit_history is an actual write, so only that is role-gated.
+        # A fresh idempotency key per click matches what the Next.js client
+        # sends (crypto.randomUUID()), so "one row per calculation" semantics
+        # are identical across both clients.
+        if run_carbon and _can_write():
+            commit_carbon_credit_result(
+                org_id, selected_id, uuid.uuid4().hex, "rice_awd", {
+                    "season_length_days": carbon_season,
+                    "area_ha": carbon_area,
+                    "awd_events": carbon_awd,
+                    "q_n_kg_per_ha": q_n_kg_per_ha,
+                }, cr,
+            )
 
         # Summary metrics
         m1, m2, m3, m4 = st.columns(4)
@@ -1727,13 +1740,20 @@ def render_carbon_tab_alm():
         # Same viewer carve-out as the rice path: viewing a live calculation
         # is read-only; persisting it (cumulative delta + credit_history) is
         # the actual write and is what gets role-gated.
+        # commit_carbon_credit_result does both writes in ONE transaction —
+        # previously these were two separate calls/commits, so a crash
+        # between them could bump the cumulative SOC delta without recording
+        # the run that caused it (or vice versa). The API already used the
+        # atomic path; this brings both clients onto it.
         if run_carbon and _can_write():
-            update_alm_cumulative_delta(org_id, selected_id, cr["cumulative_delta_co2_wp"])
-            save_credit_history(org_id, selected_id, "cropland_alm_vm0042", {
-                "area_ha": carbon_area,
-                "verification_years": verification_years,
-                "non_permanence_risk_pct": non_permanence_risk_pct,
-            }, cr)
+            commit_carbon_credit_result(
+                org_id, selected_id, uuid.uuid4().hex, "cropland_alm_vm0042", {
+                    "area_ha": carbon_area,
+                    "verification_years": verification_years,
+                    "non_permanence_risk_pct": non_permanence_risk_pct,
+                }, cr,
+                new_cumulative_delta=cr["cumulative_delta_co2_wp"],
+            )
         st.session_state["alm_carbon_ready"] = True
 
         if cr["production_decline_leakage_data_available"]:
