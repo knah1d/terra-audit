@@ -31,9 +31,8 @@ from backend.routers import ai, alm, auth, carbon, export, fields, portfolio, re
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # initialize_database() already ran at src.database import time and is
-    # idempotent (_DB_INITIALIZED guard) — calling it again here is a
-    # documented no-op, not redundant defensive code.
+    # src.database no longer initializes itself on import, so this is the
+    # API's real schema-creation point (idempotent via its own guard).
     initialize_database()
 
     from src.data_engine import SpatialDataEngine

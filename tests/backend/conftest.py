@@ -21,10 +21,17 @@ from fastapi.testclient import TestClient
 
 @pytest.fixture()
 def isolated_db(tmp_path, monkeypatch):
-    """Points src.database at a fresh temp SQLite file for the duration
-    of one test, then restores the module's engine singleton afterward
-    so other test files (or a later backend test) aren't left pointed at
-    a now-deleted temp file."""
+    """Points src.database at a fresh temp SQLite file for the duration of
+    one test, then restores the module's engine singleton afterward so
+    other test files aren't left pointed at a now-deleted temp file.
+
+    The engine is still a module-level singleton created on first use, so
+    it has to be reset for a new DATABASE_URL to take effect. What this
+    no longer has to work around is src.database running initialize_database()
+    as an import-time side effect — the engine used to be built (and DDL
+    run against the developer's real project_store.db) simply by importing
+    the module, before any fixture could redirect it.
+    """
     import src.database as db
 
     db_path = tmp_path / "test.db"

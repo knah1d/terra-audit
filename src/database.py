@@ -1297,6 +1297,3 @@ def verify_and_create_org(registration_id: str, org_id: str, user_id: str) -> di
         )
         conn.commit()
     return {"user_id": user_id, "org_id": org_id, "email": row["email"], "role": "admin"}
-
-
-initialize_database()

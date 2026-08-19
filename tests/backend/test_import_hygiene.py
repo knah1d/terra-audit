@@ -1,5 +1,6 @@
 """
-Boundary test: the FastAPI app must not pull in Streamlit.
+Import-hygiene boundary tests: importing this codebase's modules must not
+drag in a UI framework, and must not touch the filesystem or database.
 
 `src/auth.py` used to have `import streamlit as st` at module scope for
 four session/form helpers, and three backend modules import from it
@@ -55,3 +56,30 @@ def test_the_streamlit_helpers_are_still_importable():
         from src.auth_streamlit import SESSION_KEY, current_user, login_form, logout  # noqa: F401
         print(SESSION_KEY)
     """) == "auth_user"
+
+
+# --- import-time side effects -------------------------------------------
+
+def test_importing_src_database_does_not_build_an_engine_or_run_ddl():
+    """src/database.py used to call initialize_database() at module scope,
+    so merely importing it created the data/ directory, opened a
+    connection, and ran the full DDL + ALTER TABLE migration replay — and
+    latched DATABASE_URL at first import, which is why the test fixtures
+    had to reset two private globals by hand to redirect at a temp file.
+    Any test that forgot the fixture wrote DDL to the developer's real
+    project_store.db."""
+    assert _probe("""
+        import src.database as db
+        print(db._ENGINE is None and db._DB_INITIALIZED is False)
+    """) == "True"
+
+
+def test_importing_the_api_does_not_run_ddl_before_lifespan():
+    """The schema is created in backend/main.py's lifespan, not at import.
+    Importing the module to inspect routes (or for `openapi.json`
+    generation) must not require a writable database."""
+    assert _probe("""
+        import backend.main  # noqa: F401
+        import src.database as db
+        print(db._DB_INITIALIZED is False)
+    """) == "True"
