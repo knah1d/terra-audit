@@ -26,7 +26,7 @@ import src.field_types  # noqa: F401
 from src.database import initialize_database
 from src.issuance import NonIssuableResultError
 
-from backend.routers import ai, alm, auth, carbon, export, fields, portfolio, registration, signal
+from backend.routers import ai, alm, auth, carbon, export, fields, portfolio, registration, signal, team
 
 
 @asynccontextmanager
@@ -61,7 +61,7 @@ app.add_middleware(
 )
 
 for router in (auth.router, registration.router, fields.router, alm.router, carbon.router,
-               signal.router, ai.router, portfolio.router, export.router):
+               signal.router, ai.router, portfolio.router, export.router, team.router):
     app.include_router(router)
 
 
