@@ -1,6 +1,6 @@
 "use client";
 
-import { FolderKanban, Plus } from "lucide-react";
+import { BrainCircuit, FolderKanban, LayoutGrid, Plus, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LogoutButton } from "@/components/fields/LogoutButton";
@@ -10,15 +10,22 @@ import type { SessionClaims } from "@/lib/session";
 const NAV_ITEMS = [
   { href: "/fields", label: "Fields", icon: FolderKanban, exact: false },
   { href: "/fields/new", label: "Register a field", icon: Plus, exact: true },
+  { href: "/portfolio", label: "Portfolio", icon: LayoutGrid, exact: false },
+  { href: "/ai-validation", label: "AI Validation", icon: BrainCircuit, exact: false },
+];
+
+const ADMIN_NAV_ITEMS = [
+  { href: "/team", label: "Team", icon: Users, exact: false },
 ];
 
 export function SidebarNav({ session }: { session: SessionClaims | null }) {
   const pathname = usePathname();
+  const items = session?.role === "admin" ? [...NAV_ITEMS, ...ADMIN_NAV_ITEMS] : NAV_ITEMS;
 
   return (
     <>
       <nav className="flex flex-col gap-0.5 text-sm">
-        {NAV_ITEMS.map(({ href, label, icon: Icon, exact }) => {
+        {items.map(({ href, label, icon: Icon, exact }) => {
           const active = exact ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
           return (
             <Link

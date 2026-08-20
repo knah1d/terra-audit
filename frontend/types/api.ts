@@ -79,3 +79,133 @@ export interface CompletenessOut {
 export interface ApiError {
   detail: string;
 }
+
+// --- Signal Analytics (mirrors backend/schemas/signal.py) --------------
+
+export type SignalDetector = "threshold" | "random_forest" | "xgboost";
+
+export interface SignalRunRequest {
+  window_start: string;
+  window_end: string;
+  detector: SignalDetector;
+  force_refresh: boolean;
+}
+
+export interface SignalResult {
+  field_id: string;
+  cache_source: string;
+  total_awd: number;
+  sowing_date: string;
+  harvest_date: string;
+  season_length_days: number;
+  from_phenology: boolean;
+  detector_used: string;
+  model_fallback_msg: string | null;
+  n_observations: number;
+  vv_mean: number;
+  vv_std: number;
+  awd_dates: string[];
+  window_start: string;
+  window_end: string;
+  area_ha: number;
+  timeseries: Array<Record<string, unknown>>;
+}
+
+export interface JobStatusOut {
+  job_id: string;
+  job_type: string;
+  status: "pending" | "running" | "done" | "error";
+  result: Record<string, unknown> | null;
+  error: string | null;
+  created_at: string | null;
+  finished_at: string | null;
+}
+
+export interface SignalRunAccepted {
+  job_id: string;
+}
+
+// --- Livestock schedule (mirrors backend/schemas/alm.py) ---------------
+
+export type LivestockScenario = "baseline" | "project";
+export type ProductivitySystem = "low" | "high";
+
+export interface LivestockEntry {
+  livestock_type: string;
+  population_head: number;
+  productivity_system: ProductivitySystem;
+}
+
+export interface LivestockScheduleOut {
+  baseline: LivestockEntry[];
+  project: LivestockEntry[];
+}
+
+// --- Portfolio (mirrors src/database.py's get_portfolio_summary dict) --
+
+export interface PortfolioEntry {
+  field_id: string;
+  name: string;
+  district: string;
+  field_type: FieldType;
+  area_ha: number | null;
+  final_issuance: number | null;
+  calculated_at: string | null;
+}
+
+// --- AI Validation (mirrors src/ai/evaluate.py's shapes) ---------------
+
+export interface AiDatasetBuildResult {
+  row_count: number;
+  field_window_groups: number;
+  label_counts: Record<string, number>;
+}
+
+export interface AiDatasetInfo {
+  row_count: number;
+  columns: string[];
+}
+
+export interface AiTrainAccepted {
+  job_id: string;
+}
+
+export interface AiPerClassMetric {
+  precision: number;
+  recall: number;
+  f1: number;
+  support: number;
+}
+
+export interface AiTrainSummary {
+  model_name: string;
+  k_used: number;
+  stratified: boolean;
+  threshold_agreement_score: number;
+  macro_avg: { precision: number; recall: number; f1: number };
+  per_class: Record<string, AiPerClassMetric>;
+  confusion_matrix: { labels: string[]; matrix: number[][] };
+}
+
+export type AiFeatureImportance = Record<string, number>;
+
+export type AiRocCurveData = Record<string, { fpr: number[]; tpr: number[]; auc: number | null }>;
+
+export interface AiTrainResult {
+  summary: AiTrainSummary;
+  feature_importance: AiFeatureImportance;
+  roc_curve: AiRocCurveData;
+}
+
+// --- Team management (mirrors backend/schemas/team.py) -----------------
+
+export type UserRole = "admin" | "analyst" | "viewer";
+
+export interface TeamUserOut {
+  user_id: string;
+  email: string;
+  role: UserRole;
+  is_active: boolean;
+  created_at: string;
+  last_login_at: string | null;
+}

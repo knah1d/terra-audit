@@ -5,14 +5,23 @@ import { useState } from "react";
 import { useFieldContext } from "@/components/fields/FieldContext";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { FieldLabel, TextArea, TextInput } from "@/components/ui/Field";
+import { FieldLabel, Select, TextArea, TextInput } from "@/components/ui/Field";
 import { IconTile } from "@/components/ui/IconTile";
 import { RoleGate } from "@/components/ui/RoleGate";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Switch } from "@/components/ui/Switch";
-import { usePracticeSchedule, useSocMeasurements } from "@/hooks/use-alm";
-import { useSavePracticeSchedule, useSaveSocMeasurements } from "@/hooks/use-practice-form";
-import type { PracticeScheduleEntry } from "@/types/api";
+import { usePracticeSchedule, useLivestockSchedule, useSocMeasurements } from "@/hooks/use-alm";
+import { useSavePracticeSchedule, useSaveLivestockSchedule, useSaveSocMeasurements } from "@/hooks/use-practice-form";
+import type { LivestockEntry, PracticeScheduleEntry, ProductivitySystem } from "@/types/api";
+
+const LIVESTOCK_TYPE_LABELS: Record<string, string> = {
+  cattle_dairy: "Dairy cattle",
+  cattle_nondairy: "Non-dairy cattle",
+  buffalo: "Buffalo",
+  sheep: "Sheep",
+  goat: "Goats",
+};
+const LIVESTOCK_TYPES = Object.keys(LIVESTOCK_TYPE_LABELS);
 
 const EMPTY_PRACTICE: PracticeScheduleEntry = {
   crop_type: "", crop_rotation: false, cover_crops: false, intercropping: false,
@@ -84,6 +93,85 @@ function PracticeScenarioForm({
       </div>
       <RoleGate allow={["admin", "analyst"]}>
         <Button className="mt-4" variant="secondary" size="sm" icon={Save} loading={save.isPending} onClick={() => save.mutate({ scenario, practices: values })}>
+          Save
+        </Button>
+      </RoleGate>
+    </Card>
+  );
+}
+
+function LivestockScenarioForm({
+  fieldId,
+  scenario,
+  initial,
+}: {
+  fieldId: string;
+  scenario: "baseline" | "project";
+  initial: LivestockEntry[];
+}) {
+  // Populations keyed by livestock_type, defaulting every type to 0/low —
+  // matches app.py's _alm_practice_form, which renders all 5 types
+  // unconditionally and only persists the ones with population > 0.
+  const [hasLivestock, setHasLivestock] = useState(initial.length > 0);
+  const [rows, setRows] = useState<Record<string, { population: number; productivity: ProductivitySystem }>>(() => {
+    const base = Object.fromEntries(
+      LIVESTOCK_TYPES.map((t) => [t, { population: 0, productivity: "low" as ProductivitySystem }]),
+    );
+    for (const e of initial) base[e.livestock_type] = { population: e.population_head, productivity: e.productivity_system };
+    return base;
+  });
+  const save = useSaveLivestockSchedule(fieldId);
+
+  function setRow(type: string, patch: Partial<{ population: number; productivity: ProductivitySystem }>) {
+    setRows((r) => ({ ...r, [type]: { ...r[type], ...patch } }));
+  }
+
+  function handleSave() {
+    const entries: LivestockEntry[] = LIVESTOCK_TYPES
+      .filter((t) => hasLivestock && rows[t].population > 0)
+      .map((t) => ({
+        livestock_type: t,
+        population_head: rows[t].population,
+        productivity_system: rows[t].productivity,
+      }));
+    save.mutate({ scenario, entries });
+  }
+
+  return (
+    <Card>
+      <h3 className="mb-3 font-medium capitalize text-text-primary">{scenario} scenario — livestock</h3>
+      <Switch checked={hasLivestock} onChange={setHasLivestock} label="Integrated crop-livestock system (pasture-based grazing)" />
+      {hasLivestock && (
+        <div className="mt-4 flex flex-col gap-3">
+          {LIVESTOCK_TYPES.map((type) => (
+            <div key={type} className="grid grid-cols-[1fr_auto_auto] items-end gap-3">
+              <div>
+                <FieldLabel>{LIVESTOCK_TYPE_LABELS[type]}</FieldLabel>
+                <TextInput
+                  type="number"
+                  min={0}
+                  max={500}
+                  value={rows[type].population}
+                  onChange={(e) => setRow(type, { population: Number(e.target.value) })}
+                />
+              </div>
+              <div>
+                <FieldLabel>Productivity</FieldLabel>
+                <Select
+                  disabled={rows[type].population <= 0}
+                  value={rows[type].productivity}
+                  onChange={(e) => setRow(type, { productivity: e.target.value as ProductivitySystem })}
+                >
+                  <option value="low">Low</option>
+                  <option value="high">High</option>
+                </Select>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      <RoleGate allow={["admin", "analyst"]}>
+        <Button className="mt-4" variant="secondary" size="sm" icon={Save} loading={save.isPending} onClick={handleSave}>
           Save
         </Button>
       </RoleGate>
@@ -170,6 +258,7 @@ function SocMeasurementsFormBody({
 export default function PracticeDataPage() {
   const field = useFieldContext();
   const { data: schedule, isLoading } = usePracticeSchedule(field.field_id);
+  const { data: livestock, isLoading: livestockLoading } = useLivestockSchedule(field.field_id);
 
   return (
     <div className="flex flex-col gap-6">
@@ -186,6 +275,17 @@ export default function PracticeDataPage() {
         <div className="grid grid-cols-2 gap-4">
           <PracticeScenarioForm fieldId={field.field_id} scenario="baseline" initial={schedule?.baseline ?? null} />
           <PracticeScenarioForm fieldId={field.field_id} scenario="project" initial={schedule?.project ?? null} />
+        </div>
+      )}
+      {livestockLoading ? (
+        <div className="grid grid-cols-2 gap-4">
+          <Skeleton className="h-40" />
+          <Skeleton className="h-40" />
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-4">
+          <LivestockScenarioForm fieldId={field.field_id} scenario="baseline" initial={livestock?.baseline ?? []} />
+          <LivestockScenarioForm fieldId={field.field_id} scenario="project" initial={livestock?.project ?? []} />
         </div>
       )}
       <SocMeasurementsForm fieldId={field.field_id} />

@@ -1,6 +1,6 @@
 "use client";
 
-import { FlaskConical, Pencil, Wallet } from "lucide-react";
+import { FlaskConical, Pencil, Satellite, Wallet } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -23,6 +23,9 @@ export function FieldTabs({ fieldId, fieldType }: { fieldId: string; fieldType: 
   const [pillStyle, setPillStyle] = useState<{ left: number; width: number } | null>(null);
 
   const options = [
+    ...(fieldType === "rice_awd"
+      ? [{ href: `/fields/${fieldId}/signal-analytics`, label: "Signal Analytics", icon: Satellite }]
+      : []),
     { href: `/fields/${fieldId}/ledger`, label: "Carbon Asset Ledger", icon: Wallet },
     ...(fieldType === "cropland_alm_vm0042"
       ? [{ href: `/fields/${fieldId}/practice-data`, label: "Practice & Soil Data", icon: FlaskConical }]

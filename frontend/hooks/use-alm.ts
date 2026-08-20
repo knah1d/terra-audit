@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
-import type { CompletenessOut, PracticeScheduleOut } from "@/types/api";
+import type { CompletenessOut, LivestockScheduleOut, PracticeScheduleOut } from "@/types/api";
 
 interface SocMeasurementsOut {
   project_t_start: number[];
@@ -29,5 +29,12 @@ export function useAlmCompleteness(fieldId: string) {
   return useQuery({
     queryKey: ["alm-completeness", fieldId],
     queryFn: () => apiFetch<CompletenessOut>(`/fields/${fieldId}/completeness`),
+  });
+}
+
+export function useLivestockSchedule(fieldId: string) {
+  return useQuery({
+    queryKey: ["alm-livestock", fieldId],
+    queryFn: () => apiFetch<LivestockScheduleOut>(`/fields/${fieldId}/livestock`),
   });
 }

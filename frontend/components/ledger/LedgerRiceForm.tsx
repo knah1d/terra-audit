@@ -6,6 +6,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import type { z } from "zod";
 import { DerivationTrail, type DerivationStep } from "@/components/ledger/DerivationTrail";
+import { ExportButtons } from "@/components/ledger/ExportButtons";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { StatCard } from "@/components/ui/Card";
@@ -13,7 +14,7 @@ import { FinalIssuanceStat } from "@/components/ledger/FinalIssuanceStat";
 import { ErrorText, FieldLabel, Select, TextInput } from "@/components/ui/Field";
 import { RoleGate } from "@/components/ui/RoleGate";
 import { useToast } from "@/components/ui/Toast";
-import { useCommitCarbonCredits, usePreviewCarbonCredits } from "@/hooks/use-carbon";
+import { useCommitCarbonCredits, useCreditHistory, usePreviewCarbonCredits } from "@/hooks/use-carbon";
 import { formatNumber } from "@/lib/format";
 import { AMENDMENT_TYPE_OPTIONS, ledgerRiceSchema, type LedgerRiceForm as FormValues } from "@/lib/schemas/ledger";
 import type { CarbonResult } from "@/types/api";
@@ -91,6 +92,8 @@ export function LedgerRiceForm({
   const [committed, setCommitted] = useState(false);
   const preview = usePreviewCarbonCredits(fieldId);
   const commit = useCommitCarbonCredits(fieldId);
+  const { data: history } = useCreditHistory(fieldId);
+  const hasHistory = committed || (history?.length ?? 0) > 0;
   const { show } = useToast();
 
   const {
@@ -230,6 +233,8 @@ export function LedgerRiceForm({
           {committed && <Alert tone="success">Saved to credit history.</Alert>}
         </>
       )}
+
+      <ExportButtons fieldId={fieldId} fieldType="rice_awd" committed={hasHistory} />
     </div>
   );
 }
