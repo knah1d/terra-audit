@@ -44,3 +44,26 @@ export async function apiFetch<T>(
   }
   return body as T;
 }
+
+/**
+ * apiFetch above always parses the response as JSON/text, which would
+ * corrupt binary content — used for the export/pdf endpoint (the proxy
+ * already streams binary through untouched, see app/api/proxy's
+ * "Binary (PDF export)" comment; this is the client-side counterpart).
+ * JSON/CSV exports are text and work fine through apiFetch itself.
+ */
+export async function apiFetchBlob(path: string): Promise<Blob> {
+  const res = await fetch(`/api/proxy${path}`);
+  if (!res.ok) {
+    const text = await res.text();
+    let detail = `Request failed (${res.status})`;
+    try {
+      const parsed = JSON.parse(text);
+      if (parsed && typeof parsed === "object" && "detail" in parsed) detail = String(parsed.detail);
+    } catch {
+      // not JSON — keep the generic detail
+    }
+    throw new ApiError(res.status, detail);
+  }
+  return res.blob();
+}

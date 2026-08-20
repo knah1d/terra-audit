@@ -2,7 +2,7 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
-import type { PracticeScheduleEntry, PracticeScheduleOut } from "@/types/api";
+import type { LivestockEntry, LivestockScheduleOut, PracticeScheduleEntry, PracticeScheduleOut } from "@/types/api";
 
 export function useSavePracticeSchedule(fieldId: string) {
   const queryClient = useQueryClient();
@@ -38,6 +38,20 @@ export function useSaveSocMeasurements(fieldId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["alm-completeness", fieldId] });
       queryClient.invalidateQueries({ queryKey: ["alm-soc-measurements", fieldId] });
+    },
+  });
+}
+
+export function useSaveLivestockSchedule(fieldId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ scenario, entries }: { scenario: "baseline" | "project"; entries: LivestockEntry[] }) =>
+      apiFetch<LivestockScheduleOut>(`/fields/${fieldId}/livestock/${scenario}`, {
+        method: "PUT",
+        json: { entries },
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["alm-livestock", fieldId] });
     },
   });
 }

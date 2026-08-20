@@ -131,6 +131,24 @@
   --dur-fast: 120ms;
   --dur-base: 180ms;
   --dur-slow: 240ms;
+
+  /* --- Chart palette: the dataviz skill's validated 8-hue categorical
+   * order (CVD ΔE ≥ 8, normal-vision ΔE ≥ 15 on every adjacent pair, both
+   * modes) — used verbatim rather than re-deriving from the Pine ramp,
+   * since Pine-only hues would put every series in the same hue family
+   * and defeat colorblind separation. Sequential (single-hue magnitude,
+   * e.g. a confusion-matrix heatmap) reuses slot 1's blue ramp. */
+  --chart-series-1: #2a78d6; /* blue */
+  --chart-series-2: #eb6834; /* orange */
+  --chart-series-3: #1baf7a; /* aqua */
+  --chart-series-4: #eda100; /* yellow */
+  --chart-seq-100: #cde2fb;
+  --chart-seq-300: #6da7ec;
+  --chart-seq-500: #256abf;
+  --chart-seq-700: #0d366b;
+  --chart-grid: #e1e0d9;
+  --chart-axis: #c3c2b7;
+  --chart-muted: #898781;
 }
 
 /* Manual-toggle-aware dark mode: next-themes stamps data-theme on <html>,
@@ -202,6 +220,20 @@
     0 6px 18px -4px color-mix(in srgb, var(--pine-400) 55%, transparent);
   --glow-m: 0 2px 4px rgb(var(--shadow-rgb) / 0.35),
     0 18px 40px -10px color-mix(in srgb, var(--pine-400) 62%, transparent);
+
+  /* Chart palette, dark steps — same 8 hues, stepped for the dark surface
+   * per the dataviz skill reference (not a separate palette). */
+  --chart-series-1: #3987e5;
+  --chart-series-2: #d95926;
+  --chart-series-3: #199e70;
+  --chart-series-4: #c98500;
+  --chart-seq-100: #184f95;
+  --chart-seq-300: #256abf;
+  --chart-seq-500: #5598e7;
+  --chart-seq-700: #b7d3f6;
+  --chart-grid: #2c2c2a;
+  --chart-axis: #383835;
+  --chart-muted: #898781;
 }
 
 /*
