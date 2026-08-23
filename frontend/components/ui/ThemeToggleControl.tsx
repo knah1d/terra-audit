@@ -2,6 +2,7 @@
 
 import { Monitor, Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
+import { resetLiquidPointer, trackLiquidPointer } from "@/components/ui/liquid-pointer";
 
 const OPTIONS = [
   { value: "light", label: "Light", icon: Sun },
@@ -31,9 +32,12 @@ export default function ThemeToggleControl() {
           aria-label={label}
           aria-pressed={theme === value}
           onClick={() => setTheme(value)}
-          className={`press flex size-7 items-center justify-center rounded-full ${
+          onPointerEnter={trackLiquidPointer}
+          onPointerMove={trackLiquidPointer}
+          onPointerLeave={resetLiquidPointer}
+          className={`liquid-hover press flex size-7 items-center justify-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 ${
             theme === value
-              ? "bg-brand-50 text-brand-700"
+              ? "liquid-active text-brand-700"
               : "text-text-tertiary hover:text-text-secondary"
           }`}
         >

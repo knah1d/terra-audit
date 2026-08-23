@@ -80,6 +80,19 @@
   --glass-specular: rgba(255, 255, 255, 0.62);
   --glass-hairline: rgba(10, 10, 10, 0.07);
 
+  /* Interactive Liquid Glass (.liquid-hover / .liquid-active, below) —
+   * a lighter, faster-fading material than glass-chrome, sized for a nav
+   * item or tab rather than a whole floating panel. --liquid-reflection
+   * is the moving specular highlight's color (mixed white + a restrained
+   * touch of Pine, never pure white — that would read as a flashlight,
+   * not glass); --liquid-active-bg is the stable active-state fill, a
+   * faint brand tint over the glass base so an active tab/nav item reads
+   * as "lit from within" rather than a flat color block. Both are
+   * color-mix() over other tokens, so they follow those tokens' own
+   * light/dark swap without needing separate dark-mode overrides here. */
+  --liquid-reflection: color-mix(in srgb, white 70%, var(--pine-500) 20%);
+  --liquid-active-bg: color-mix(in srgb, var(--brand-500) 16%, var(--glass-bg-strong));
+
   /* Ambient layer behind the glass — without something back here to
    * refract, a translucent panel over flat white is just a white panel.
    * Five layers now (was three): a "bokeh through leaves" quality — soft
@@ -200,6 +213,11 @@
   --glass-rim: rgba(255, 255, 255, 0.1);
   --glass-specular: rgba(255, 255, 255, 0.14);
   --glass-hairline: rgba(255, 255, 255, 0.08);
+
+  /* Dimmer white portion — a bright white reflection on a near-black
+   * glass surface reads as a flashlight/neon glint, not glass catching
+   * ambient light. */
+  --liquid-reflection: color-mix(in srgb, white 38%, var(--pine-300) 30%);
 
   --ambient-1: rgba(85, 186, 131, 0.18);
   --ambient-2: rgba(47, 158, 99, 0.14);
@@ -374,6 +392,93 @@ body {
 }
 
 /* ============================================================
+ * Interactive Liquid Glass — reusable hover/press/active material for
+ * nav items, tabs/segmented controls, and secondary/ghost/glass buttons.
+ *
+ * Two pseudo-element layers, both `inset:0` + `border-radius:inherit` so
+ * they exactly track whatever shape the host already has (pill, rounded
+ * card, etc.) with no extra markup:
+ *   ::before — the glass material itself. Transparent at rest, fades to
+ *     var(--glass-bg) + a specular top edge on hover/focus. `.liquid-active`
+ *     keeps this permanently visible (a stable capsule) with a brand-tinted
+ *     fill instead — "lit from within," not a flat color block.
+ *   ::after — the moving reflection. A small radial highlight positioned
+ *     by --mouse-x/--mouse-y (frontend/components/ui/liquid-pointer.ts),
+ *     opacity-only fade so it never lags the cursor (position itself is
+ *     never transitioned — see that file's comment).
+ *
+ * Real content is lifted onto its own stacking layer (`isolation: isolate`
+ * on the host + `z-index:1` on direct children) so text/icons always
+ * paint above both pseudo-layers without needing z-index at every call
+ * site. `overflow: hidden` keeps both layers from bleeding past the
+ * host's own corners; this does not clip focus-visible outlines, which
+ * paint outside the element's own box regardless of its overflow.
+ * ============================================================ */
+.liquid-hover {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  --mouse-x: 50%;
+  --mouse-y: 50%;
+  transition: transform var(--dur-base) var(--curve-out), box-shadow var(--dur-base) var(--curve-out);
+}
+.liquid-hover > * {
+  position: relative;
+  z-index: 1;
+}
+.liquid-hover::before,
+.liquid-hover::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--dur-base) var(--curve-out);
+}
+.liquid-hover::before {
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px) saturate(160%);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  box-shadow: inset 0 1px 0 var(--glass-specular), inset 0 0 0 1px var(--glass-rim);
+}
+.liquid-hover::after {
+  background: radial-gradient(
+    90px 90px at var(--mouse-x) var(--mouse-y),
+    color-mix(in srgb, var(--liquid-reflection) 60%, transparent) 0%,
+    transparent 72%
+  );
+}
+.liquid-hover:hover::before,
+.liquid-hover:focus-visible::before {
+  opacity: 1;
+}
+.liquid-hover:active {
+  transform: scale(0.98);
+}
+/* Pointer-following reflection only where a real pointer can hover —
+ * on touch it would either never show or show pinned to the last tap,
+ * neither of which reads as "reflection." Touch still gets the ::before
+ * glass fade via :active/:focus-visible above. */
+@media (hover: hover) and (pointer: fine) {
+  .liquid-hover:hover::after {
+    opacity: 1;
+  }
+}
+
+/* Stable variant — active nav item / selected tab. Source order here
+ * (after the base rules above) is what lets its background win over
+ * .liquid-hover::before's at equal specificity. */
+.liquid-active::before {
+  opacity: 1;
+  background: var(--liquid-active-bg);
+  box-shadow: inset 0 1px 0 var(--glass-specular), inset 0 0 0 1px var(--glass-rim),
+    inset 0 0 0 1px color-mix(in srgb, var(--brand-600) 30%, transparent);
+}
+
+
+/* ============================================================
  * Ambient backdrop + grain (rendered by components/ui/AppBackground.tsx)
  * ============================================================ */
 
@@ -502,8 +607,11 @@ body {
   /* Glow, not neutral: .lift is only used by Card's `interactive` prop
    * (clickable nav-style cards, e.g. the fields list), which is "brand"
    * chrome in the sense that matters here — never applied to dense
-   * data/table rows. */
-  box-shadow: var(--glow-m);
+   * data/table rows. A thin rim highlight rides along with the glow so
+   * the card reads as catching light at its edge, not just lifting —
+   * still no backdrop-filter/blur and no content transparency, since
+   * this sits on top of dense list rows that must stay fast and legible. */
+  box-shadow: var(--glow-m), inset 0 0 0 1px color-mix(in srgb, var(--brand-600) 18%, transparent);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -516,7 +624,8 @@ body {
     scroll-behavior: auto !important;
   }
   .press:active:not(:disabled),
-  .lift:hover {
+  .lift:hover,
+  .liquid-hover:active {
     transform: none;
   }
 }
