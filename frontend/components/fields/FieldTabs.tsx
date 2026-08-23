@@ -4,6 +4,7 @@ import { FlaskConical, Pencil, Satellite, Wallet } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { resetLiquidPointer, trackLiquidPointer } from "@/components/ui/liquid-pointer";
 import { Toolbar } from "@/components/ui/Toolbar";
 
 /** Floating tab bar for the field-detail sub-nav — each option is a real
@@ -55,10 +56,21 @@ export function FieldTabs({ fieldId, fieldType }: { fieldId: string; fieldType: 
     <Toolbar className="relative mb-0 inline-flex w-fit gap-1 px-1.5 py-1.5">
       <div ref={containerRef} className="relative flex gap-1">
         {pillStyle && (
+          // The sliding lens itself is glass, not a flat solid fill — a
+          // brand-tinted .liquid-active-bg with the same specular rim the
+          // per-item .liquid-hover material uses, so it reads as "one
+          // piece of glass sliding between positions" rather than a
+          // colored rectangle.
           <div
             aria-hidden
-            className="absolute top-0 h-full rounded-full bg-brand-600 shadow-xs transition-[transform,width] duration-[var(--dur-base)] ease-[var(--curve-out)]"
-            style={{ width: pillStyle.width, transform: `translateX(${pillStyle.left}px)` }}
+            className="absolute top-0 h-full rounded-full transition-[transform,width] duration-[var(--dur-base)] ease-[var(--curve-out)]"
+            style={{
+              width: pillStyle.width,
+              transform: `translateX(${pillStyle.left}px)`,
+              background: "var(--liquid-active-bg)",
+              boxShadow:
+                "inset 0 1px 0 var(--glass-specular), inset 0 0 0 1px var(--glass-rim), inset 0 0 0 1px color-mix(in srgb, var(--brand-600) 30%, transparent)",
+            }}
           />
         )}
         {options.map(({ href, label, icon: Icon }) => {
@@ -68,12 +80,16 @@ export function FieldTabs({ fieldId, fieldType }: { fieldId: string; fieldType: 
               key={href}
               href={href}
               data-active={active}
-              className={`press relative z-10 flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors duration-[var(--dur-base)] ${
-                active ? "text-white" : "text-text-secondary hover:bg-surface-muted hover:text-text-primary"
+              aria-current={active ? "page" : undefined}
+              onPointerEnter={trackLiquidPointer}
+              onPointerMove={trackLiquidPointer}
+              onPointerLeave={resetLiquidPointer}
+              className={`liquid-hover press relative z-10 flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors duration-[var(--dur-base)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 ${
+                active ? "text-brand-700" : "text-text-secondary hover:text-text-primary"
               }`}
             >
               <Icon className="size-3.5" />
-              {label}
+              <span>{label}</span>
             </Link>
           );
         })}

@@ -4,6 +4,7 @@ import { BrainCircuit, FolderKanban, LayoutGrid, Plus, Users } from "lucide-reac
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LogoutButton } from "@/components/fields/LogoutButton";
+import { resetLiquidPointer, trackLiquidPointer } from "@/components/ui/liquid-pointer";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import type { SessionClaims } from "@/lib/session";
 
@@ -31,14 +32,16 @@ export function SidebarNav({ session }: { session: SessionClaims | null }) {
             <Link
               key={href}
               href={href}
-              className={`press flex items-center gap-2.5 rounded-full px-3 py-2 font-medium ${
-                active
-                  ? "bg-brand-50 text-brand-700"
-                  : "text-text-secondary hover:bg-surface-muted hover:text-text-primary"
+              aria-current={active ? "page" : undefined}
+              onPointerEnter={trackLiquidPointer}
+              onPointerMove={trackLiquidPointer}
+              onPointerLeave={resetLiquidPointer}
+              className={`liquid-hover press flex items-center gap-2.5 rounded-full px-3 py-2 font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 ${
+                active ? "liquid-active text-brand-700" : "text-text-secondary hover:text-text-primary"
               }`}
             >
               <Icon className="size-4" />
-              {label}
+              <span>{label}</span>
             </Link>
           );
         })}
