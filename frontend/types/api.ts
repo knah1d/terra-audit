@@ -43,6 +43,9 @@ export interface CommitResponse {
 }
 
 export interface CreditHistoryEntry {
+  // The real, stable credit_history.id — identifies one committed
+  // verification for export/evidence purposes. Never an array index.
+  credit_history_id: number;
   calculated_at: string;
   final_issuance: number;
   inputs: Record<string, unknown>;

@@ -94,7 +94,6 @@ export function LedgerRiceForm({
   const preview = usePreviewCarbonCredits(fieldId);
   const commit = useCommitCarbonCredits(fieldId);
   const { data: history } = useCreditHistory(fieldId);
-  const hasHistory = committed || (history?.length ?? 0) > 0;
   const { show } = useToast();
   const latestSignal = useLatestSignalRun(fieldId);
 
@@ -270,7 +269,11 @@ export function LedgerRiceForm({
         </>
       )}
 
-      <ExportButtons fieldId={fieldId} fieldType="rice_awd" committed={hasHistory} />
+      <ExportButtons
+        fieldId={fieldId}
+        fieldType="rice_awd"
+        verificationId={history?.[0]?.credit_history_id ?? null}
+      />
     </div>
   );
 }

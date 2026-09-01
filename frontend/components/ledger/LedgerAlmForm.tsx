@@ -86,7 +86,6 @@ export function LedgerAlmForm({ fieldId, defaultArea }: { fieldId: string; defau
   const preview = usePreviewCarbonCredits(fieldId);
   const commit = useCommitCarbonCredits(fieldId);
   const { data: history } = useCreditHistory(fieldId);
-  const hasHistory = committed || (history?.length ?? 0) > 0;
   const { show } = useToast();
 
   const {
@@ -173,7 +172,11 @@ export function LedgerAlmForm({ fieldId, defaultArea }: { fieldId: string; defau
         </>
       )}
 
-      <ExportButtons fieldId={fieldId} fieldType="cropland_alm_vm0042" committed={hasHistory} />
+      <ExportButtons
+        fieldId={fieldId}
+        fieldType="cropland_alm_vm0042"
+        verificationId={history?.[0]?.credit_history_id ?? null}
+      />
     </div>
   );
 }
