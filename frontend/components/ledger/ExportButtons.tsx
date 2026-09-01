@@ -7,21 +7,22 @@ import { useExportField } from "@/hooks/use-export";
 
 /**
  * "Export Evidence Package" — PDF/JSON/CSV downloads, the frontend
- * counterpart of app.py's three st.download_button calls. Enabled once a
- * credit-history entry exists; the backend 409s otherwise (no committed
- * calculation to export yet), so committed gates the buttons here instead
- * of letting the request round-trip into a caught error every time.
+ * counterpart of app.py's three st.download_button calls. Tied to one
+ * specific committed verification (verificationId — the latest
+ * credit_history row's stable id); null means nothing has been committed
+ * yet, which also disables the buttons.
  */
 export function ExportButtons({
   fieldId,
   fieldType,
-  committed,
+  verificationId,
 }: {
   fieldId: string;
   fieldType: string;
-  committed: boolean;
+  verificationId: number | null;
 }) {
-  const { download, pending, error } = useExportField(fieldId, fieldType);
+  const committed = verificationId !== null;
+  const { download, pending, error } = useExportField(fieldId, fieldType, verificationId);
 
   return (
     <div className="flex flex-col gap-2">
