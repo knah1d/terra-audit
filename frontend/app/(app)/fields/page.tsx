@@ -68,7 +68,7 @@ export default function FieldsPage() {
         {fields?.map((field, i) => (
           <Link
             key={field.field_id}
-            href={`/fields/${field.field_id}/ledger`}
+            href={`/fields/${field.field_id}`}
             className="enter"
             style={{ animationDelay: `${Math.min(i, 8) * 30}ms` }}
           >

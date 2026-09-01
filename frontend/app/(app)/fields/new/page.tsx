@@ -44,7 +44,16 @@ export default function NewFieldPage() {
     setServerError(null);
     try {
       const field = await createField.mutateAsync({ ...values, feature: pendingFeature });
-      router.push(`/fields/${field.field_id}/ledger`);
+      // Mirrors Streamlit's tab order: rice_awd's first working tab is
+      // Signal Analytics (you run the SAR pipeline before the ledger has
+      // anything real to calculate from); ALM has no such step, so it
+      // goes straight to the ledger, which itself gates on Practice &
+      // Soil Data completeness.
+      router.push(
+        field.field_type === "rice_awd"
+          ? `/fields/${field.field_id}/signal-analytics`
+          : `/fields/${field.field_id}/ledger`,
+      );
     } catch (err) {
       setServerError(err instanceof ApiError ? err.detail : "Failed to save field");
     }
