@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict
@@ -53,7 +54,7 @@ class CommitResponse(BaseModel):
 
 
 class CreditHistoryEntry(BaseModel):
-    calculated_at: str
+    calculated_at: datetime
     final_issuance: float
     inputs: dict[str, Any]
     result: dict[str, Any]

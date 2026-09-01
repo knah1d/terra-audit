@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel
@@ -43,8 +44,8 @@ class JobStatusOut(BaseModel):
     status: str  # pending | running | done | error
     result: dict[str, Any] | None = None
     error: str | None = None
-    created_at: str | None = None
-    finished_at: str | None = None
+    created_at: datetime | None = None
+    finished_at: datetime | None = None
 
 
 class SignalRunAccepted(BaseModel):

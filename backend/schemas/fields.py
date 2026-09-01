@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel
@@ -46,7 +47,7 @@ class FieldOut(BaseModel):
     district: str
     area_ha: float | None
     field_type: str
-    created_at: str | None = None
+    created_at: datetime | None = None
 
 
 class FieldDetailOut(FieldOut):
