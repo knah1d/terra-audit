@@ -12,7 +12,12 @@ export const AMENDMENT_TYPE_OPTIONS = [
 
 export const ledgerRiceSchema = z.object({
   season_length_days: z.coerce.number().int().min(1).max(365),
-  area_ha: z.coerce.number().min(0.1).max(500),
+  // No upper bound: VM0051 has no maximum-project-area requirement (the
+  // methodology's only size gate is the 60,000 tCO2e/yr QA3 threshold,
+  // which calculate_credits() enforces on the *result*, not the input
+  // area). The old 500 ha cap was a Streamlit UI default, not a
+  // methodology constraint.
+  area_ha: z.coerce.number().min(0.1),
   awd_events: z.coerce.number().int().min(0).max(20),
   q_n_kg_per_ha: z.coerce.number().min(0).max(300),
   preseason_category: z.enum(["short", "long"]),
@@ -26,7 +31,9 @@ export type LedgerRiceForm = z.infer<typeof ledgerRiceSchema>;
 
 // Mirrors backend/schemas/carbon.py CarbonCalcRequestAlm.
 export const ledgerAlmSchema = z.object({
-  area_ha: z.coerce.number().min(0.1).max(500),
+  // No upper bound — VM0042 has no maximum-project-area requirement either
+  // (see ledgerRiceSchema's area_ha comment above).
+  area_ha: z.coerce.number().min(0.1),
   verification_years: z.coerce.number().min(1.0).max(5.0),
   non_permanence_risk_pct: z.coerce.number().min(0).max(100),
 });
