@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
 import "leaflet/dist/leaflet.css";
 import { AppBackground } from "@/components/ui/AppBackground";
@@ -29,7 +30,41 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-background text-foreground">
+      <body suppressHydrationWarning className="min-h-full flex flex-col bg-background text-foreground">
+        <Script
+          id="extension-hydration-cleanup"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `
+              (() => {
+                const removeInjectedAttrs = () => {
+                  document.querySelectorAll("*").forEach((el) => {
+                    for (const attr of [...el.attributes]) {
+                      if (
+                        attr.name === "bis_skin_checked" ||
+                        attr.name === "bis_register" ||
+                        attr.name.startsWith("__processed_")
+                      ) {
+                        el.removeAttribute(attr.name);
+                      }
+                    }
+                  });
+                };
+                removeInjectedAttrs();
+                const observer = new MutationObserver(removeInjectedAttrs);
+                observer.observe(document.documentElement, {
+                  attributes: true,
+                  childList: true,
+                  subtree: true,
+                });
+                window.addEventListener("load", () => {
+                  removeInjectedAttrs();
+                  window.setTimeout(() => observer.disconnect(), 1500);
+                });
+              })();
+            `,
+          }}
+        />
         <AppBackground />
         <Providers session={session}>{children}</Providers>
       </body>
