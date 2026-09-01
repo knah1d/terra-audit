@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel
 
 
@@ -6,8 +8,8 @@ class TeamUserOut(BaseModel):
     email: str
     role: str
     is_active: bool
-    created_at: str | None = None
-    last_login_at: str | None = None
+    created_at: datetime | None = None
+    last_login_at: datetime | None = None
 
 
 class CreateUserIn(BaseModel):
