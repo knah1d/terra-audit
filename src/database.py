@@ -840,11 +840,14 @@ def save_credit_history(org_id: str, field_id: str, field_type: str, inputs: dic
 
 def get_credit_history(org_id: str, field_id: str) -> list:
     """Returns this field's past calculate_credits() runs, most recent
-    first, each as {'calculated_at', 'final_issuance', 'inputs', 'result'}."""
+    first, each as {'credit_history_id', 'calculated_at', 'final_issuance',
+    'inputs', 'result'}. credit_history_id is the real, stable primary-key
+    id of the row — the only thing safe to use to identify a specific
+    committed verification later (never an array index/timestamp/field_id)."""
     with get_db_connection() as conn:
         rows = conn.execute(
             text("""
-                SELECT calculated_at, final_issuance, inputs_json, result_json
+                SELECT id, calculated_at, final_issuance, inputs_json, result_json
                 FROM credit_history
                 WHERE org_id = :org_id AND field_id = :field_id
                 ORDER BY calculated_at DESC, id DESC
@@ -853,6 +856,7 @@ def get_credit_history(org_id: str, field_id: str) -> list:
         ).mappings().fetchall()
     return [
         {
+            "credit_history_id": row["id"],
             "calculated_at": row["calculated_at"],
             "final_issuance": row["final_issuance"],
             "inputs": json.loads(row["inputs_json"]),
@@ -860,6 +864,43 @@ def get_credit_history(org_id: str, field_id: str) -> list:
         }
         for row in rows
     ]
+
+
+def get_credit_history_entry(org_id: str, field_id: str, credit_history_id: int) -> dict | None:
+    """Org+field-scoped lookup of ONE committed verification run by its
+    stable id (see get_credit_history's credit_history_id). Returns None
+    if the id doesn't exist, or belongs to a different org/field — callers
+    should turn that into a 404, never leak which case it was."""
+    with get_db_connection() as conn:
+        row = conn.execute(
+            text("""
+                SELECT id, calculated_at, final_issuance, inputs_json, result_json
+                FROM credit_history
+                WHERE org_id = :org_id AND field_id = :field_id AND id = :id
+            """),
+            {"org_id": org_id, "field_id": field_id, "id": credit_history_id},
+        ).mappings().fetchone()
+    if row is None:
+        return None
+    return {
+        "credit_history_id": row["id"],
+        "calculated_at": row["calculated_at"],
+        "final_issuance": row["final_issuance"],
+        "inputs": json.loads(row["inputs_json"]),
+        "result": json.loads(row["result_json"]),
+    }
+
+
+def get_latest_signal_result(org_id: str, field_id: str) -> dict | None:
+    """Most recently completed signal_run job for this field. NOT tied to
+    any specific credit_history row — there is no stored link between a
+    committed verification and the signal_run job that produced its rice
+    inputs, so this is a best-effort "current signal context" lookup, not
+    provenance for a historical export. Callers must not present it as such."""
+    for job in list_completed_jobs(org_id, "signal_run"):
+        if job["result"] and job["result"].get("field_id") == field_id:
+            return job["result"]
+    return None
 
 
 def get_portfolio_summary(org_id: str) -> list:
