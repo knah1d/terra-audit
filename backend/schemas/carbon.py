@@ -54,6 +54,9 @@ class CommitResponse(BaseModel):
 
 
 class CreditHistoryEntry(BaseModel):
+    # The real, stable credit_history.id — never an array index/timestamp/
+    # field_id. This is what identifies a specific committed verification.
+    credit_history_id: int
     calculated_at: datetime
     final_issuance: float
     inputs: dict[str, Any]

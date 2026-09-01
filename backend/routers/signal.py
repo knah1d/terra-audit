@@ -6,7 +6,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response
 from backend.deps import get_current_user, get_owned_field, get_spatial_engine
 from backend.schemas.signal import JobStatusOut, SignalRunAccepted, SignalResult, SignalRunRequest
 from src.ai.predictor import predict_awd_states
-from src.database import check_cache, get_job, save_cache
+from src.database import check_cache, get_job, get_latest_signal_result, save_cache
 from src.database import create_job, mark_job_done, mark_job_error, mark_job_running
 from src.threshold_gate import AdaptiveAWDGate
 
@@ -120,6 +120,21 @@ def submit_signal_run(
     background_tasks.add_task(_run_signal_job, job_id, org_id, field_id, field, body, engine)
     response.status_code = status.HTTP_202_ACCEPTED
     return SignalRunAccepted(job_id=job_id)
+
+
+@router.get("/fields/{field_id}/signal-runs/latest", response_model=SignalResult)
+def get_latest_signal_run(
+    field_id: str, user: dict = Depends(get_current_user),
+    field: dict = Depends(get_owned_field(require_sar=True)),
+):
+    """Read-only — the Audit & Evidence page's readiness checklist uses
+    this to show whether satellite/AWD/phenology context exists at all
+    for this field, without running a new analysis. NOT tied to any
+    specific committed verification (see get_latest_signal_result)."""
+    signal = get_latest_signal_result(user["org_id"], field_id)
+    if signal is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No signal-analytics run recorded for this field yet")
+    return SignalResult(**signal)
 
 
 @router.get("/signal-runs/{job_id}", response_model=JobStatusOut)
