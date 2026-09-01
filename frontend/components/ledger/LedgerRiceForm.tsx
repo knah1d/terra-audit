@@ -1,8 +1,8 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Sparkles } from "lucide-react";
-import { useState } from "react";
+import { Satellite, Sparkles } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import type { z } from "zod";
 import { DerivationTrail, type DerivationStep } from "@/components/ledger/DerivationTrail";
@@ -15,6 +15,7 @@ import { ErrorText, FieldLabel, Select, TextInput } from "@/components/ui/Field"
 import { RoleGate } from "@/components/ui/RoleGate";
 import { useToast } from "@/components/ui/Toast";
 import { useCommitCarbonCredits, useCreditHistory, usePreviewCarbonCredits } from "@/hooks/use-carbon";
+import { useLatestSignalRun } from "@/hooks/use-signal";
 import { formatNumber } from "@/lib/format";
 import { AMENDMENT_TYPE_OPTIONS, ledgerRiceSchema, type LedgerRiceForm as FormValues } from "@/lib/schemas/ledger";
 import type { CarbonResult } from "@/types/api";
@@ -95,10 +96,12 @@ export function LedgerRiceForm({
   const { data: history } = useCreditHistory(fieldId);
   const hasHistory = committed || (history?.length ?? 0) > 0;
   const { show } = useToast();
+  const latestSignal = useLatestSignalRun(fieldId);
 
   const {
     register,
     handleSubmit,
+    reset,
     formState: { errors },
   } = useForm<RiceFormInput, unknown, FormValues>({
     resolver: zodResolver(ledgerRiceSchema),
@@ -114,6 +117,20 @@ export function LedgerRiceForm({
       project_amendment_rate: 5,
     },
   });
+
+  // Mirrors Streamlit's carbon_total_awd/carbon_season_length session_state
+  // handoff from the Signal Analytics tab — prefill (not lock) the two
+  // signal-derived fields once the latest run resolves. Only runs once per
+  // fetched run so a user's own edits afterward aren't clobbered.
+  useEffect(() => {
+    if (!latestSignal.data) return;
+    reset((prev) => ({
+      ...prev,
+      awd_events: latestSignal.data!.total_awd,
+      season_length_days: latestSignal.data!.season_length_days,
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [latestSignal.data]);
 
   function toRequestBody(values: FormValues) {
     return {
@@ -146,6 +163,25 @@ export function LedgerRiceForm({
 
   return (
     <div className="flex flex-col gap-6">
+      {latestSignal.data ? (
+        <Alert tone="info" title="Prefilled from Signal Analytics">
+          <span className="flex items-center gap-1.5">
+            <Satellite className="size-3.5" />
+            AWD Events and Season Length below were carried over from your latest signal-analytics run
+            ({latestSignal.data.n_observations} observations, {latestSignal.data.detector_used}). Edit them
+            below if the verified events differ.
+          </span>
+        </Alert>
+      ) : latestSignal.isError ? (
+        <Alert tone="warning" title="No Signal Analytics run yet">
+          AWD Events and Season Length below are not backed by a satellite run — run{" "}
+          <a href={`/fields/${fieldId}/signal-analytics`} className="font-medium underline">
+            Signal Analytics
+          </a>{" "}
+          first, then return here to prefill these fields from real data.
+        </Alert>
+      ) : null}
+
       <form onSubmit={handleSubmit(onPreview)} className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <div>
           <FieldLabel>Season Length (days)</FieldLabel>
