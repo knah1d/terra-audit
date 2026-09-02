@@ -250,6 +250,17 @@ export function LedgerRiceForm({
         </div>
       </form>
 
+      {preview.isError && (
+        <Alert tone="danger" title="Calculation failed">
+          {preview.error.message}
+        </Alert>
+      )}
+      {commit.isError && (
+        <Alert tone="danger" title="Save failed">
+          {commit.error.message}
+        </Alert>
+      )}
+
       {result && result.qa3_pathway_valid === false && (
         <Alert tone="danger" title="Issuance blocked">
           {result.qa3_block_reason as string}

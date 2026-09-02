@@ -10,9 +10,15 @@ import { IconTile } from "@/components/ui/IconTile";
 import { RoleGate } from "@/components/ui/RoleGate";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Switch } from "@/components/ui/Switch";
+import { useToast } from "@/components/ui/Toast";
 import { usePracticeSchedule, useLivestockSchedule, useSocMeasurements } from "@/hooks/use-alm";
 import { useSavePracticeSchedule, useSaveLivestockSchedule, useSaveSocMeasurements } from "@/hooks/use-practice-form";
+import { ApiError } from "@/lib/api";
 import type { LivestockEntry, PracticeScheduleEntry, ProductivitySystem } from "@/types/api";
+
+function onSaveError(show: (message: string, tone?: "success" | "danger" | "info") => void) {
+  return (err: unknown) => show(err instanceof ApiError ? err.detail : "Failed to save", "danger");
+}
 
 const LIVESTOCK_TYPE_LABELS: Record<string, string> = {
   cattle_dairy: "Dairy cattle",
@@ -43,6 +49,7 @@ function PracticeScenarioForm({
   // initializer captures it once at mount — no effect-based resync needed.
   const [values, setValues] = useState<PracticeScheduleEntry>(() => initial ?? EMPTY_PRACTICE);
   const save = useSavePracticeSchedule(fieldId);
+  const { show } = useToast();
 
   function set<K extends keyof PracticeScheduleEntry>(key: K, value: PracticeScheduleEntry[K]) {
     setValues((v) => ({ ...v, [key]: value }));
@@ -92,7 +99,7 @@ function PracticeScenarioForm({
         ))}
       </div>
       <RoleGate allow={["admin", "analyst"]}>
-        <Button className="mt-4" variant="secondary" size="sm" icon={Save} loading={save.isPending} onClick={() => save.mutate({ scenario, practices: values })}>
+        <Button className="mt-4" variant="secondary" size="sm" icon={Save} loading={save.isPending} onClick={() => save.mutate({ scenario, practices: values }, { onError: onSaveError(show) })}>
           Save
         </Button>
       </RoleGate>
@@ -121,6 +128,7 @@ function LivestockScenarioForm({
     return base;
   });
   const save = useSaveLivestockSchedule(fieldId);
+  const { show } = useToast();
 
   function setRow(type: string, patch: Partial<{ population: number; productivity: ProductivitySystem }>) {
     setRows((r) => ({ ...r, [type]: { ...r[type], ...patch } }));
@@ -134,7 +142,7 @@ function LivestockScenarioForm({
         population_head: rows[t].population,
         productivity_system: rows[t].productivity,
       }));
-    save.mutate({ scenario, entries });
+    save.mutate({ scenario, entries }, { onError: onSaveError(show) });
   }
 
   return (
@@ -204,6 +212,7 @@ function SocMeasurementsFormBody({
   soc: NonNullable<ReturnType<typeof useSocMeasurements>["data"]>;
 }) {
   const save = useSaveSocMeasurements(fieldId);
+  const { show } = useToast();
   // `soc` is already resolved by the loading gate above, so this initializer
   // runs once at mount with real data — no effect-based resync needed.
   const [texts, setTexts] = useState<Record<string, string>>(() =>
@@ -215,7 +224,7 @@ function SocMeasurementsFormBody({
       .split("\n")
       .map((s) => parseFloat(s.trim()))
       .filter((v) => !Number.isNaN(v));
-    save.mutate({ siteType: l.site, timepoint: l.timepoint, values });
+    save.mutate({ siteType: l.site, timepoint: l.timepoint, values }, { onError: onSaveError(show) });
   }
 
   return (
