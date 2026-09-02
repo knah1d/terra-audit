@@ -12,7 +12,7 @@ import { FieldLabel, Select, TextInput } from "@/components/ui/Field";
 import { IconTile } from "@/components/ui/IconTile";
 import { Switch } from "@/components/ui/Switch";
 import { useJobPoll } from "@/hooks/use-job-poll";
-import { isSignalRunAccepted, useRunSignalAnalysis } from "@/hooks/use-signal";
+import { isSignalRunAccepted, useLatestSignalRun, useRunSignalAnalysis } from "@/hooks/use-signal";
 import type { SignalDetector, SignalResult } from "@/types/api";
 
 const SEASON_PRESETS: Record<string, { start: string; end: string } | null> = {
@@ -41,6 +41,10 @@ export default function SignalAnalyticsPage() {
 
   const run = useRunSignalAnalysis(field.field_id);
   const jobPoll = useJobPoll(jobId ? `/signal-runs/${jobId}` : null);
+  // Previously completed run for this field, if any — shown on first
+  // visit so a field you already analyzed doesn't come up blank; a fresh
+  // handleRun() (below) always overwrites `result` with the new one.
+  const latestSignal = useLatestSignalRun(field.field_id);
 
   const window = preset === "Custom Range" ? { start: customStart, end: customEnd } : SEASON_PRESETS[preset]!;
   const rangeInvalid = !window.start || !window.end || window.end <= window.start;
@@ -50,7 +54,7 @@ export default function SignalAnalyticsPage() {
   // once status settles). The direct (cache-hit, 200) path stores straight
   // into `result` state since there's no job to poll.
   const jobResult = jobId && jobPoll.data?.status === "done" ? (jobPoll.data.result as unknown as SignalResult) : null;
-  const effectiveResult = result ?? jobResult;
+  const effectiveResult = result ?? jobResult ?? latestSignal.data ?? null;
   const jobError = jobId && jobPoll.data?.status === "error" ? jobPoll.data.error : null;
 
   async function handleRun() {
@@ -145,6 +149,9 @@ export default function SignalAnalyticsPage() {
 
           {effectiveResult && (
             <>
+              {!result && !jobResult && (
+                <Alert tone="info">Showing your most recent Signal Analytics run for this field.</Alert>
+              )}
               <p className="text-xs text-text-tertiary">Data source: {effectiveResult.cache_source}</p>
               {!effectiveResult.from_phenology && (
                 <Alert tone="warning">
