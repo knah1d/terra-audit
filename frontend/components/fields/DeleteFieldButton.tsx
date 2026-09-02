@@ -8,6 +8,7 @@ import { RoleGate } from "@/components/ui/RoleGate";
 import { Sheet } from "@/components/ui/Sheet";
 import { useToast } from "@/components/ui/Toast";
 import { useDeleteField } from "@/hooks/use-fields";
+import { ApiError } from "@/lib/api";
 
 export function DeleteFieldButton({ fieldId, fieldName }: { fieldId: string; fieldName: string }) {
   const [confirming, setConfirming] = useState(false);
@@ -16,9 +17,13 @@ export function DeleteFieldButton({ fieldId, fieldName }: { fieldId: string; fie
   const { show } = useToast();
 
   async function handleDelete() {
-    await deleteField.mutateAsync(fieldId);
-    show(`${fieldName} removed`, "info");
-    router.push("/fields");
+    try {
+      await deleteField.mutateAsync(fieldId);
+      show(`${fieldName} removed`, "info");
+      router.push("/fields");
+    } catch (err) {
+      show(err instanceof ApiError ? err.detail : "Failed to remove field", "danger");
+    }
   }
 
   return (

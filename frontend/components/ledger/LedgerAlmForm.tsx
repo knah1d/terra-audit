@@ -143,6 +143,17 @@ export function LedgerAlmForm({ fieldId, defaultArea }: { fieldId: string; defau
         </div>
       </form>
 
+      {preview.isError && (
+        <Alert tone="danger" title="Calculation failed">
+          {preview.error.message}
+        </Alert>
+      )}
+      {commit.isError && (
+        <Alert tone="danger" title="Save failed">
+          {commit.error.message}
+        </Alert>
+      )}
+
       {result?.production_decline_leakage_blocked && (
         <Alert tone="danger" title="Issuance blocked">
           {result.leakage_block_reason as string}
