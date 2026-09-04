@@ -61,6 +61,12 @@ def send_otp_email(to_email: str, otp: str) -> None:
         headers={
             "Authorization": f"Bearer {RESEND_API_KEY}",
             "Content-Type": "application/json",
+            # Without a real User-Agent, urllib's default
+            # ("Python-urllib/3.x") gets blocked by Cloudflare's bot
+            # protection in front of api.resend.com (error code 1010) —
+            # confirmed by direct testing, before any API-key check is
+            # even reached.
+            "User-Agent": "terra-audit-backend/1.0",
         },
     )
     try:

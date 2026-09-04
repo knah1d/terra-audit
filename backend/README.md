@@ -21,23 +21,24 @@ development-only default is used so `uvicorn` still boots.
 
 `POST /auth/register/request-otp` + `POST /auth/register/verify-otp`
 (see `.claude/plans/misty-growing-yao.md`) let anyone create a brand-new
-org + become its first admin, verified via a 6-digit email code. Add to
-`.env` to send real email via SMTP:
+org + become its first admin, verified via a 6-digit email code. Sent via
+Resend's HTTPS API, not SMTP — confirmed by direct testing that Railway
+silently drops outbound traffic on SMTP ports 587 and 465 (the connection
+hangs until timeout rather than being refused), a common anti-abuse
+egress policy on PaaS hosts; HTTPS doesn't have this problem. Add to
+`.env` to send real email:
 
 ```
-SMTP_HOST=
-SMTP_PORT=587
-SMTP_USER=
-SMTP_PASSWORD=
-SMTP_FROM=no-reply@terra-audit.local
+RESEND_API_KEY=
+EMAIL_FROM=no-reply@yourdomain.com  # must be on a domain verified in Resend
 OTP_EXPIRE_MINUTES=10
 OTP_MAX_ATTEMPTS=5
 OTP_RESEND_COOLDOWN_SECONDS=60
 ```
 
-Without `SMTP_HOST`/`SMTP_USER`/`SMTP_PASSWORD` set, a `UserWarning`
-fires at startup and the OTP is instead logged to stdout prefixed
-`[DEV-ONLY OTP]` — fine for local dev, not for any real deployment.
+Without `RESEND_API_KEY` set, a `UserWarning` fires at startup and the
+OTP is instead logged to stdout prefixed `[DEV-ONLY OTP]` — fine for
+local dev, not for any real deployment.
 
 ## Tests
 
