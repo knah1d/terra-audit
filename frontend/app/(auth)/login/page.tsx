@@ -10,7 +10,7 @@ import { z } from "zod";
 import { Alert } from "@/components/ui/Alert";
 import { BotanicalMotif } from "@/components/ui/BotanicalMotif";
 import { Button } from "@/components/ui/Button";
-import { ErrorText, FieldLabel, TextInput } from "@/components/ui/Field";
+import { ErrorText, FieldLabel, PasswordInput, TextInput } from "@/components/ui/Field";
 
 const loginSchema = z.object({
   email: z.string().min(1, "Email is required"),
@@ -68,7 +68,7 @@ export default function LoginPage() {
             </div>
             <div>
               <FieldLabel>Password</FieldLabel>
-              <TextInput type="password" autoComplete="current-password" {...register("password")} />
+              <PasswordInput autoComplete="current-password" {...register("password")} />
               <ErrorText>{errors.password?.message}</ErrorText>
             </div>
             {serverError && <Alert tone="danger">{serverError}</Alert>}

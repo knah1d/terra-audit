@@ -10,11 +10,28 @@ SMTP_CONFIGURED), so local dev never requires a real mail server.
 
 import logging
 import smtplib
+import socket
 from email.message import EmailMessage
 
 from backend.config import SMTP_CONFIGURED, SMTP_FROM, SMTP_HOST, SMTP_PASSWORD, SMTP_PORT, SMTP_USER
 
 logger = logging.getLogger("terra_audit.registration")
+
+
+class _IPv4SMTP(smtplib.SMTP):
+    """smtplib.SMTP, but the connection socket is always resolved over
+    IPv4. Some container platforms (Railway included) have no IPv6 egress
+    route; smtp.gmail.com (and other providers) publish an AAAA record
+    that Python's default getaddrinfo() ordering can try first, surfacing
+    as OSError: [Errno 101] Network is unreachable before IPv4 is ever
+    attempted. Overriding just _get_socket (not smtplib.SMTP.connect(),
+    and not socket.getaddrinfo globally) keeps self._host as the real
+    hostname, so starttls()'s server_hostname/certificate check below is
+    unaffected — only which socket gets connected changes."""
+
+    def _get_socket(self, host, port, timeout):
+        addr_info = socket.getaddrinfo(host, port, socket.AF_INET, socket.SOCK_STREAM)
+        return socket.create_connection(addr_info[0][4], timeout, self.source_address)
 
 
 class EmailSendError(RuntimeError):
@@ -47,7 +64,7 @@ def send_otp_email(to_email: str, otp: str) -> None:
     )
 
     try:
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as smtp:
+        with _IPv4SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as smtp:
             smtp.starttls()
             smtp.login(SMTP_USER, SMTP_PASSWORD)
             smtp.send_message(message)
