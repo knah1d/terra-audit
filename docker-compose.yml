@@ -1,0 +1,50 @@
+# Local full-stack dev/testing convenience — the actual deployment target
+# is Vercel (frontend) + Railway (backend), each building directly from
+# this repo via their own GitHub integration (see backend/Dockerfile,
+# which Railway reuses as-is; frontend/Dockerfile is not part of that
+# deploy path since Vercel builds Next.js natively).
+#
+# Reads secrets from a git-ignored .env in the repo root (see
+# .env.example) — never bake them into an image or commit them.
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      # Persists data/project_store.db (default SQLite backend) and
+      # data/ai_models/ across deploys/restarts. Irrelevant if DATABASE_URL
+      # in .env points at an external Postgres instead.
+      - backend_data:/app/data
+    ports:
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      # Earth Engine auth (ee.Initialize() in src/data_engine.py) can take
+      # 20s+ to time out/fail before the app finishes startup, even though
+      # that failure is caught and non-fatal (see backend/main.py lifespan)
+      # — give it enough room to not be killed as unhealthy mid-startup.
+      start_period: 45s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      # Container-to-container hostname (compose's default network),
+      # distinct from frontend/.env.local's 127.0.0.1 used for local dev.
+      BACKEND_URL: http://backend:8000
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  backend_data:

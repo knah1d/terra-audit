@@ -26,6 +26,7 @@ import src.field_types  # noqa: F401
 from src.database import initialize_database
 from src.issuance import NonIssuableResultError
 
+from backend.config import ALLOWED_ORIGIN_REGEX
 from backend.routers import ai, alm, auth, carbon, export, fields, portfolio, registration, signal, team
 
 
@@ -50,11 +51,11 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Terra Audit API", lifespan=lifespan)
 
-# Permissive for local dev (Next.js on :3000) — tighten allow_origins to
-# the real frontend origin(s) before any real deployment.
+# ALLOWED_ORIGIN_REGEX defaults to local dev (Next.js on :3000) — set it
+# in the deployment env to the real frontend domain(s) (see backend/config.py).
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origin_regex=ALLOWED_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

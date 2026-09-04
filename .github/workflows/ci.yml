@@ -1,0 +1,48 @@
+name: CI
+
+# Pure CI — no deploy job. Vercel (frontend) and Railway (backend) each
+# connect to this repo via their own GitHub integration and deploy on
+# push to main directly; the actual "don't ship a red commit" guarantee
+# comes from branch protection on main requiring these two jobs
+# (backend-tests, frontend-checks) to pass before a PR can merge.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      # requirements.txt alone is enough to run the API and its test
+      # suite — Streamlit (requirements-ui.txt) is deliberately excluded,
+      # see requirements.txt's own doc comment and
+      # tests/backend/test_no_streamlit_in_api.py.
+      - run: pip install -r requirements.txt
+      # tests/backend/ stubs Earth Engine and uses an isolated throwaway
+      # SQLite file per test (see tests/backend/conftest.py) — no GEE
+      # credentials or DATABASE_URL needed here.
+      - run: pytest
+
+  frontend-checks:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npx eslint .
+      - run: npm run build
