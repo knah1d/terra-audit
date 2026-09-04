@@ -32,6 +32,13 @@ if not JWT_SECRET:
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRE_MINUTES = int(os.environ.get("JWT_EXPIRE_MINUTES", "720"))  # 12h default
 
+# CORS — regex (not a fixed origin list) because a Vercel-hosted frontend
+# gets a new preview subdomain per branch/PR that can't be enumerated in
+# advance (e.g. https://terra-audit-git-foo-<team>.vercel.app). Defaults to
+# local dev only; set this in the deployment env to your real frontend
+# domain(s), e.g. "https://terra-audit\.vercel\.app|https://.*-<team>\.vercel\.app".
+ALLOWED_ORIGIN_REGEX = os.environ.get("ALLOWED_ORIGIN_REGEX", r"http://localhost:3000")
+
 # Self-serve org signup (OTP email verification) — see
 # .claude/plans/misty-growing-yao.md. SMTP_* has no safe default (there's
 # no dev-only fallback server the way JWT_SECRET has a fallback string);

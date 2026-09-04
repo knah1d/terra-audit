@@ -66,7 +66,9 @@ def test_verification_export_json_round_trips_committed_inputs(client, alm_field
 
     r = client.get(f"/fields/{alm_field}/verifications/{vid}/evidence/json", headers=auth_headers["admin"])
     assert r.status_code == 200
-    assert r.json()["credits"]["final_issuance"] == committed["final_issuance"] or True  # shape varies; smoke check
+    # generate_audit_json_alm (src/report_generator.py) nests the committed
+    # result under "carbon_calculation", not "credits".
+    assert r.json()["carbon_calculation"]["final_issuance"] == committed["final_issuance"]
 
 
 def test_verification_export_pdf_and_csv_succeed(client, alm_field, auth_headers):
