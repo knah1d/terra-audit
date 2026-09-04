@@ -2,100 +2,74 @@
 OTP email delivery for self-serve org signup
 (.claude/plans/misty-growing-yao.md).
 
-Uses stdlib smtplib/email — deliberately no new pip dependency for what
-is, at this app's scale, a single templated message. Falls back to
-logging the code when SMTP_* isn't configured (backend/config.py's
-SMTP_CONFIGURED), so local dev never requires a real mail server.
+Sent via Resend's HTTPS API (urllib.request, stdlib only — deliberately
+no new pip dependency for what is, at this app's scale, a single
+templated message), not SMTP. Confirmed by direct testing that Railway
+silently drops outbound traffic on both SMTP ports 587 and 465 — the
+connection hangs until timeout rather than being refused, a common
+anti-abuse egress policy on PaaS hosts. HTTPS (443) doesn't have this
+problem. Falls back to logging the code when RESEND_API_KEY isn't set
+(backend/config.py's EMAIL_CONFIGURED), so local dev never requires a
+real Resend account.
 """
 
+import json
 import logging
-import smtplib
-import socket
-from email.message import EmailMessage
+import urllib.error
+import urllib.request
 
-from backend.config import SMTP_CONFIGURED, SMTP_FROM, SMTP_HOST, SMTP_PASSWORD, SMTP_PORT, SMTP_USER
+from backend.config import EMAIL_CONFIGURED, EMAIL_FROM, RESEND_API_KEY
 
 logger = logging.getLogger("terra_audit.registration")
 
-
-def _ipv4_connect(host: str, port: int, timeout, source_address):
-    """Some container platforms (Railway included) have no IPv6 egress
-    route; smtp.gmail.com (and other providers) publish an AAAA record
-    that Python's default getaddrinfo() ordering can try first, surfacing
-    as OSError: [Errno 101] Network is unreachable before IPv4 is ever
-    attempted. Shared by both _get_socket overrides below."""
-    addr_info = socket.getaddrinfo(host, port, socket.AF_INET, socket.SOCK_STREAM)
-    return socket.create_connection(addr_info[0][4], timeout, source_address)
-
-
-class _IPv4SMTP(smtplib.SMTP):
-    """smtplib.SMTP (STARTTLS on an initially-plaintext connection, port
-    587 by convention), but the connection socket is always IPv4 — see
-    _ipv4_connect. Overriding just _get_socket (not smtplib.SMTP.connect(),
-    and not socket.getaddrinfo globally) keeps self._host as the real
-    hostname, so starttls()'s server_hostname/certificate check is
-    unaffected — only which socket gets connected changes."""
-
-    def _get_socket(self, host, port, timeout):
-        return _ipv4_connect(host, port, timeout, self.source_address)
-
-
-class _IPv4SMTP_SSL(smtplib.SMTP_SSL):
-    """smtplib.SMTP_SSL (implicit TLS from the first byte, port 465 by
-    convention) — some networks that block/drop STARTTLS's port 587 allow
-    465, or vice versa, so SMTP_PORT picks which of these two classes is
-    used (see send_otp_email below). Mirrors smtplib.SMTP_SSL's own
-    _get_socket (base socket + wrap_socket) but over the IPv4-forced
-    connection from _ipv4_connect instead of the default dual-stack one."""
-
-    def _get_socket(self, host, port, timeout):
-        sock = _ipv4_connect(host, port, timeout, self.source_address)
-        return self.context.wrap_socket(sock, server_hostname=self._host)
+RESEND_API_URL = "https://api.resend.com/emails"
 
 
 class EmailSendError(RuntimeError):
-    """Raised when SMTP delivery fails — the router turns this into a 502
-    rather than letting a bare smtplib traceback reach the client."""
+    """Raised when email delivery fails — the router turns this into a 502
+    rather than letting a bare urllib traceback reach the client."""
 
 
 def send_otp_email(to_email: str, otp: str) -> None:
-    if not SMTP_CONFIGURED:
+    if not EMAIL_CONFIGURED:
         # The ONLY place the raw OTP is ever surfaced, and only reached
-        # when SMTP isn't configured — never in a real deployment that
-        # set SMTP_HOST/SMTP_USER/SMTP_PASSWORD correctly. print(), not
-        # logger.info(): this codebase has no logging.basicConfig() call
-        # anywhere, so an INFO-level record would silently vanish (the
-        # root logger's default level is WARNING with no handler attached)
-        # — defeating the entire point of a *visible* dev fallback. The
-        # prefix makes a stray occurrence of this line in real output
-        # easy to grep for.
+        # when Resend isn't configured — never in a real deployment that
+        # set RESEND_API_KEY correctly. print(), not logger.info(): this
+        # codebase has no logging.basicConfig() call anywhere, so an
+        # INFO-level record would silently vanish (the root logger's
+        # default level is WARNING with no handler attached) — defeating
+        # the entire point of a *visible* dev fallback. The prefix makes a
+        # stray occurrence of this line in real output easy to grep for.
         print(f"[DEV-ONLY OTP] {to_email}: {otp}")
         return
 
-    message = EmailMessage()
-    message["Subject"] = "Your Terra Audit verification code"
-    message["From"] = SMTP_FROM
-    message["To"] = to_email
-    message.set_content(
-        f"Your Terra Audit verification code is: {otp}\n\n"
-        "This code expires shortly and can only be used once. If you didn't "
-        "request this, you can safely ignore this email."
-    )
+    body = json.dumps({
+        "from": EMAIL_FROM,
+        "to": [to_email],
+        "subject": "Your Terra Audit verification code",
+        "text": (
+            f"Your Terra Audit verification code is: {otp}\n\n"
+            "This code expires shortly and can only be used once. If you didn't "
+            "request this, you can safely ignore this email."
+        ),
+    }).encode("utf-8")
 
-    # 465 = implicit TLS from the first byte (no STARTTLS command); every
-    # other port (587 by convention) = plaintext-then-upgrade. Some
-    # networks' egress filtering treats these two differently, which is
-    # exactly what SMTP_PORT=465 is for testing.
+    request = urllib.request.Request(
+        RESEND_API_URL,
+        data=body,
+        method="POST",
+        headers={
+            "Authorization": f"Bearer {RESEND_API_KEY}",
+            "Content-Type": "application/json",
+        },
+    )
     try:
-        if SMTP_PORT == 465:
-            with _IPv4SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=10) as smtp:
-                smtp.login(SMTP_USER, SMTP_PASSWORD)
-                smtp.send_message(message)
-        else:
-            with _IPv4SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as smtp:
-                smtp.starttls()
-                smtp.login(SMTP_USER, SMTP_PASSWORD)
-                smtp.send_message(message)
-    except (smtplib.SMTPException, OSError) as exc:
-        logger.error("Failed to send OTP email to %s: %s", to_email, exc)
+        with urllib.request.urlopen(request, timeout=10):
+            pass
+    except (urllib.error.URLError, OSError) as exc:
+        # urllib.error.HTTPError (a 4xx/5xx from Resend, e.g. unverified
+        # sender domain) is also a URLError — its .read() body carries
+        # Resend's actual error message, more useful than str(exc) alone.
+        detail = exc.read().decode("utf-8", errors="replace") if isinstance(exc, urllib.error.HTTPError) else str(exc)
+        logger.error("Failed to send OTP email to %s: %s", to_email, detail)
         raise EmailSendError("Could not send verification email") from exc
