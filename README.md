@@ -55,7 +55,7 @@ JWT_SECRET=some-long-random-string        # required for the FastAPI backend
 
 Optional: `DATABASE_URL` (e.g. `postgresql+psycopg2://user:pass@host:5432/dbname`)
 points `src/database.py` at Postgres instead of the default local SQLite
-file (`data/project_store.db`). See `backend/README.md` for Resend/OTP
+file (`data/project_store.db`). See `backend/README.md` for Brevo/OTP
 registration-email settings.
 
 ## Running it
