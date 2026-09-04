@@ -1,4 +1,7 @@
-import { InputHTMLAttributes, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
+"use client";
+
+import { Eye, EyeOff } from "lucide-react";
+import { InputHTMLAttributes, SelectHTMLAttributes, TextareaHTMLAttributes, useState } from "react";
 
 export function FieldLabel({
   children,
@@ -21,6 +24,31 @@ const FIELD_BASE =
 
 export function TextInput(props: InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className={`${FIELD_BASE} ${props.className ?? ""}`} />;
+}
+
+// Same field-inset styling as TextInput, plus a show/hide toggle — for
+// every password field (login, register, team invite) instead of a bare
+// type="password" input.
+export function PasswordInput(props: InputHTMLAttributes<HTMLInputElement>) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <div className="relative">
+      <input
+        {...props}
+        type={visible ? "text" : "password"}
+        className={`${FIELD_BASE} pr-10 ${props.className ?? ""}`}
+      />
+      <button
+        type="button"
+        onClick={() => setVisible((v) => !v)}
+        tabIndex={-1}
+        aria-label={visible ? "Hide password" : "Show password"}
+        className="absolute inset-y-0 right-0 flex w-9 items-center justify-center text-text-tertiary transition-colors hover:text-text-secondary"
+      >
+        {visible ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+      </button>
+    </div>
+  );
 }
 
 export function TextArea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {

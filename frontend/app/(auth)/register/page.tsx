@@ -9,7 +9,7 @@ import { useForm } from "react-hook-form";
 import { Alert } from "@/components/ui/Alert";
 import { BotanicalMotif } from "@/components/ui/BotanicalMotif";
 import { Button } from "@/components/ui/Button";
-import { ErrorText, FieldLabel, TextInput } from "@/components/ui/Field";
+import { ErrorText, FieldLabel, PasswordInput, TextInput } from "@/components/ui/Field";
 import {
   registerDetailsSchema,
   verifyOtpSchema,
@@ -108,8 +108,7 @@ export default function RegisterPage() {
               </div>
               <div>
                 <FieldLabel>Password</FieldLabel>
-                <TextInput
-                  type="password"
+                <PasswordInput
                   autoComplete="new-password"
                   {...detailsForm.register("password")}
                 />
