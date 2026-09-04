@@ -23,11 +23,20 @@ export function SidebarNav({ session }: { session: SessionClaims | null }) {
   const pathname = usePathname();
   const items = session?.role === "admin" ? [...NAV_ITEMS, ...ADMIN_NAV_ITEMS] : NAV_ITEMS;
 
+  // Non-exact items match by prefix (e.g. "/fields" matches
+  // "/fields/{id}/ledger"), but that would also match "/fields/new" —
+  // its own exact-match item. Picking the single longest matching href
+  // (rather than letting each item decide "active" independently) makes
+  // the more specific route win instead of both lighting up at once.
+  const activeHref = items
+    .filter(({ href, exact }) => (exact ? pathname === href : pathname === href || pathname.startsWith(`${href}/`)))
+    .sort((a, b) => b.href.length - a.href.length)[0]?.href;
+
   return (
     <>
       <nav className="flex flex-col gap-0.5 text-sm">
-        {items.map(({ href, label, icon: Icon, exact }) => {
-          const active = exact ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
+        {items.map(({ href, label, icon: Icon }) => {
+          const active = href === activeHref;
           return (
             <Link
               key={href}
