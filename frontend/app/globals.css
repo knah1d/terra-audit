@@ -41,9 +41,7 @@
   --brand-700: var(--pine-700);
   --on-brand: #ffffff;
 
-  /* --- Neutrals: a perceptible cool-sage cast in light mode (was flat
-   * gray — "muddy off-white"), so a pure-white card visibly floats on a
-   * tinted canvas rather than blending into it. */
+  /* Cool neutral canvas under the translucent content surfaces. */
   --background: #e5efed;
   --foreground: #0a0a0a;
 
@@ -612,14 +610,8 @@ body {
 }
 .lift:hover {
   transform: translateY(-1px);
-  /* Glow, not neutral: .lift is only used by Card's `interactive` prop
-   * (clickable nav-style cards, e.g. the fields list), which is "brand"
-   * chrome in the sense that matters here — never applied to dense
-   * data/table rows. A thin rim highlight rides along with the glow so
-   * the card reads as catching light at its edge, not just lifting —
-   * still no backdrop-filter/blur and no content transparency, since
-   * this sits on top of dense list rows that must stay fast and legible. */
-  box-shadow: var(--glow-m), inset 0 0 0 1px color-mix(in srgb, var(--brand-600) 18%, transparent);
+  /* Lift and edge feedback are reserved for clickable cards. */
+  box-shadow: var(--shadow-l), inset 0 0 0 1px color-mix(in srgb, var(--brand-600) 18%, transparent);
 }
 
 @media (prefers-reduced-motion: reduce) {

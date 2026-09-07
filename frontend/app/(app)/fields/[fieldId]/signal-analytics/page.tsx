@@ -60,19 +60,19 @@ export default function SignalAnalyticsPage() {
   async function handleRun() {
     if (isRunning || rangeInvalid) return;
     try {
-    setJobId(null);
-    setResult(null);
-    const body = await run.mutateAsync({
-      window_start: window.start,
-      window_end: window.end,
-      detector,
-      force_refresh: forceRefresh,
-    });
-    if (isSignalRunAccepted(body)) {
-      setJobId(body.job_id);
-    } else {
-      setResult(body);
-    }
+      setJobId(null);
+      setResult(null);
+      const body = await run.mutateAsync({
+        window_start: window.start,
+        window_end: window.end,
+        detector,
+        force_refresh: forceRefresh,
+      });
+      if (isSignalRunAccepted(body)) {
+        setJobId(body.job_id);
+      } else {
+        setResult(body);
+      }
     } catch {
       // The mutation error is displayed below; retain all selected inputs.
     }
