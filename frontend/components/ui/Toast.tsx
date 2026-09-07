@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, Info, XCircle } from "lucide-react";
+import { CheckCircle2, Info, XCircle, X } from "lucide-react";
 import { createContext, useCallback, useContext, useRef, useState } from "react";
 
 type Tone = "success" | "danger" | "info";
@@ -41,7 +41,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     <ToastContext.Provider value={{ show }}>
       {children}
       <div
-        className="fixed bottom-5 right-5 flex flex-col gap-2"
+        className="fixed bottom-5 right-5 left-5 sm:left-auto sm:max-w-md flex flex-col gap-2"
         style={{ zIndex: "var(--z-index-sheet)" }}
       >
         {toasts.map((t) => {
@@ -53,7 +53,8 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
               className="glass-chrome-strong toast-in flex items-center gap-2.5 rounded-xl px-4 py-3 text-sm text-text-primary"
             >
               <Icon className={`size-4 shrink-0 ${TONE_ACCENT[t.tone]}`} />
-              {t.message}
+              <span className="flex-1">{t.message}</span>
+              <button type="button" aria-label="Dismiss notification" onClick={() => setToasts((current) => current.filter((entry) => entry.id !== t.id))} className="rounded-lg p-1"><X className="size-4" /></button>
             </div>
           );
         })}

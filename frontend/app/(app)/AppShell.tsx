@@ -28,7 +28,7 @@ export function AppShell({ session, children }: { session: SessionClaims | null;
         </div>
         <SidebarNav session={session} collapsed={collapsed} />
       </aside>
-      <Sheet open={mobileRoute === pathname} onClose={() => setMobileRoute(null)} title="Navigation">
+      <Sheet placement="drawer" open={mobileRoute === pathname} onClose={() => setMobileRoute(null)} title="Navigation">
         <button type="button" onClick={() => setMobileRoute(null)} aria-label="Close navigation" className="absolute right-4 top-4 rounded-lg p-2"><X className="size-4" /></button>
         <div className="flex min-h-80 flex-col gap-6" onClick={(event) => { if ((event.target as HTMLElement).closest("a")) setMobileRoute(null); }}><SidebarNav session={session} /></div>
       </Sheet>

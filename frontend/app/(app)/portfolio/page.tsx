@@ -2,6 +2,9 @@
 
 import { LayoutGrid } from "lucide-react";
 import Link from "next/link";
+import { useState } from "react";
+import { Alert } from "@/components/ui/Alert";
+import { sortPortfolio, type PortfolioSortKey } from "@/lib/field-filters";
 import { PortfolioBarChart } from "@/components/portfolio/PortfolioBarChart";
 import { Button } from "@/components/ui/Button";
 import { StatCard } from "@/components/ui/Card";
@@ -18,8 +21,20 @@ const FIELD_TYPE_LABELS: Record<string, string> = {
 };
 
 export default function PortfolioPage() {
-  const { data: entries, isLoading } = usePortfolio();
+  const { data: entries, isLoading, error } = usePortfolio();
 
+  const [sortKey, setSortKey] = useState<PortfolioSortKey>("name");
+  const [direction, setDirection] = useState<"asc" | "desc">("asc");
+  const sortedEntries = sortPortfolio(entries ?? [], sortKey, direction);
+  function changeSort(key: PortfolioSortKey) {
+    setDirection(key === sortKey && direction === "asc" ? "desc" : "asc");
+    setSortKey(key);
+  }
+  const columns: { key: PortfolioSortKey; label: string }[] = [
+    { key: "name", label: "Field" }, { key: "district", label: "District" },
+    { key: "field_type", label: "Type" }, { key: "area_ha", label: "Area (ha)" },
+    { key: "final_issuance", label: "Latest Credits (tCO2e)" }, { key: "calculated_at", label: "Last Calculated" },
+  ];
   const registeredFields = entries?.length ?? 0;
   const totalArea = entries?.reduce((sum, e) => sum + (e.area_ha ?? 0), 0) ?? 0;
   const riceCredits = entries
@@ -33,6 +48,7 @@ export default function PortfolioPage() {
     <div className="mx-auto max-w-5xl">
       <PageHeader title="Portfolio" subtitle="Aggregated carbon-credit position across every registered field." />
 
+      {error && <Alert tone="danger" title="Unable to load portfolio">{error.message}</Alert>}
       {isLoading && (
         <div className="grid gap-4">
           <Skeleton className="h-24" />
@@ -75,16 +91,17 @@ export default function PortfolioPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-xs font-medium uppercase tracking-wide text-text-tertiary">
-                  <th className="px-4 pb-2.5 pt-4">Field</th>
-                  <th className="px-4 pb-2.5 pt-4">District</th>
-                  <th className="px-4 pb-2.5 pt-4">Type</th>
-                  <th className="px-4 pb-2.5 pt-4 text-right">Area (ha)</th>
-                  <th className="px-4 pb-2.5 pt-4 text-right">Latest Credits (tCO2e)</th>
-                  <th className="px-4 pb-2.5 pt-4">Last Calculated</th>
+                  {columns.map(({ key, label }) => (
+                    <th key={key} aria-sort={sortKey === key ? (direction === "asc" ? "ascending" : "descending") : "none"} className="px-4 pb-2.5 pt-4">
+                      <button type="button" onClick={() => changeSort(key)} className="inline-flex items-center gap-2 rounded-md py-1 text-left hover:text-text-primary">
+                        {label}<span aria-hidden>{sortKey === key ? (direction === "asc" ? "↑" : "↓") : "↕"}</span>
+                      </button>
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
-                {entries.map((e) => (
+                {sortedEntries.map((e) => (
                   <tr key={e.field_id} className="border-t border-border/60">
                     <td className="px-4 py-3">
                       <Link href={`/fields/${e.field_id}/ledger`} className="flex items-center gap-2 text-text-primary hover:underline">

@@ -39,6 +39,7 @@
   --brand-500: var(--pine-500);
   --brand-600: var(--pine-600);
   --brand-700: var(--pine-700);
+  --on-brand: #ffffff;
 
   /* --- Neutrals: a perceptible cool-sage cast in light mode (was flat
    * gray — "muddy off-white"), so a pure-white card visibly floats on a
@@ -161,7 +162,7 @@
   --chart-seq-700: #0d366b;
   --chart-grid: #e1e0d9;
   --chart-axis: #c3c2b7;
-  --chart-muted: #898781;
+  --chart-muted: #53665e;
 }
 
 /* Manual-toggle-aware dark mode: next-themes stamps data-theme on <html>,
@@ -177,6 +178,7 @@
   --brand-500: var(--pine-400);
   --brand-600: var(--pine-400);
   --brand-700: var(--pine-300);
+  --on-brand: #082619;
 
   /* Pine-black, not neutral charcoal — the single biggest lever for
    * "forest at night" over "gray dashboard in dark mode." */
@@ -251,7 +253,7 @@
   --chart-seq-700: #b7d3f6;
   --chart-grid: #2c2c2a;
   --chart-axis: #383835;
-  --chart-muted: #898781;
+  --chart-muted: #a0b8ad;
 }
 
 /*
@@ -677,4 +679,16 @@ select option { background: var(--surface); color: var(--text-primary); }
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
   }
+}
+
+.primary-action {
+  color: var(--on-brand);
+  background: linear-gradient(155deg, color-mix(in srgb, var(--brand-600) 88%, white), var(--brand-700));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.28), var(--shadow-s);
+}
+.primary-action:hover:not(:disabled) { filter: brightness(1.08); }
+.primary-action:disabled { opacity: 0.55; }
+@media (hover: none) {
+  .lift:hover { transform: none; }
+  .liquid-hover::after { display: none; }
 }

@@ -53,8 +53,8 @@ export function FieldTabs({ fieldId, fieldType }: { fieldId: string; fieldType: 
   }, [pathname, fieldType]);
 
   return (
-    <Toolbar className="relative mb-0 inline-flex w-fit gap-1 px-1.5 py-1.5">
-      <div ref={containerRef} className="relative flex gap-1">
+    <Toolbar className="relative mb-0 inline-flex max-w-full w-fit overflow-x-auto gap-1 px-1.5 py-1.5">
+      <div ref={containerRef} className="relative flex shrink-0 gap-1">
         {pillStyle && (
           // The sliding lens itself is glass, not a flat solid fill — a
           // brand-tinted .liquid-active-bg with the same specular rim the
@@ -84,7 +84,7 @@ export function FieldTabs({ fieldId, fieldType }: { fieldId: string; fieldType: 
               onPointerEnter={trackLiquidPointer}
               onPointerMove={trackLiquidPointer}
               onPointerLeave={resetLiquidPointer}
-              className={`liquid-hover press relative z-10 flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors duration-[var(--dur-base)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 ${
+              className={`liquid-hover press relative z-10 flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors duration-[var(--dur-base)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 ${
                 active ? "text-brand-700" : "text-text-secondary hover:text-text-primary"
               }`}
             >

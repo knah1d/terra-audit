@@ -15,7 +15,7 @@ const VARIANT_CLASSES: Record<Variant, string> = {
   // on the one button making the page's key action would distract from
   // the label, not read as premium.
   primary:
-    "bg-brand-600 text-white shadow-glow-sm hover:bg-brand-700 hover:shadow-glow-md disabled:bg-brand-600/40 disabled:text-white/70 disabled:shadow-sm",
+    "primary-action disabled:shadow-none",
   danger: "bg-danger-600 text-white shadow-sm hover:bg-danger-700 disabled:bg-danger-600/40 disabled:text-white/70",
   // secondary/ghost/glass all get the liquid material (applied via the
   // `liquid-hover` class below, not here) — these three differ only in

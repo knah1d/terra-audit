@@ -1,6 +1,7 @@
 "use client";
 
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { useState } from "react";
 import type { PortfolioEntry } from "@/types/api";
 
 const FIELD_TYPE_LABELS: Record<string, string> = {
@@ -16,29 +17,28 @@ const FIELD_TYPE_LABELS: Record<string, string> = {
  * app.py's own filter.
  */
 export function PortfolioBarChart({ entries }: { entries: PortfolioEntry[] }) {
+  const [hiddenTypes, setHiddenTypes] = useState<string[]>([]);
   const calculated = entries
-    .filter((e) => e.final_issuance !== null)
+    .filter((e) => e.final_issuance !== null && !hiddenTypes.includes(e.field_type))
     .map((e) => ({
       label: `${e.field_id} — ${e.name}`,
       value: e.final_issuance as number,
       fieldType: e.field_type,
     }));
 
-  if (calculated.length === 0) return null;
+  if (!entries.some((entry) => entry.final_issuance !== null)) return null;
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex items-center gap-4 text-xs text-text-secondary">
-        <span className="flex items-center gap-1.5">
-          <span className="inline-block size-2.5 rounded-sm" style={{ background: "var(--chart-series-1)" }} />
-          {FIELD_TYPE_LABELS.rice_awd}
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="inline-block size-2.5 rounded-sm" style={{ background: "var(--chart-series-2)" }} />
-          {FIELD_TYPE_LABELS.cropland_alm_vm0042}
-        </span>
+      <div className="flex flex-wrap items-center gap-2 text-xs text-text-secondary">
+        {Object.entries(FIELD_TYPE_LABELS).map(([type, label], index) => (
+          <button key={type} type="button" aria-pressed={!hiddenTypes.includes(type)} onClick={() => setHiddenTypes((current) => current.includes(type) ? current.filter((item) => item !== type) : [...current, type])} className={`glass-control flex items-center gap-2 rounded-full px-3 py-2 transition-opacity ${hiddenTypes.includes(type) ? "opacity-50" : "opacity-100"}`}>
+            <span className="size-2.5 rounded-full" style={{ background: `var(--chart-series-${index + 1})` }} />{label}
+          </button>
+        ))}
       </div>
-      <div style={{ height: Math.max(280, 60 * calculated.length) }} className="w-full">
+      {calculated.length === 0 && <p role="status" className="py-8 text-center text-sm text-text-secondary">No calculated fields in the selected methodologies. Enable a methodology above.</p>}
+      <div style={{ height: Math.max(280, 60 * calculated.length) }} className="w-full overflow-x-auto">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={calculated} layout="vertical" margin={{ left: 24, right: 16 }}>
             <CartesianGrid stroke="var(--chart-grid)" strokeDasharray="2 4" horizontal={false} />

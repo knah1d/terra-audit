@@ -2,7 +2,7 @@ import { Loader2 } from "lucide-react";
 
 /** Replaces every literal "Loading…" string with a consistent shimmer block. */
 export function Skeleton({ className = "" }: { className?: string }) {
-  return <div className={`animate-pulse rounded-md bg-surface-muted ${className}`} />;
+  return <div className={`animate-pulse rounded-md glass-control ${className}`} />;
 }
 
 /** Inline spinner + label, for buttons and small in-place loading states. */
