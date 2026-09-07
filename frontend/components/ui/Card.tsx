@@ -6,12 +6,7 @@ export function Card({
 }: {
   children: React.ReactNode;
   className?: string;
-  /**
-   * `solid` (default) keeps dense numeric content maximally legible and
-   * avoids putting an expensive backdrop-filter on every list row.
-   * `glass` is reserved for chrome — sticky panels, popovers, the auth
-   * card. See the material note in app/globals.css.
-   */
+  /** Content and chrome both use frosted materials; glass adds a brighter rim. */
   variant?: "solid" | "glass";
   /** Adds hover-lift; use only for cards that are actually clickable. */
   interactive?: boolean;

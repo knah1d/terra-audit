@@ -22,7 +22,7 @@ const VARIANT_CLASSES: Record<Variant, string> = {
   // their resting-state fill, since the hover glass looks the same on
   // top of any of them.
   secondary:
-    "liquid-hover bg-surface border border-border text-text-primary shadow-sm hover:border-border-strong disabled:text-text-tertiary",
+    "liquid-hover glass-control border border-border text-text-primary shadow-sm hover:border-border-strong disabled:text-text-tertiary",
   ghost: "liquid-hover text-text-secondary hover:text-text-primary disabled:text-text-tertiary",
   // Translucent at rest too (not just on hover) — a "glass" button should
   // read as glass even before the pointer arrives, unlike secondary/ghost
@@ -75,6 +75,7 @@ export function Button({
   return (
     <button
       className={`press inline-flex items-center justify-center font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 disabled:cursor-not-allowed ${SHAPE_CLASSES[shape]} ${VARIANT_CLASSES[variant]} ${SIZE_CLASSES[size]} ${className}`}
+      aria-busy={loading || undefined}
       disabled={disabled || loading}
       onPointerEnter={(e) => {
         if (isLiquid) trackLiquidPointer(e);

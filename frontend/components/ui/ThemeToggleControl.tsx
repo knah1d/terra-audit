@@ -24,7 +24,7 @@ export default function ThemeToggleControl() {
   const { theme, setTheme } = useTheme();
 
   return (
-    <div className="inline-flex gap-0.5 rounded-full bg-surface p-0.5 shadow-xs">
+    <div className="inline-flex gap-0.5 rounded-full glass-control p-0.5 shadow-xs">
       {OPTIONS.map(({ value, label, icon: Icon }) => (
         <button
           key={value}

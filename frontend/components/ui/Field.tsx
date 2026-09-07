@@ -20,7 +20,7 @@ export function FieldLabel({
 // same "soft glowing snap" most modern text fields use instead of a flat
 // 2px outline appearing/disappearing with no transition.
 const FIELD_BASE =
-  "field-inset w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-primary placeholder:text-text-tertiary transition-[border-color,box-shadow] duration-[var(--dur-base)] ease-[var(--curve-out)] focus:border-brand-600 focus:shadow-[0_0_0_4px_var(--brand-100)] focus:outline-none disabled:bg-surface-muted disabled:text-text-tertiary";
+  "field-inset w-full rounded-lg border border-border glass-control px-3 py-2 text-sm text-text-primary placeholder:text-text-tertiary transition-[border-color,box-shadow] duration-[var(--dur-base)] ease-[var(--curve-out)] focus:border-brand-600 focus:shadow-[0_0_0_4px_var(--brand-100)] focus:outline-none disabled:bg-surface-muted disabled:text-text-tertiary";
 
 export function TextInput(props: InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className={`${FIELD_BASE} ${props.className ?? ""}`} />;

@@ -27,7 +27,7 @@ export function Tabs<T extends string>({
   onChange: (value: T) => void;
 }) {
   return (
-    <div className="glass-chrome inline-flex gap-1 rounded-full p-1 text-sm">
+    <div className="glass-chrome inline-flex max-w-full flex-wrap gap-1 rounded-full p-1 text-sm">
       {options.map((opt) => {
         const Icon = opt.icon;
         const active = opt.value === value;
@@ -39,7 +39,7 @@ export function Tabs<T extends string>({
             onPointerEnter={trackLiquidPointer}
             onPointerMove={trackLiquidPointer}
             onPointerLeave={resetLiquidPointer}
-            aria-current={active ? "true" : undefined}
+            aria-pressed={active}
             className={`liquid-hover press flex items-center gap-1.5 rounded-full px-3 py-1.5 font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 ${
               active ? "liquid-active text-brand-700" : "text-text-secondary hover:text-text-primary"
             }`}
