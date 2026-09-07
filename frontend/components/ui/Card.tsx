@@ -40,7 +40,7 @@ export function StatCard({
   return (
     <Card className="flex flex-col gap-1.5 p-4">
       <span className="text-xs font-medium uppercase tracking-wide text-text-tertiary">{label}</span>
-      <span className={`font-mono text-2xl font-semibold tracking-tight tabular-nums ${toneClasses[tone]}`}>
+      <span className={`break-words font-mono text-xl xl:text-2xl font-semibold tracking-tight tabular-nums ${toneClasses[tone]}`}>
         {value}
       </span>
     </Card>

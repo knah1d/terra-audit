@@ -99,7 +99,7 @@ function PracticeScenarioForm({
         ))}
       </div>
       <RoleGate allow={["admin", "analyst"]}>
-        <Button className="mt-4" variant="secondary" size="sm" icon={Save} loading={save.isPending} onClick={() => save.mutate({ scenario, practices: values }, { onError: onSaveError(show) })}>
+        <Button className="mt-4" variant="secondary" size="sm" icon={Save} loading={save.isPending} onClick={() => save.mutate({ scenario, practices: values }, { onError: onSaveError(show), onSuccess: () => show("Changes saved", "success") })}>
           Save
         </Button>
       </RoleGate>
@@ -142,7 +142,7 @@ function LivestockScenarioForm({
         population_head: rows[t].population,
         productivity_system: rows[t].productivity,
       }));
-    save.mutate({ scenario, entries }, { onError: onSaveError(show) });
+    save.mutate({ scenario, entries }, { onError: onSaveError(show), onSuccess: () => show("Changes saved", "success") });
   }
 
   return (
@@ -224,7 +224,7 @@ function SocMeasurementsFormBody({
       .split("\n")
       .map((s) => parseFloat(s.trim()))
       .filter((v) => !Number.isNaN(v));
-    save.mutate({ siteType: l.site, timepoint: l.timepoint, values }, { onError: onSaveError(show) });
+    save.mutate({ siteType: l.site, timepoint: l.timepoint, values }, { onError: onSaveError(show), onSuccess: () => show("Changes saved", "success") });
   }
 
   return (

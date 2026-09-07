@@ -58,6 +58,8 @@ export default function SignalAnalyticsPage() {
   const jobError = jobId && jobPoll.data?.status === "error" ? jobPoll.data.error : null;
 
   async function handleRun() {
+    if (isRunning || rangeInvalid) return;
+    try {
     setJobId(null);
     setResult(null);
     const body = await run.mutateAsync({
@@ -70,6 +72,9 @@ export default function SignalAnalyticsPage() {
       setJobId(body.job_id);
     } else {
       setResult(body);
+    }
+    } catch {
+      // The mutation error is displayed below; retain all selected inputs.
     }
   }
 
@@ -138,6 +143,8 @@ export default function SignalAnalyticsPage() {
         </div>
 
         <div className="flex flex-col gap-4">
+          {isRunning && <Alert tone="info" title="Analysis in progress">Results will update when processing finishes. Your selected season and detector are preserved.</Alert>}
+          {jobPoll.isError && <Alert tone="danger" title="Unable to check analysis status">{jobPoll.error.message}</Alert>}
           {run.isError && <Alert tone="danger" title="Run failed">{run.error.message}</Alert>}
           {jobError && <Alert tone="danger" title="Job failed">{jobError}</Alert>}
 
@@ -152,7 +159,7 @@ export default function SignalAnalyticsPage() {
               {!result && !jobResult && (
                 <Alert tone="info">Showing your most recent Signal Analytics run for this field.</Alert>
               )}
-              <p className="text-xs text-text-tertiary">Data source: {effectiveResult.cache_source}</p>
+              <p className="text-xs text-text-secondary">Showing {effectiveResult.window_start} – {effectiveResult.window_end} · {effectiveResult.detector_used} · Source: {effectiveResult.cache_source}</p>
               {!effectiveResult.from_phenology && (
                 <Alert tone="warning">
                   Phenology markers not detected — season length falls back to a 120-day default.
