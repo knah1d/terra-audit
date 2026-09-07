@@ -42,12 +42,12 @@ function DerivationStepCard({ step, index, total }: { step: DerivationStep; inde
       <div className="mt-3 space-y-2 pl-5 text-sm text-text-secondary">
         {step.description && <p>{step.description}</p>}
         {step.formula && (
-          <div className="overflow-x-auto rounded-md bg-surface-muted px-2 py-1.5 text-sm">
+          <div className="overflow-x-auto rounded-md bg-surface-muted/50 px-2 py-1.5 text-sm">
             <BlockMath math={step.formula} errorColor="#dc2626" />
           </div>
         )}
         {step.substitution && (
-          <div className="overflow-x-auto rounded-md bg-surface-muted px-2 py-1.5 text-sm">
+          <div className="overflow-x-auto rounded-md bg-surface-muted/50 px-2 py-1.5 text-sm">
             <BlockMath math={step.substitution} errorColor="#dc2626" />
           </div>
         )}

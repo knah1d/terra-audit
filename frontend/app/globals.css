@@ -684,3 +684,7 @@ select option { background: var(--surface); color: var(--text-primary); }
   .lift:hover { transform: none; }
   .liquid-hover::after { display: none; }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .liquid-hover::after { display: none; }
+}

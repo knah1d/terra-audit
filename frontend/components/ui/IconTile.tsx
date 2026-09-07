@@ -26,7 +26,7 @@ export function IconTile({
 }) {
   const { tile, icon } = SIZE_CLASSES[size];
   const toneClasses =
-    tone === "brand" ? "bg-brand-50 text-brand-700" : "bg-surface-muted text-text-tertiary";
+    tone === "brand" ? "bg-brand-50/60 text-brand-700" : "bg-surface-muted/60 text-text-tertiary";
   return (
     <div className={`flex shrink-0 items-center justify-center ${tile} ${toneClasses}`}>
       <Icon className={icon} />
