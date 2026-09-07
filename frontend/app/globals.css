@@ -16,7 +16,7 @@
  *
  * Palette: Deep Pine green as a restrained ACCENT ONLY (buttons, active
  * nav, links, focus rings, subtle tint fills) over cool neutral surfaces.
- * No green washes, no gradients as decoration, no neon.
+ * Ambient gradients provide depth behind the shared glass materials.
  */
 
 :root {
@@ -43,7 +43,7 @@
   /* --- Neutrals: a perceptible cool-sage cast in light mode (was flat
    * gray — "muddy off-white"), so a pure-white card visibly floats on a
    * tinted canvas rather than blending into it. */
-  --background: #f2f8f4;
+  --background: #e5efed;
   --foreground: #0a0a0a;
 
   --surface: #ffffff;
@@ -52,8 +52,8 @@
   --border-strong: #c3d9cc;
 
   --text-primary: #0a0a0a;
-  --text-secondary: #5f6367;
-  --text-tertiary: #94969b;
+  --text-secondary: #435c54;
+  --text-tertiary: #52675f;
   /* Heading-only accent — deep slate-green instead of flat black, used by
    * PageHeader's title. Not a replacement for --text-primary generally:
    * body copy/labels/table text stay neutral for maximum legibility. */
@@ -74,8 +74,8 @@
   --info-700: #0369a1;
 
   /* --- Glass material ------------------------------------- */
-  --glass-bg: rgba(255, 255, 255, 0.66);
-  --glass-bg-strong: rgba(255, 255, 255, 0.78);
+  --glass-bg: rgba(255, 255, 255, 0.38);
+  --glass-bg-strong: rgba(245, 252, 249, 0.68);
   --glass-rim: rgba(255, 255, 255, 0.5);
   --glass-specular: rgba(255, 255, 255, 0.62);
   --glass-hairline: rgba(10, 10, 10, 0.07);
@@ -100,11 +100,11 @@
    * a single faint wash. Still concentrated toward the edges, where
    * content is sparsest; the center third (where text sits) stays close
    * to clear. This is a fixed CSS gradient, not an image or JS parallax. */
-  --ambient-1: rgba(31, 127, 78, 0.19);
-  --ambient-2: rgba(47, 158, 99, 0.14);
-  --ambient-3: rgba(20, 79, 51, 0.1);
-  --ambient-4: rgba(138, 212, 169, 0.13);
-  --ambient-5: rgba(85, 186, 131, 0.09);
+  --ambient-1: rgba(31, 127, 100, 0.38);
+  --ambient-2: rgba(103, 147, 176, 0.32);
+  --ambient-3: rgba(76, 134, 115, 0.28);
+  --ambient-4: rgba(163, 210, 174, 0.42);
+  --ambient-5: rgba(134, 170, 193, 0.25);
   --grain-opacity: 0.025;
 
   /* --- Elevation: layered contact + ambient, never one hard drop --- */
@@ -128,8 +128,8 @@
   /* --- Radius: concentric (inner = outer − padding) -------- */
   --r-sm: 6px;
   --r-md: 10px;
-  --r-lg: 14px;
-  --r-xl: 20px;
+  --r-lg: 20px;
+  --r-xl: 24px;
   --r-2xl: 28px; /* floating shell panels — sidebar, sheets */
 
   /* --- Elevation (z-index): ambient(-1) < content(0) <
@@ -191,8 +191,8 @@
   /* Barely-green-tinted off-white — stark #fff on a green-black surface
    * reads as harsh; this keeps near-white legibility without the clash. */
   --text-primary: #eef5f1;
-  --text-secondary: #a1a1a6;
-  --text-tertiary: #71717a;
+  --text-secondary: #b4c9c1;
+  --text-tertiary: #a0b8ad;
   --text-heading: var(--text-primary);
 
   --success-50: rgba(52, 211, 153, 0.12);
@@ -208,8 +208,8 @@
   --info-600: #38bdf8;
   --info-700: #7dd3fc;
 
-  --glass-bg: rgba(255, 255, 255, 0.055);
-  --glass-bg-strong: rgba(255, 255, 255, 0.085);
+  --glass-bg: rgba(20, 42, 35, 0.46);
+  --glass-bg-strong: rgba(20, 39, 33, 0.78);
   --glass-rim: rgba(255, 255, 255, 0.1);
   --glass-specular: rgba(255, 255, 255, 0.14);
   --glass-hairline: rgba(255, 255, 255, 0.08);
@@ -220,7 +220,7 @@
   --liquid-reflection: color-mix(in srgb, white 38%, var(--pine-300) 30%);
 
   --ambient-1: rgba(85, 186, 131, 0.18);
-  --ambient-2: rgba(47, 158, 99, 0.14);
+  --ambient-2: rgba(103, 147, 176, 0.32);
   --ambient-3: rgba(15, 59, 39, 0.5);
   --ambient-4: rgba(138, 212, 169, 0.1);
   --ambient-5: rgba(85, 186, 131, 0.12);
@@ -335,6 +335,7 @@ html[data-theme="dark"] {
 }
 
 body {
+  isolation: isolate;
   background: var(--background);
   color: var(--foreground);
   transition: background-color var(--dur-slow) var(--curve-out),
@@ -349,10 +350,8 @@ body {
 /* ============================================================
  * Glass material
  *
- * Chrome only — sidebar, sticky headers, popovers, auth card. Content
- * surfaces stay opaque (.surface-card) so dense numeric data keeps
- * maximum legibility, and so backdrop-filter (GPU-expensive, janks
- * scrolling when applied per-row) never lands on list items.
+ * Shared frosted material. Blur belongs on panel boundaries, never
+ * individual table rows; text and chart marks remain fully opaque.
  * ============================================================ */
 
 .glass-chrome {
@@ -365,7 +364,7 @@ body {
    * this class is brand chrome (Toolbar) — see .glass-chrome-strong's
    * comment above for why that gets a pine tint instead of neutral. */
   box-shadow: inset 0 1px 0 var(--glass-specular), inset 0 0 0 1px var(--glass-rim),
-    var(--glow-s);
+    var(--shadow-m);
 }
 
 .glass-chrome-strong {
@@ -381,14 +380,21 @@ body {
    * sidebar, sheets) — a pine-tinted ambient shadow is what makes it read
    * as "floating over atmosphere" rather than "gray panel on gray page." */
   box-shadow: inset 0 1px 0 var(--glass-specular), inset 0 0 0 1px var(--glass-rim),
-    var(--glow-m);
+    var(--shadow-l);
 }
 
-/* Opaque content surface — refined border + layered shadow, no blur. */
+/* Content panels share the glass material; nested surfaces use tint only. */
 .surface-card {
-  background: var(--surface);
-  border: 1px solid var(--border-c);
-  box-shadow: var(--shadow-s);
+  background: var(--glass-bg);
+  backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  border: 1px solid var(--glass-hairline);
+  box-shadow: inset 0 1px 0 var(--glass-specular), var(--shadow-m);
+}
+.surface-card .surface-card {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: inset 0 1px 0 var(--glass-rim);
 }
 
 /* ============================================================
@@ -493,9 +499,9 @@ body {
    * single flat wash; sized/placed so the densest overlap sits at the
    * corners and the reading column in the middle stays nearly clear. */
   background:
-    radial-gradient(48rem 32rem at 10% -10%, var(--ambient-1), transparent 68%),
-    radial-gradient(42rem 30rem at 94% 2%, var(--ambient-2), transparent 66%),
-    radial-gradient(56rem 38rem at 50% 108%, var(--ambient-3), transparent 70%),
+    radial-gradient(48rem 32rem at 18% 5%, var(--ambient-1), transparent 68%),
+    radial-gradient(42rem 30rem at 84% 28%, var(--ambient-2), transparent 66%),
+    radial-gradient(56rem 38rem at 48% 95%, var(--ambient-3), transparent 70%),
     radial-gradient(38rem 38rem at -6% 55%, var(--ambient-4), transparent 62%),
     radial-gradient(34rem 34rem at 104% 70%, var(--ambient-5), transparent 60%);
 }
@@ -627,5 +633,48 @@ body {
   .lift:hover,
   .liquid-hover:active {
     transform: none;
+  }
+}
+
+/* Interactive surfaces retain sharp content and a shared focus treatment. */
+.glass-control {
+  background: color-mix(in srgb, var(--glass-bg-strong) 70%, transparent);
+  border: 1px solid var(--glass-hairline);
+  box-shadow: inset 0 1px 0 var(--glass-specular);
+}
+button:not(:disabled), select, summary { cursor: pointer; }
+a, button, input, select, textarea { -webkit-tap-highlight-color: transparent; }
+a:focus-visible, button:focus-visible, select:focus-visible {
+  outline: 2px solid var(--brand-600);
+  outline-offset: 3px;
+}
+a:focus-visible > .lift {
+  box-shadow: inset 0 1px 0 var(--glass-specular), var(--shadow-l);
+}
+.surface-card tbody tr {
+  transition: background-color var(--dur-base) var(--curve-out);
+}
+.surface-card tbody tr:hover {
+  background: color-mix(in srgb, var(--brand-100) 50%, transparent);
+}
+select option { background: var(--surface); color: var(--text-primary); }
+.recharts-default-tooltip {
+  background: var(--glass-bg-strong) !important;
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-radius: var(--r-lg) !important;
+  box-shadow: var(--shadow-m);
+}
+.sheet-backdrop { background: rgb(5 18 13 / 0.38); }
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .surface-card, .glass-chrome, .glass-chrome-strong, .glass-control {
+    background: var(--surface);
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .surface-card, .glass-chrome, .glass-chrome-strong, .glass-control {
+    background: var(--surface);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
   }
 }

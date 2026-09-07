@@ -19,7 +19,7 @@ const ADMIN_NAV_ITEMS = [
   { href: "/team", label: "Team", icon: Users, exact: false },
 ];
 
-export function SidebarNav({ session }: { session: SessionClaims | null }) {
+export function SidebarNav({ session, collapsed = false }: { session: SessionClaims | null; collapsed?: boolean }) {
   const pathname = usePathname();
   const items = session?.role === "admin" ? [...NAV_ITEMS, ...ADMIN_NAV_ITEMS] : NAV_ITEMS;
 
@@ -41,16 +41,18 @@ export function SidebarNav({ session }: { session: SessionClaims | null }) {
             <Link
               key={href}
               href={href}
+              title={collapsed ? label : undefined}
+              aria-label={collapsed ? label : undefined}
               aria-current={active ? "page" : undefined}
               onPointerEnter={trackLiquidPointer}
               onPointerMove={trackLiquidPointer}
               onPointerLeave={resetLiquidPointer}
-              className={`liquid-hover press flex items-center gap-2.5 rounded-full px-3 py-2 font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 ${
+              className={`liquid-hover press flex items-center gap-2.5 rounded-xl px-3 py-3 font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 ${
                 active ? "liquid-active text-brand-700" : "text-text-secondary hover:text-text-primary"
               }`}
             >
               <Icon className="size-4" />
-              <span>{label}</span>
+              {!collapsed && <span>{label}</span>}
             </Link>
           );
         })}
@@ -59,7 +61,7 @@ export function SidebarNav({ session }: { session: SessionClaims | null }) {
       {/* Its own tinted card — a "control center" corner rather than
        * profile info + a toggle just sitting loose above the logout
        * button. */}
-      <div className="mt-auto flex flex-col gap-3 rounded-xl bg-surface-muted/60 p-3">
+      <div className={`${collapsed ? "hidden" : "flex"} mt-auto flex-col gap-3 rounded-xl glass-control p-3`}>
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
             {session && (

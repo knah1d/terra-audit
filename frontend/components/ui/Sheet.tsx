@@ -2,61 +2,41 @@
 
 import { useEffect, useRef } from "react";
 
-/**
- * Centered glass sheet over a dimmed backdrop — the "clean sheets/modals"
- * primitive from the Liquid Glass brief. Generic on purpose (title +
- * children + footer slot) so any future confirm-style flow can use it;
- * this pass only retrofits DeleteFieldButton's inline confirm row with it.
- *
- * Dismiss via Escape or backdrop click; focus moves into the sheet on
- * open and the trigger regains focus on close (handled by the caller,
- * since only it knows which element opened the sheet).
- */
-export function Sheet({
-  open,
-  onClose,
-  title,
-  children,
-}: {
+/** Native modal supplies focus containment, Escape handling, and focus restoration. */
+export function Sheet({ open, onClose, title, children }: {
   open: boolean;
   onClose: () => void;
   title?: string;
   children: React.ReactNode;
 }) {
-  const panelRef = useRef<HTMLDivElement>(null);
-
+  const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
-    if (!open) return;
-    panelRef.current?.focus();
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-    }
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [open, onClose]);
-
-  if (!open) return null;
+    const dialog = ref.current;
+    if (!dialog || !open) return;
+    const previousOverflow = document.body.style.overflow;
+    dialog.showModal();
+    document.body.style.overflow = "hidden";
+    return () => {
+      dialog.close();
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [open]);
 
   return (
-    <>
-      <div className="sheet-backdrop" onClick={onClose} aria-hidden />
-      <div
-        className="fixed inset-0 flex items-center justify-center p-4"
-        style={{ zIndex: "var(--z-index-sheet)" }}
-      >
-        <div
-          ref={panelRef}
-          role="dialog"
-          aria-modal="true"
-          aria-label={title}
-          tabIndex={-1}
-          onClick={(e) => e.stopPropagation()}
-          className="glass-chrome-strong sheet-panel w-full max-w-sm rounded-2xl p-6 outline-none"
-        >
-          {title && <h2 className="mb-3 text-lg font-semibold text-text-primary">{title}</h2>}
-          {children}
-        </div>
-      </div>
-    </>
+    <dialog
+      ref={ref}
+      aria-label={title}
+      onCancel={(event) => { event.preventDefault(); onClose(); }}
+      onClick={(event) => {
+        if (event.target === event.currentTarget) {
+          const bounds = event.currentTarget.getBoundingClientRect();
+          if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) onClose();
+        }
+      }}
+      className="glass-chrome-strong sheet-panel fixed inset-0 m-auto max-h-[85dvh] w-[calc(100%-2rem)] max-w-sm overflow-y-auto rounded-2xl p-6 text-text-primary backdrop:bg-black/40"
+    >
+      {title && <h2 className="mb-4 text-lg font-semibold">{title}</h2>}
+      {children}
+    </dialog>
   );
 }

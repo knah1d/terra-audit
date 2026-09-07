@@ -13,7 +13,7 @@ export function Toolbar({
 }) {
   return (
     <div
-      className={`glass-chrome sticky top-4 z-chrome mb-6 flex items-center gap-2 rounded-2xl px-3 py-2 ${className}`}
+      className={`glass-chrome sticky top-20 md:top-4 z-chrome mb-6 flex flex-wrap items-center gap-2 rounded-2xl px-3 py-2 ${className}`}
     >
       {children}
     </div>

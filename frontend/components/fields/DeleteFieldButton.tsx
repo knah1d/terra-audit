@@ -17,6 +17,7 @@ export function DeleteFieldButton({ fieldId, fieldName }: { fieldId: string; fie
   const { show } = useToast();
 
   async function handleDelete() {
+    if (deleteField.isPending) return;
     try {
       await deleteField.mutateAsync(fieldId);
       show(`${fieldName} removed`, "info");
@@ -31,13 +32,13 @@ export function DeleteFieldButton({ fieldId, fieldName }: { fieldId: string; fie
       <Button variant="secondary" size="sm" icon={Trash2} onClick={() => setConfirming(true)}>
         Remove field
       </Button>
-      <Sheet open={confirming} onClose={() => setConfirming(false)} title="Remove field">
+      <Sheet open={confirming} onClose={() => { if (!deleteField.isPending) setConfirming(false); }} title="Remove field">
         <p className="mb-5 text-sm text-text-secondary">
           Delete <strong className="text-text-primary">{fieldName}</strong>? This removes its
           boundary, cached signal data, and credit history. This cannot be undone.
         </p>
         <div className="flex justify-end gap-2">
-          <Button variant="ghost" size="sm" onClick={() => setConfirming(false)}>
+          <Button variant="ghost" size="sm" disabled={deleteField.isPending} onClick={() => setConfirming(false)}>
             Cancel
           </Button>
           <Button variant="danger" size="sm" loading={deleteField.isPending} onClick={handleDelete}>

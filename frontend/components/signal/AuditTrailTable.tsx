@@ -17,7 +17,7 @@ export function AuditTrailTable({ rows }: { rows: Array<Record<string, unknown>>
   return (
     <div className="surface-card max-h-[420px] overflow-auto rounded-xl">
       <table className="w-full text-sm">
-        <thead className="sticky top-0 bg-surface">
+        <thead className="sticky top-0 glass-chrome-strong">
           <tr className="text-left text-xs font-medium uppercase tracking-wide text-text-tertiary">
             <th className="px-3 pb-2.5 pt-3">Date</th>
             <th className="px-3 pb-2.5 pt-3 text-right">VV smoothed</th>
