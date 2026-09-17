@@ -1,4 +1,5 @@
 import ee
+import json
 import os
 import pandas as pd
 from datetime import datetime, timezone
@@ -13,8 +14,17 @@ class SpatialDataEngine:
     def __init__(self):
         try:
             project = os.environ.get("EE_PROJECT")
-            if project:
-                ee.Initialize(project=project)
+            key_json = os.environ.get("EE_SERVICE_ACCOUNT_KEY")
+            if key_json:
+                # Non-interactive auth for deployments (e.g. Railway) that
+                # have no cached `earthengine authenticate` credentials.
+                key_data = json.loads(key_json)
+                credentials = ee.ServiceAccountCredentials(
+                    key_data["client_email"], key_data=key_json
+                )
+                ee.Initialize(credentials, project=project or key_data.get("project_id"))
+            elif project:
+                ee.Initialize(project=project)  # local `earthengine authenticate` config
             else:
                 ee.Initialize()  # falls back to earthengine CLI config
         except Exception as e:
