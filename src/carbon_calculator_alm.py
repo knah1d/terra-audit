@@ -351,10 +351,57 @@ class AlmCarbonEngine:
         such model — it's a direct, single-stratum sample mean/variance
         estimate (VM0042's plain "Measure and Re-Measure," permitted per
         §8.1 for a single quantification unit). VT0014 is therefore not
-        applicable to this implementation; it would only become relevant if
-        this engine were extended to spatially interpolate SOC across a
-        multi-stratum project area instead of treating the whole field as
-        one unit.
+        applicable to this implementation and none of its formulas are used
+        here; it would only become relevant if this engine were extended to
+        spatially interpolate SOC across a multi-stratum project area
+        instead of treating the whole field as one unit.
+
+        Units and time basis of every intermediate quantity (Phase 3
+        reconciliation, docs/RESEARCH_IMPLEMENTATION_PLAN_2026-09-23.md
+        Priority 1) — traced directly against VM0042 v2.2's own equation
+        text (methodologies/verra/vm0042/VM0042v2.2.pdf):
+          - `means[(site,timepoint)]`: areal mean SOC stock at ONE point in
+            time (t CO2e/ha) — a snapshot, not a rate. Matches Eq. 46/47's
+            SOC_bsl,i,t / SOC_wp,i,t terms exactly.
+          - `delta_co2_soil_wp` / `_bsl`: Eq. 46/47's ΔCO2_soil, computed as
+            (SOC_t - SOC_{t-x}) / x * A — an ANNUAL rate (t CO2e/year) for
+            the WHOLE project area, because Eq. 46/47 explicitly divides by
+            x = verification_years before multiplying by area. This is the
+            ONLY place x divides the MEAN.
+          - `variances[(site,timepoint)]`: Eq. 71's per-stratum variance-of-
+            the-mean term (A_h^2 * sample-variance-of-mean), units
+            (t CO2e)^2 — a snapshot-in-time estimate, NOT divided by x
+            anywhere in Eq. 71's text.
+          - `var_h_t` / `var_total`: Eq. 70's area-weighted total variance
+            of the RAW (non-annualized) change over the full verification
+            period t, units (t CO2e/ha)^2 after dividing by area^2. Eq.
+            70/71, AS WRITTEN, do not divide this by x or x^2 anywhere.
+          - `mean_err_per_ha`: Eq. 74's mean_Δ·,t (t CO2e/ha, described in
+            the source text as "in year t" — i.e. an ANNUAL per-hectare
+            rate). Correctly derived as the ALREADY-annual delta_co2_soil_*
+            difference (from Eq. 46/47) divided only by area — NOT divided
+            by verification_years a second time. A prior version of this
+            function divided by verification_years twice (once inside
+            delta_co2_soil_wp/bsl, again here), which had no basis in the
+            source equations and made the uncertainty deduction too
+            aggressive whenever verification_years != 1 — fixed.
+
+        UNRESOLVED — Eq. 74 requires both mean_Δ·,t and its variance s²_Δ·,t
+        to be on the SAME (annual, per-hectare) time basis, but Eq. 70/71's
+        own text builds that variance from RAW start/end sample differences
+        over the full verification period t WITHOUT dividing by x anywhere,
+        while Eq. 46/47 DOES divide the mean by x. Taken literally, the two
+        equations are not obviously on a consistent time basis whenever
+        verification_years != 1: this function does not silently guess an
+        x^2 correction the source text does not state. When
+        verification_years != 1.0, calculate_credits() sets
+        `soc_uncertainty_annualization_unresolved=True` and this result is
+        refused at commit time (src.issuance.result_is_issuable) rather than
+        persisted as claim-ready — see this module's class docstring and
+        src/methodology_registry.py's vm0042.soc_uncertainty_annualization
+        requirement. Only verification_years == 1.0 (annual verification,
+        where the ambiguity cannot manifest since dividing or not dividing
+        by x=1 is identical) is currently supported end to end.
         """
         means, variances = {}, {}
         for site_type in ("project", "control"):
@@ -374,7 +421,11 @@ class AlmCarbonEngine:
         var_h_t = var_wp_change + var_bsl_change            # Eq. 70 (single stratum h)
         var_total = var_h_t / area_ha ** 2                   # Eq. 70 (single-stratum total)
 
-        mean_err_per_ha = (delta_co2_soil_wp - delta_co2_soil_bsl) / verification_years / area_ha
+        # Eq. 74's mean_Δ·,t: the ALREADY-annualized (Eq. 46/47) total-area
+        # change, converted to per-hectare by dividing by area ONLY — see
+        # this function's docstring for why a second /verification_years
+        # here (present in a prior version of this code) was wrong.
+        mean_err_per_ha = (delta_co2_soil_wp - delta_co2_soil_bsl) / area_ha
         if abs(mean_err_per_ha) < 1e-9:
             unc_co2 = 1.0  # degenerate case — no detectable signal, fully conservative
         else:
@@ -536,6 +587,13 @@ class AlmCarbonEngine:
         else:
             delta_co2_soil_wp, delta_co2_soil_bsl, unc_co2 = 0.0, 0.0, 1.0
 
+        # Unresolved annualization concern between Eq. 46/47 (mean, divided
+        # by x) and Eq. 70/71 (variance, NOT divided by x anywhere in the
+        # source text) — see _soc_stock_change's docstring. Only manifests
+        # when x != 1 (dividing or not by x=1 is identical), so verification
+        # periods of exactly one year are unaffected and remain supported.
+        soc_uncertainty_annualization_unresolved = soc_ready and verification_years != 1.0
+
         # Eq. 44/45 — sign-flip indicator, applied to the SOC uncertainty deduction
         i_soil = 1 if (delta_co2_soil_wp - delta_co2_soil_bsl) >= 0 else -1
         delta_co2_bsl_t = delta_co2_soil_bsl * (1 - unc_co2 * i_soil)
@@ -608,6 +666,13 @@ class AlmCarbonEngine:
             "other_leakage_screened": False,
             "other_leakage_gap_note": self.OTHER_LEAKAGE_GAP_NOTE,
             "cadence_compliant":   verification_years <= self.MAX_VERIFICATION_YEARS,
+            "soc_uncertainty_annualization_unresolved": soc_uncertainty_annualization_unresolved,
+            "soc_uncertainty_block_reason": (
+                f"verification_years={verification_years} != 1 — Eq. 74's uncertainty deduction combines an "
+                "annualized mean (Eq. 46/47, divided by x) with a variance that Eq. 70/71's text does not "
+                "divide by x anywhere; this engine does not silently guess a correction. Only annual "
+                "(verification_years=1) SOC verification periods are currently supported for issuance."
+            ) if soc_uncertainty_annualization_unresolved else None,
             "non_permanence_risk_pct": non_permanence_risk_pct,
             "bu_er":               bu_er,
             "bu_cr":               bu_cr,

@@ -25,6 +25,15 @@ Covers both methodologies' block flags:
     when genuine yield decline is detected, since VMD0054 Steps 3-5
     (new-land carbon-stock accounting) are not implemented and the
     engine blocks rather than fabricating a number (§8.4.3).
+  - VM0042 (AlmCarbonEngine): soc_uncertainty_annualization_unresolved=True
+    when the SOC verification period is not exactly one year — Eq. 46/47
+    (mean) and Eq. 70/71 (variance) are not demonstrably on a consistent
+    annualized time basis for x != 1 (see src/carbon_calculator_alm.py's
+    _soc_stock_change docstring for the full reconciliation). This is
+    checked UNCONDITIONALLY (unlike the accounting_pathway-gated
+    final_issuance check below) — a registry note alone is not enough
+    per docs/RESEARCH_IMPLEMENTATION_PLAN_2026-09-23.md Phase 3
+    Priority 1, so even the legacy commit path refuses this result.
 """
 
 
@@ -70,6 +79,11 @@ def result_is_issuable(result: dict, accounting_pathway: str | None = None) -> t
         return False, (
             result.get("leakage_block_reason")
             or "VM0042 production-decline leakage blocked"
+        )
+    if result.get("soc_uncertainty_annualization_unresolved"):
+        return False, (
+            result.get("soc_uncertainty_block_reason")
+            or "VM0042 SOC uncertainty annualization is unresolved for a non-annual verification period"
         )
     if accounting_pathway is not None and result.get("final_issuance") is None:
         return False, "Calculation result has no final_issuance value — cannot confirm issuability."

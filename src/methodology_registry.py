@@ -116,14 +116,25 @@ DOCUMENTS = [
      "document_type": "protocol", "file_path": "fao/FAO_GSOC_MRV_Protocol.pdf",
      "notes": "Supporting guidance for sampling/laboratory workflows — not itself an authorization to issue "
               "credits (see docs/RESEARCH_IMPLEMENTATION_PLAN_2026-09-23.md)."},
-    # Referenced but not present locally — registered for dependency tracking (per the plan's
-    # "Missing from this folder" note) with no file_path/sha256, ingestion_status makes this explicit.
+    # Fetched directly from Verra (https://verra.org/wp-content/uploads/2026/01/
+    # VMD0054-Estimating-Leakage-from-the-Displacement-of-Agricultural-Activities-v1.1_FINAL.pdf)
+    # and saved locally under methodologies/verra/vmd0054/ for this phase — no
+    # longer merely referenced. Its real structure: §5.1 Step 1 (Determine
+    # Change in Production, Eqs. 1-3, commodity-by-commodity), §5.2 Step 2
+    # (leakage mitigation, optional), §5.3 Step 3 (land impact), §5.4 Step 4
+    # (change in carbon stocks on new land, Eq. 11 — needs regional
+    # ecoregion/biomass data this codebase does not have), §5.5 Step 5
+    # (leakage emissions, Eq. 13).
     {"document_id": "vmd0054-v1.1", "methodology_key": "VMD0054", "title": "VMD0054: Estimating Leakage "
      "from the Displacement of Agricultural Activities", "version": "1.1",
-     "document_type": "methodology_module", "effective_date": "2026-01-13",
-     "notes": "This codebase's production-decline leakage screening implements only v1.0-era Steps 1-2 "
-              "logic (see src/carbon_calculator_alm.py's _production_decline_leakage docstring); v1.1's "
-              "new-commodity/ecosystem provisions are not implemented.",
+     "document_type": "methodology_module", "file_path": "verra/vmd0054/VMD0054-v1.1.pdf",
+     "effective_date": "2026-01-13",
+     "notes": "This codebase's production-decline leakage screening (src/carbon_calculator_alm.py's "
+              "_production_decline_leakage) approximates only the SPIRIT of Step 1 (single baseline-vs-"
+              "project crop yield comparison, not commodity-by-commodity Eqs. 1-3 with a proper 3-year-"
+              "or-one-rotation historical reference period) and does not implement Steps 2-5 at all. It "
+              "blocks issuance on a detected decline rather than fabricating a leakage quantity — see "
+              "vm0042.leakage_step1_production_change and the vm0042.leakage_step[2-5]_* rows below.",
      "source_url": "https://verra.org/methodologies/vmd0054-estimating-leakage-from-the-displacement-of-agricultural-activities-v1-1/"},
     {"document_id": "vmd0053-v2.1", "methodology_key": "VMD0053",
      "title": "VMD0053: Model Calibration, Validation, and Uncertainty Guidance for VM0042", "version": "2.1",
@@ -228,12 +239,11 @@ REQUIREMENTS = [
      "reviewer_authority": "automated_only", "blocking": False},
     # --- VM0042 ALM ---
     {"requirement_id": "vm0042.baseline_documentation", "bundle_id": "vm0042-2026-06",
-     "title": "Baseline practice schedule and historical activity record",
+     "title": "Baseline practice schedule",
      "source_document_id": "vm0042-v2.2", "source_section": "Table 4",
-     "required_evidence": "A baseline practice schedule AND at least one recorded crop season predating "
-                           "the monitoring period (a minimum evidentiary bar — not full historical "
-                           "look-back verification; see docs/RESEARCH_IMPLEMENTATION_PLAN_2026-09-23.md "
-                           "Phase 1 gap #1).",
+     "required_evidence": "A baseline practice schedule is recorded. The underlying historical activity "
+                           "evidence for that schedule (3-year/one-complete-rotation look-back) is "
+                           "evaluated separately — see vm0042.historical_lookback.",
      "implementation_support": "implemented", "reviewer_authority": "reviewable", "blocking": True},
     {"requirement_id": "vm0042.soc_measurements", "bundle_id": "vm0042-2026-06",
      "title": "Paired project/control SOC samples at both timepoints",
@@ -251,21 +261,56 @@ REQUIREMENTS = [
      "source_document_id": "vm0042-v2.2", "source_section": "§8.2.6/8.2.7",
      "required_evidence": "Livestock schedule recorded, or not applicable if none.",
      "implementation_support": "implemented", "reviewer_authority": "automated_only", "blocking": False},
-    {"requirement_id": "vm0042.production_decline_leakage", "bundle_id": "vm0042-2026-06",
-     "title": "Production-decline leakage screening",
-     "source_document_id": "vmd0054-v1.1", "source_section": "§8.4.3 Eq. 39/42 (v1.0-era Steps 1-2 only)",
-     "required_evidence": "Computed from baseline vs. project crop yield.",
+    {"requirement_id": "vm0042.leakage_step1_production_change", "bundle_id": "vm0042-2026-06",
+     "title": "VMD0054 Step 1: commodity-by-commodity change in production",
+     "source_document_id": "vmd0054-v1.1", "source_section": "§5.1 (Eqs. 1-3), §5.1.1 historical reference period",
+     "required_evidence": "This engine approximates Step 1's spirit with a single baseline-vs-project crop "
+                           "yield comparison (VM0042 Table 4's crop_yield_t_ha) rather than the full "
+                           "commodity-by-commodity Eqs. 1-3 computation over a properly determined "
+                           "historical reference period (the longer of 3 years or one complete crop "
+                           "rotation, §5.1.1) — it blocks issuance on any detected decline rather than "
+                           "fabricating a leakage quantity.",
      "implementation_support": "partial", "reviewer_authority": "automated_only", "blocking": True},
-    {"requirement_id": "vm0042.new_land_carbon_stock_accounting", "bundle_id": "vm0042-2026-06",
-     "title": "New-land carbon-stock accounting for foregone production (VMD0054 Steps 3-5)",
-     "source_document_id": "vmd0054-v1.1", "source_section": "§8.4.3",
-     "required_evidence": "Not implemented — the engine blocks rather than quantifying.",
+    {"requirement_id": "vm0042.leakage_step2_mitigation", "bundle_id": "vm0042-2026-06",
+     "title": "VMD0054 Step 2: impact of leakage mitigation activities (optional)",
+     "source_document_id": "vmd0054-v1.1", "source_section": "§5.2",
+     "required_evidence": "Not implemented.", "implementation_support": "unsupported",
+     "reviewer_authority": "automated_only", "blocking": False},
+    {"requirement_id": "vm0042.leakage_step3_land_impact", "bundle_id": "vm0042-2026-06",
+     "title": "VMD0054 Step 3: determine land impact",
+     "source_document_id": "vmd0054-v1.1", "source_section": "§5.3",
+     "required_evidence": "Not implemented.", "implementation_support": "unsupported",
+     "reviewer_authority": "automated_only", "blocking": False},
+    {"requirement_id": "vm0042.leakage_step4_new_land_carbon_stock", "bundle_id": "vm0042-2026-06",
+     "title": "VMD0054 Step 4: change in carbon stocks on new land brought into production",
+     "source_document_id": "vmd0054-v1.1", "source_section": "§5.4 Eq. 11",
+     "required_evidence": "Requires regional ecoregion/forest-biomass and deforestation-rate data "
+                           "(Global Forest Watch) this codebase does not source. Not implemented.",
      "implementation_support": "unsupported", "reviewer_authority": "automated_only", "blocking": False},
+    {"requirement_id": "vm0042.leakage_step5_emissions", "bundle_id": "vm0042-2026-06",
+     "title": "VMD0054 Step 5: determine leakage emissions",
+     "source_document_id": "vmd0054-v1.1", "source_section": "§5.5 Eq. 13",
+     "required_evidence": "Depends on Step 4 output, which is not implemented. Not implemented.",
+     "implementation_support": "unsupported", "reviewer_authority": "automated_only", "blocking": False},
+    {"requirement_id": "vm0042.historical_lookback", "bundle_id": "vm0042-2026-06",
+     "title": "Historical look-back period and complete crop rotation",
+     "source_document_id": "vm0042-v2.2",
+     "source_section": "'Historical look-back period' definition; 'Development of Schedule of Activities "
+                        "in the Baseline Scenario' (minimum 3 years and one complete crop rotation)",
+     "required_evidence": "Crop-season/practice records covering at minimum the 3 years immediately "
+                           "preceding the monitoring period start, with any gap in that window explicitly "
+                           "documented as a fallow or missing-period season rather than left silent; if the "
+                           "project period shows more than one crop, the look-back must evidence the same "
+                           "crop(s) (a complete rotation), not just any 3 years of records.",
+     "implementation_support": "implemented", "reviewer_authority": "reviewable", "blocking": True},
     {"requirement_id": "vm0042.liming_co2", "bundle_id": "vm0042-2026-06",
      "title": "CO2 from liming",
      "source_document_id": "vm0042-v2.2", "source_section": "§8.2.4",
-     "required_evidence": "Not implemented.", "implementation_support": "unsupported",
-     "reviewer_authority": "automated_only", "blocking": False},
+     "required_evidence": "Not implemented. The IPCC 2019 Refinement Vol 4 Ch 11 §11.3 'CO2 Emissions "
+                           "from Liming' states only 'No refinement' — the applicable default factors are "
+                           "in the original 2006 IPCC Guidelines Vol 4 Ch 11, which is not present in this "
+                           "codebase's local document set. No factor is fabricated in its place.",
+     "implementation_support": "unsupported", "reviewer_authority": "automated_only", "blocking": False},
     {"requirement_id": "vm0042.quantification_approach", "bundle_id": "vm0042-2026-06",
      "title": "Quantification approach used for SOC stock change",
      "source_document_id": "vm0042-v2.2", "source_section": "§8.2.1",
@@ -273,14 +318,36 @@ REQUIREMENTS = [
                            "Approach 1 (biogeochemical model, VMD0053) is not implemented — never presented "
                            "as available.",
      "implementation_support": "partial", "reviewer_authority": "automated_only", "blocking": False},
+    {"requirement_id": "vm0042.soc_sampling_traceability", "bundle_id": "vm0042-2026-06",
+     "title": "Traceable soil sampling evidence (plans, strata, geolocated samples, lab methods, chain of custody)",
+     "source_document_id": "vm0042-v2.2", "source_section": "§8.2.1/8.3 measure-and-remeasure requirements",
+     "required_evidence": "Optional supplementary evidence beyond the aggregate soc_measurements the "
+                           "engine reads — a sampling plan with geolocated samples, depth intervals, bulk "
+                           "density, lab method, and chain of custody. Not required for a calculation to "
+                           "proceed today (the engine still only consumes the aggregate); this exists so "
+                           "that traceability CAN be recorded and reviewed going forward.",
+     "implementation_support": "partial", "reviewer_authority": "reviewable", "blocking": False},
     {"requirement_id": "vm0042.uncertainty_deduction", "bundle_id": "vm0042-2026-06",
      "title": "SOC-only uncertainty deduction via probability of exceedance",
      "source_document_id": "vm0042-v2.2", "source_section": "§8.6.2/8.6.4 Eqs. 70-71, 74",
-     "required_evidence": "Computed from SOC measurements and the supplied non-permanence risk rating. "
-                           "The annualization in the uncertainty denominator and variance conversions "
-                           "against Eqs. 70-71/74 has not been independently re-derived in this phase — "
-                           "flagged for Phase 3 review, not a confirmed defect.",
-     "implementation_support": "partial", "reviewer_authority": "automated_only", "blocking": False},
+     "required_evidence": "Computed from SOC measurements and the supplied non-permanence risk rating "
+                           "for annual (verification_years=1) periods, reconciled against Eq. 46/47/70/71/74 "
+                           "(see src/carbon_calculator_alm.py's _soc_stock_change docstring) — a genuine "
+                           "double-annualization bug found and fixed during that reconciliation. Non-annual "
+                           "periods are separately gated — see vm0042.soc_uncertainty_annualization.",
+     "implementation_support": "implemented", "reviewer_authority": "automated_only", "blocking": False},
+    {"requirement_id": "vm0042.soc_uncertainty_annualization", "bundle_id": "vm0042-2026-06",
+     "title": "SOC uncertainty deduction time-basis consistency for non-annual verification periods",
+     "source_document_id": "vm0042-v2.2",
+     "source_section": "Eq. 46/47 (mean, divided by verification period x) vs. Eq. 70/71 (variance, not "
+                        "divided by x anywhere in the source text) vs. Eq. 74 (requires both on a "
+                        "consistent per-year basis)",
+     "required_evidence": "verification_years must equal 1 (annual verification). For any other value, "
+                           "Eq. 74's mean and variance are not demonstrably on a consistent time basis per "
+                           "the source text as written, and this engine does not invent an x^2 correction "
+                           "the methodology does not state. This is enforced as a hard commit-time block "
+                           "(src.issuance.result_is_issuable), not merely an informational note.",
+     "implementation_support": "unsupported", "reviewer_authority": "automated_only", "blocking": True},
 ]
 
 

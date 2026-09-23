@@ -57,14 +57,18 @@ class ReadinessRequest(BaseModel):
 
 class DeterminationRequest(BaseModel):
     """Scoped to the exact project, methodology bundle (resolved
-    server-side from project_id + accounting_pathway), and reporting
-    period — a determination outside this exact scope is never honored
-    (see src.calculations.latest_determinations). Restricted, at the
-    write path, to requirements the methodology registry marks
-    reviewable/expert_required — see src.calculations.record_determination."""
+    server-side from project_id + accounting_pathway), reporting period,
+    AND the evidence in scope at the moment of decision (season_ids,
+    hashed server-side into an evidence fingerprint) — a determination
+    outside this exact scope, or recorded against evidence that has
+    since changed, is never honored (see
+    src.calculations.latest_determinations). Restricted, at the write
+    path, to requirements the methodology registry marks reviewable/
+    expert_required — see src.calculations.record_determination."""
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     project_id: str | None = None
     accounting_pathway: Literal["vm0051_rice_awd", "vm0042_alm"]
+    season_ids: list[str] = Field(min_length=1, max_length=50)
     requirement_id: str = Field(min_length=1, max_length=200)
     monitoring_period_start: date
     monitoring_period_end: date

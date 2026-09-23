@@ -1,6 +1,6 @@
 "use client";
 
-import { Activity, MapPinned, LayoutList, BrainCircuit } from "lucide-react";
+import { Activity, MapPinned, LayoutList, BrainCircuit, ScrollText } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -9,6 +9,7 @@ export function ProjectTabs({ projectId }: { projectId: string }) {
   const options = [
     { href: `/projects/${projectId}/monitoring`, label: "Monitoring", icon: Activity },
     { href: `/projects/${projectId}/fields`, label: "Fields", icon: MapPinned },
+    { href: `/projects/${projectId}/methodology`, label: "Methodology", icon: ScrollText },
     { href: `/projects/${projectId}/ai`, label: "AI workspace", icon: BrainCircuit },
     { href: `/reviews?project=${projectId}`, label: "Reviews", icon: LayoutList },
   ];

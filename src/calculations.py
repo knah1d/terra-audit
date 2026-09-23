@@ -150,6 +150,7 @@ def initialize_tables(conn):
             bundle_id               TEXT NOT NULL DEFAULT '',
             monitoring_period_start TEXT NOT NULL DEFAULT '',
             monitoring_period_end   TEXT NOT NULL DEFAULT '',
+            evidence_fingerprint    TEXT NOT NULL DEFAULT '',
             status                  TEXT NOT NULL,
             reason                  TEXT NOT NULL,
             decided_by              TEXT NOT NULL,
@@ -168,7 +169,7 @@ def initialize_tables(conn):
     # real (non-empty) scope again — its determination is not deleted,
     # but src.readiness stops honoring it, which is the intended
     # "invalidate when scope changes" behavior applied retroactively.
-    for col in ("bundle_id", "monitoring_period_start", "monitoring_period_end"):
+    for col in ("bundle_id", "monitoring_period_start", "monitoring_period_end", "evidence_fingerprint"):
         if is_sqlite():
             try:
                 conn.execute(text(f"ALTER TABLE readiness_determinations ADD COLUMN {col} TEXT NOT NULL DEFAULT ''"))
@@ -192,7 +193,7 @@ def _now_iso():
 
 def record_determination(org_id: str, field_id: str, accounting_pathway: str, requirement_id: str,
                           bundle_id: str, monitoring_period_start: str, monitoring_period_end: str,
-                          status: str, reason: str, decided_by: str) -> dict:
+                          evidence_fingerprint: str, status: str, reason: str, decided_by: str) -> dict:
     """Restricted to explicitly reviewable requirements
     (docs/RESEARCH_IMPLEMENTATION_PLAN_2026-09-23.md Phase 1 gap #2/#5):
     a requirement whose registry entry says implementation_support=
@@ -200,9 +201,11 @@ def record_determination(org_id: str, field_id: str, accounting_pathway: str, re
     receive a manual determination — raises ValueError (422), not a
     silent no-op, so a client can't quietly fail to override something
     it shouldn't have been trying to override. Scoped to the exact
-    bundle + reporting period supplied — see latest_determinations()'s
-    exact-match read, which is what actually makes an out-of-scope
-    decision stop applying."""
+    bundle, reporting period, AND evidence fingerprint supplied (see
+    src.readiness.compute_evidence_fingerprint) — see
+    latest_determinations()'s exact-match read, which is what actually
+    makes an out-of-scope OR evidence-changed decision stop applying,
+    even when the bundle and dates are unchanged."""
     if status not in DETERMINATION_STATUSES:
         raise ValueError(f"status must be one of {sorted(DETERMINATION_STATUSES)}")
     from src import methodology_registry as registry
@@ -220,36 +223,42 @@ def record_determination(org_id: str, field_id: str, accounting_pathway: str, re
         conn.execute(text("""
             INSERT INTO readiness_determinations
                 (id, org_id, field_id, accounting_pathway, requirement_id, bundle_id,
-                 monitoring_period_start, monitoring_period_end, status, reason, decided_by)
+                 monitoring_period_start, monitoring_period_end, evidence_fingerprint, status, reason, decided_by)
             VALUES (:id, :org_id, :field_id, :accounting_pathway, :requirement_id, :bundle_id,
-                    :monitoring_period_start, :monitoring_period_end, :status, :reason, :decided_by)
+                    :monitoring_period_start, :monitoring_period_end, :evidence_fingerprint, :status, :reason, :decided_by)
         """), {"id": row_id, "org_id": org_id, "field_id": field_id, "accounting_pathway": accounting_pathway,
                "requirement_id": requirement_id, "bundle_id": bundle_id or "",
                "monitoring_period_start": monitoring_period_start, "monitoring_period_end": monitoring_period_end,
-               "status": status, "reason": reason, "decided_by": decided_by})
+               "evidence_fingerprint": evidence_fingerprint, "status": status, "reason": reason,
+               "decided_by": decided_by})
         conn.commit()
     return {"id": row_id, "requirement_id": requirement_id, "status": status,
             "reason": reason, "decided_by": decided_by}
 
 
 def latest_determinations(org_id: str, field_id: str, accounting_pathway: str, bundle_id: str | None,
-                           monitoring_period_start: str, monitoring_period_end: str) -> dict:
+                           monitoring_period_start: str, monitoring_period_end: str,
+                           evidence_fingerprint: str) -> dict:
     """Returns {requirement_id: {status, reason, decided_by, decided_at}}
     for the most recent determination on each requirement THAT STILL
-    MATCHES this exact bundle + reporting period. A determination
-    recorded under a different bundle or period is invisible here —
-    not deleted, just no longer honored (see record_determination's
-    docstring and the additive-migration note in initialize_tables)."""
+    MATCHES this exact bundle + reporting period + evidence fingerprint.
+    A determination recorded under a different bundle/period, OR whose
+    evidence fingerprint no longer matches the field's CURRENT evidence
+    (a season was corrected, a new observation was added, the practice
+    schedule was edited, etc. — even with the bundle/dates unchanged),
+    is invisible here — not deleted, just no longer honored (see
+    record_determination's docstring and the additive-migration note in
+    initialize_tables)."""
     with get_db_connection() as conn:
         rows = conn.execute(text("""
             SELECT * FROM readiness_determinations
             WHERE org_id = :org_id AND field_id = :field_id AND accounting_pathway = :pathway
               AND bundle_id = :bundle_id AND monitoring_period_start = :period_start
-              AND monitoring_period_end = :period_end
+              AND monitoring_period_end = :period_end AND evidence_fingerprint = :evidence_fingerprint
             ORDER BY decided_at
         """), {"org_id": org_id, "field_id": field_id, "pathway": accounting_pathway,
                "bundle_id": bundle_id or "", "period_start": monitoring_period_start,
-               "period_end": monitoring_period_end}).mappings().fetchall()
+               "period_end": monitoring_period_end, "evidence_fingerprint": evidence_fingerprint}).mappings().fetchall()
     result = {}
     for row in rows:
         result[row["requirement_id"]] = dict(row)  # later rows overwrite earlier ones (append-only, latest wins)
