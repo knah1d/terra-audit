@@ -75,6 +75,12 @@ def initialize_database():
             _init_sqlite(conn)
         else:
             _init_postgres(conn)
+        from src.monitoring import initialize_tables
+        initialize_tables(conn)
+        conn.execute(text("""CREATE TABLE IF NOT EXISTS timeseries_cache_versions (
+            org_id TEXT NOT NULL, field_id TEXT NOT NULL, window_start TEXT NOT NULL,
+            window_end TEXT NOT NULL, processing_version TEXT NOT NULL,
+            PRIMARY KEY (org_id, field_id, window_start, window_end))"""))
         conn.commit()
     _DB_INITIALIZED = True
 
@@ -593,7 +599,13 @@ def check_cache(org_id: str, field_id: str, window_start: str, window_end: str) 
     Retrieves cached time-series records keyed to a specific org+field AND
     analysis window. Returns an empty DataFrame on a cache miss.
     """
+    from src.processing import PROCESSING_VERSION
     with get_db_connection() as conn:
+        version = conn.execute(text("SELECT processing_version FROM timeseries_cache_versions "
+            "WHERE org_id=:org_id AND field_id=:field_id AND window_start=:window_start AND window_end=:window_end"),
+            dict(org_id=org_id, field_id=field_id, window_start=window_start, window_end=window_end)).scalar()
+        if version != PROCESSING_VERSION:
+            return pd.DataFrame()
         df = pd.read_sql_query(
             text("""
                 SELECT observation_date AS date, vv, vh, cross_ratio, rvi
@@ -617,7 +629,17 @@ def save_cache(
     """Commits a batch of EE-fetched observations into the local cache."""
     if df.empty:
         return
+    from src.processing import PROCESSING_VERSION
     with get_db_connection() as conn:
+        params = dict(org_id=org_id, field_id=field_id, window_start=window_start, window_end=window_end,
+                      processing_version=PROCESSING_VERSION)
+        # Replace the entire window: refreshed queries may return fewer scenes.
+        conn.execute(text("DELETE FROM timeseries_cache WHERE org_id=:org_id AND field_id=:field_id "
+                          "AND window_start=:window_start AND window_end=:window_end"), params)
+        conn.execute(text("INSERT INTO timeseries_cache_versions VALUES "
+                          "(:org_id,:field_id,:window_start,:window_end,:processing_version) "
+                          "ON CONFLICT (org_id,field_id,window_start,window_end) DO UPDATE SET "
+                          "processing_version=excluded.processing_version"), params)
         rows = [
             {
                 "org_id": org_id,
@@ -809,6 +831,8 @@ def delete_field(org_id: str, field_id: str):
         for table in (
             "fields", "timeseries_cache", "alm_practice_schedule",
             "alm_livestock_schedule", "soc_measurements", "credit_history",
+            "crop_seasons", "field_observations", "observation_reviews", "monitoring_runs",
+            "timeseries_cache_versions",
         ):
             conn.execute(
                 text(f"DELETE FROM {table} WHERE org_id = :org_id AND field_id = :field_id"),

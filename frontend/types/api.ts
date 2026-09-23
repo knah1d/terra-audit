@@ -184,6 +184,7 @@ export interface AiTrainSummary {
   model_name: string;
   k_used: number;
   stratified: boolean;
+  split_strategy?: string;
   threshold_agreement_score: number;
   macro_avg: { precision: number; recall: number; f1: number };
   per_class: Record<string, AiPerClassMetric>;

@@ -67,7 +67,9 @@ class SpatialDataEngine:
             vh = img.select("VH")
             cross_ratio = vh.subtract(vv).rename("CROSS_RATIO")
             # Radar Vegetation Index (RVI) — sensitive to crop biomass
-            rvi = vh.multiply(4).divide(vh.add(vv)).rename("RVI")
+            vv_power = ee.Image.constant(10).pow(vv.divide(10))
+            vh_power = ee.Image.constant(10).pow(vh.divide(10))
+            rvi = vh_power.multiply(4).divide(vh_power.add(vv_power)).rename("RVI")
             return img.addBands([cross_ratio, rvi]).select(
                 ["VV", "VH", "CROSS_RATIO", "RVI"]
             )
