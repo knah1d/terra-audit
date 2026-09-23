@@ -111,6 +111,14 @@ class AlmCarbonEngine:
     # diesel = 0.002886 t CO2e/L (source: IPCC 2019 Refinement Vol 2 Ch 3 Table 3.3.1)
     EF_CO2_DIESEL_T_PER_L = 0.002886
 
+    # Liming — VM0042 v2.2 §8.2.4 Eq. 8/9 and §8.5.3 Eq. 53. These are the
+    # same IPCC 2006 Guidelines Vol 4 Ch 11 Eq. 11.12 Tier-1 defaults VM0042
+    # embeds directly in its own text (t C per t material, before the 44/12
+    # CO2/C conversion below); independently confirmed against
+    # methodologies/ipcc/2006_guidelines/V4_Ch11_N2O_CO2_Lime_Urea.pdf.
+    EF_LIMESTONE_T_C_PER_T = 0.12
+    EF_DOLOMITE_T_C_PER_T = 0.13
+
     # Confirmed against VCS Standard v5.0 §3.14.4/Table 9
     # (methodologies/verra/standards/VCS-Standard-v5.0.pdf): AR5 GWP100 is
     # mandatory for reductions/removals on or after 1 Jan 2021.
@@ -257,6 +265,18 @@ class AlmCarbonEngine:
         """Eqs. 6-7 — CO2 from fossil fuel combustion (tCO2e)."""
         return ffc_liters * self.EF_CO2_DIESEL_T_PER_L
 
+    def _liming_co2(self, limestone_t: float, dolomite_t: float) -> float:
+        """Eq. 8/9 — CO2 from liming (tCO2e).
+
+        Eq. 8/9's per-ha form (EL_i,t / A_i) followed by Eq. 53's re-
+        multiplication by A_i cancels algebraically for a single
+        quantification unit, so — consistent with how every other term in
+        this engine is computed as an absolute total rather than a per-ha
+        round trip — this takes the scenario's total applied mass directly
+        and returns the total tCO2e.
+        """
+        return (limestone_t * self.EF_LIMESTONE_T_C_PER_T + dolomite_t * self.EF_DOLOMITE_T_C_PER_T) * 44 / 12
+
     def _enteric_fermentation(self, livestock: list) -> float:
         """
         Eq. 10.19/10.20 (IPCC 2019 Refinement Vol 4 Ch 10) — CH4 from enteric
@@ -317,6 +337,8 @@ class AlmCarbonEngine:
             ),
             "mb_kg":         (practices.get("residue_burned_kg_ha") or 0.0) * area_ha,
             "ffc_liters":    (practices.get("fuel_use_l_ha") or 0.0) * area_ha,
+            "limestone_t":   (practices.get("limestone_applied_t_ha") or 0.0) * area_ha,
+            "dolomite_t":    (practices.get("dolomite_applied_t_ha") or 0.0) * area_ha,
             "crop_type":     practices.get("crop_type"),
         }
 
@@ -564,12 +586,16 @@ class AlmCarbonEngine:
         co2_ff_bsl = self._fossil_fuel_co2(bsl_terms["ffc_liters"])
         co2_ff_wp  = self._fossil_fuel_co2(wp_terms["ffc_liters"])
 
+        co2_lime_bsl = self._liming_co2(bsl_terms["limestone_t"], bsl_terms["dolomite_t"])
+        co2_lime_wp  = self._liming_co2(wp_terms["limestone_t"], wp_terms["dolomite_t"])
+
         ch4_ent_bsl = self._enteric_fermentation(baseline_livestock)
         ch4_ent_wp  = self._enteric_fermentation(project_livestock)
         ch4_manure_bsl, n2o_manure_bsl = self._manure_pasture_ch4_n2o(baseline_livestock)
         ch4_manure_wp,  n2o_manure_wp  = self._manure_pasture_ch4_n2o(project_livestock)
 
         delta_co2_ff     = co2_ff_bsl - co2_ff_wp
+        delta_co2_lime   = co2_lime_bsl - co2_lime_wp  # Eq. 53
         delta_ch4_bb     = ch4_bb_bsl - ch4_bb_wp
         delta_n2o_soil   = (n2o_fert_bsl + n2o_nfix_bsl) - (n2o_fert_wp + n2o_nfix_wp)
         delta_n2o_bb     = n2o_bb_bsl - n2o_bb_wp
@@ -604,7 +630,7 @@ class AlmCarbonEngine:
         cumulative_delta_co2_wp = prior_cumulative_delta_co2_wp_t + delta_co2_wp_t
         i_wp = 1 if cumulative_delta_co2_wp > 0 else 0
         non_soc_terms = (
-            delta_co2_ff + delta_ch4_bb + delta_n2o_soil + delta_n2o_bb
+            delta_co2_ff + delta_co2_lime + delta_ch4_bb + delta_n2o_soil + delta_n2o_bb
             + delta_ch4_livestock + delta_n2o_livestock
         )
         min_diff = min(0.0, delta_co2_wp_t) - min(0.0, delta_co2_bsl_t)
@@ -641,6 +667,9 @@ class AlmCarbonEngine:
             "co2_ff_bsl":          co2_ff_bsl,
             "co2_ff_wp":           co2_ff_wp,
             "delta_co2_ff":        delta_co2_ff,
+            "co2_lime_bsl":        co2_lime_bsl,
+            "co2_lime_wp":         co2_lime_wp,
+            "delta_co2_lime":      delta_co2_lime,
             "delta_ch4_bb":        delta_ch4_bb,
             "delta_n2o_soil":      delta_n2o_soil,
             "delta_n2o_bb":        delta_n2o_bb,

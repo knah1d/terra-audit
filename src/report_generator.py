@@ -480,6 +480,9 @@ def generate_pdf_alm(
     pdf.kv("CH4 / N2O biomass burning (baseline -> project)",
            f"{carbon['ch4_bb_bsl']:.4f}->{carbon['ch4_bb_wp']:.4f} / {carbon['n2o_bb_bsl']:.4f}->{carbon['n2o_bb_wp']:.4f} tCO2e")
     pdf.kv("CO2 fossil fuel (baseline -> project)", f"{carbon['co2_ff_bsl']:.4f} -> {carbon['co2_ff_wp']:.4f} tCO2e")
+    if "co2_lime_bsl" in carbon:
+        pdf.kv("CO2 liming (baseline -> project)",
+               f"{carbon['co2_lime_bsl']:.4f} -> {carbon['co2_lime_wp']:.4f} tCO2e  (§8.2.4 Eq. 8/9, §8.5.3 Eq. 53)")
     pdf.kv("CH4 enteric fermentation (baseline -> project)", f"{carbon['ch4_ent_bsl']:.4f} -> {carbon['ch4_ent_wp']:.4f} tCO2e  (§8.2.6 Eq. 11)")
     pdf.kv("CH4 manure, pasture (baseline -> project)", f"{carbon['ch4_manure_bsl']:.4f} -> {carbon['ch4_manure_wp']:.4f} tCO2e  (§8.2.7 Eq. 12/13)")
     pdf.kv("N2O manure, pasture (baseline -> project)", f"{carbon['n2o_manure_bsl']:.4f} -> {carbon['n2o_manure_wp']:.4f} tCO2e  (Ch 11 Eq. 11.5, EF3PRP)")

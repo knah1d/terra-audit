@@ -110,6 +110,22 @@ DOCUMENTS = [
     {"document_id": "ipcc2019-v4-ch11", "methodology_key": "IPCC_2019_V4_CH11",
      "title": "2019 Refinement to the 2006 IPCC Guidelines — Volume 4, Chapter 11: Soils N2O/CO2",
      "document_type": "guidance", "file_path": "ipcc/2019_refinement/19R_V4_Ch11_Soils_N2O_CO2.pdf"},
+    # Fetched directly from the official IPCC source
+    # (https://www.ipcc-nggip.iges.or.jp/public/2006gl/pdf/4_Volume4/V4_11_Ch11_N2O&CO2.pdf)
+    # and saved locally under methodologies/ipcc/2006_guidelines/. The 2019
+    # Refinement's Vol 4 Ch 11 §11.3 "CO2 Emissions from Liming" states only
+    # "No refinement", so the applicable Tier-1 default factors (Eq. 11.12:
+    # EF_Limestone=0.12, EF_Dolomite=0.13 t C/t material, x44/12 for CO2) live
+    # here in the original 2006 Guidelines, not the 2019 supplement already
+    # registered above as ipcc2019-v4-ch11.
+    {"document_id": "ipcc2006-v4-ch11", "methodology_key": "IPCC_2006_V4_CH11",
+     "title": "2006 IPCC Guidelines for National Greenhouse Gas Inventories — Volume 4, Chapter 11: "
+              "N2O Emissions from Managed Soils, and CO2 Emissions from Lime and Urea Application",
+     "version": "2006", "document_type": "guidance",
+     "file_path": "ipcc/2006_guidelines/V4_Ch11_N2O_CO2_Lime_Urea.pdf",
+     "notes": "Source of the Eq. 11.12 liming factors VM0042 §8.2.4 Eq. 8/9 embeds directly "
+              "(independently confirmed identical here) — see vm0042.liming_co2.",
+     "source_url": "https://www.ipcc-nggip.iges.or.jp/public/2006gl/pdf/4_Volume4/V4_11_Ch11_N2O&CO2.pdf"},
     {"document_id": "fao-gsoc-mrv", "methodology_key": "FAO_GSOC_MRV",
      "title": "FAO: A protocol for measurement, monitoring, reporting and verification of soil organic "
               "carbon in agricultural landscapes",
@@ -158,7 +174,8 @@ BUNDLES = [
          ("vcs-registration-issuance-v5.0", "standard"),
          ("vmd0054-v1.1", "supporting"), ("vt0008", "supporting"),
          ("ipcc2019-v4-ch5", "supporting"), ("ipcc2019-v4-ch10", "supporting"),
-         ("ipcc2019-v4-ch11", "supporting"), ("fao-gsoc-mrv", "supporting"),
+         ("ipcc2019-v4-ch11", "supporting"), ("ipcc2006-v4-ch11", "supporting"),
+         ("fao-gsoc-mrv", "supporting"),
      ]},
     {"bundle_id": "vm0051-2026-07", "accounting_pathway": "vm0051_rice_awd",
      "bundle_version": "VM0051 v1.1", "effective_from": "2026-07-14", "is_current": True,
@@ -293,24 +310,47 @@ REQUIREMENTS = [
      "required_evidence": "Depends on Step 4 output, which is not implemented. Not implemented.",
      "implementation_support": "unsupported", "reviewer_authority": "automated_only", "blocking": False},
     {"requirement_id": "vm0042.historical_lookback", "bundle_id": "vm0042-2026-06",
-     "title": "Historical look-back period and complete crop rotation",
+     "title": "Historical look-back period date coverage",
      "source_document_id": "vm0042-v2.2",
      "source_section": "'Historical look-back period' definition; 'Development of Schedule of Activities "
-                        "in the Baseline Scenario' (minimum 3 years and one complete crop rotation)",
+                        "in the Baseline Scenario' (minimum 3 years)",
      "required_evidence": "Crop-season/practice records covering at minimum the 3 years immediately "
-                           "preceding the monitoring period start, with any gap in that window explicitly "
-                           "documented as a fallow or missing-period season rather than left silent; if the "
-                           "project period shows more than one crop, the look-back must evidence the same "
-                           "crop(s) (a complete rotation), not just any 3 years of records.",
+                           "preceding the monitoring period start. A 'fallow' season counts as documented "
+                           "coverage (an observed, known state); a 'missing_period' season does NOT — it "
+                           "records that the activity during that window is unknown, which is not itself "
+                           "evidence of what happened. Rotation completeness is a separate requirement — "
+                           "see vm0042.rotation_completeness.",
      "implementation_support": "implemented", "reviewer_authority": "reviewable", "blocking": True},
+    {"requirement_id": "vm0042.rotation_completeness", "bundle_id": "vm0042-2026-06",
+     "title": "Complete crop rotation in the baseline schedule",
+     "source_document_id": "vm0042-v2.2",
+     "source_section": "'Development of Schedule of Activities in the Baseline Scenario': 'must include at "
+                        "least one complete crop rotation, where applicable. Where a crop rotation is not "
+                        "implemented in the baseline, x >= 3 years.'",
+     "required_evidence": "Only applies when the baseline practice schedule declares crop_rotation=True — "
+                           "otherwise the 3-year window alone (vm0042.historical_lookback) satisfies this "
+                           "clause per VM0042's own text. When a rotation is declared, this is a PARTIAL, "
+                           "disclosed proxy (>=2 distinct historical crops recorded in the look-back window) "
+                           "— not a verification that the rotation returns to its starting crop, since no "
+                           "rotation-cycle length is collected. A project-period crop absent from history is "
+                           "NEVER treated as a rotation-completeness defect — introducing a new crop is an "
+                           "explicitly permitted 'Improved agricultural land management practice.'",
+     "implementation_support": "partial", "reviewer_authority": "reviewable", "blocking": False},
     {"requirement_id": "vm0042.liming_co2", "bundle_id": "vm0042-2026-06",
      "title": "CO2 from liming",
-     "source_document_id": "vm0042-v2.2", "source_section": "§8.2.4",
-     "required_evidence": "Not implemented. The IPCC 2019 Refinement Vol 4 Ch 11 §11.3 'CO2 Emissions "
-                           "from Liming' states only 'No refinement' — the applicable default factors are "
-                           "in the original 2006 IPCC Guidelines Vol 4 Ch 11, which is not present in this "
-                           "codebase's local document set. No factor is fabricated in its place.",
-     "implementation_support": "unsupported", "reviewer_authority": "automated_only", "blocking": False},
+     "source_document_id": "vm0042-v2.2", "source_section": "§8.2.4 Eq. 8/9, §8.5.3 Eq. 53",
+     "required_evidence": "Implemented (src/carbon_calculator_alm.py's _liming_co2): baseline and project "
+                           "limestone/dolomite application rates (t/ha, ALM_PRACTICE_COLUMNS' "
+                           "limestone_applied_t_ha/dolomite_applied_t_ha) are each converted to tCO2e via "
+                           "the IPCC 2006 Guidelines Vol 4 Ch 11 Eq. 11.12 Tier-1 defaults VM0042 embeds "
+                           "directly in its own §8.2.4 text (EF_Limestone=0.12, EF_Dolomite=0.13 t C/t "
+                           "material, x44/12 CO2/C conversion) — independently confirmed identical against "
+                           "the freshly-registered ipcc2006-v4-ch11 source (the 2019 Refinement's §11.3 "
+                           "states only 'No refinement', so the 2006 original is the operative source). "
+                           "Eq. 53's baseline-minus-project difference is folded into non_soc_terms. No "
+                           "material purity/composition beyond the standard limestone/dolomite Tier-1 "
+                           "split is supported — a mixed or non-standard liming material cannot be entered.",
+     "implementation_support": "implemented", "reviewer_authority": "reviewable", "blocking": False},
     {"requirement_id": "vm0042.quantification_approach", "bundle_id": "vm0042-2026-06",
      "title": "Quantification approach used for SOC stock change",
      "source_document_id": "vm0042-v2.2", "source_section": "§8.2.1",

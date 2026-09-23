@@ -175,6 +175,8 @@ def _init_sqlite(conn):
             n_fixing_dry_matter_kg_ha REAL,
             fuel_use_l_ha           REAL,
             crop_yield_t_ha         REAL,
+            limestone_applied_t_ha  REAL,
+            dolomite_applied_t_ha   REAL,
             updated_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (field_id, scenario)
         )
@@ -185,6 +187,13 @@ def _init_sqlite(conn):
         conn.execute(text("ALTER TABLE alm_practice_schedule ADD COLUMN crop_yield_t_ha REAL"))
     except Exception:
         pass
+    # Migration: liming fields added later (VM0042 §8.2.4/§8.5.3 Eq. 8/9/53
+    # — see carbon_calculator_alm.py's _liming_co2) for DBs that predate them
+    for _col in ("limestone_applied_t_ha", "dolomite_applied_t_ha"):
+        try:
+            conn.execute(text(f"ALTER TABLE alm_practice_schedule ADD COLUMN {_col} REAL"))
+        except Exception:
+            pass
 
     # VM0042 ALM field type — integrated crop-livestock schedule (§8.2.6/
     # §8.2.7/§8.2.10, Pasture/Range/Paddock scope — see AlmCarbonEngine's
@@ -350,6 +359,8 @@ def _init_sqlite(conn):
                 n_fixing_dry_matter_kg_ha REAL,
                 fuel_use_l_ha           REAL,
                 crop_yield_t_ha         REAL,
+                limestone_applied_t_ha  REAL,
+                dolomite_applied_t_ha   REAL,
                 updated_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 PRIMARY KEY (org_id, field_id, scenario)
             )
@@ -404,6 +415,15 @@ def _init_sqlite(conn):
         conn.execute(text(_create_sql))
         conn.execute(text(f"INSERT INTO {_table} ({_cols}) SELECT {_cols} FROM {_table}_old"))
         conn.execute(text(f"DROP TABLE {_table}_old"))
+
+    # Safety net: a DB already past the org_id-in-PK rebuild above (so the
+    # loop's `continue` skipped it) still needs the liming columns if it
+    # predates them.
+    for _col in ("limestone_applied_t_ha", "dolomite_applied_t_ha"):
+        try:
+            conn.execute(text(f"ALTER TABLE alm_practice_schedule ADD COLUMN {_col} REAL"))
+        except Exception:
+            pass
 
     # credit_history doesn't need this treatment — its PK is a plain
     # AUTOINCREMENT id, not a natural key built from field_id, so it was
@@ -541,10 +561,20 @@ def _init_postgres(conn):
             n_fixing_dry_matter_kg_ha DOUBLE PRECISION,
             fuel_use_l_ha           DOUBLE PRECISION,
             crop_yield_t_ha         DOUBLE PRECISION,
+            limestone_applied_t_ha  DOUBLE PRECISION,
+            dolomite_applied_t_ha   DOUBLE PRECISION,
             updated_at              TIMESTAMPTZ DEFAULT now(),
             PRIMARY KEY (org_id, field_id, scenario)
         )
     """))
+    # Migration: liming fields added later (VM0042 §8.2.4/§8.5.3 Eq. 8/9/53)
+    # for DBs that predate them — IF NOT EXISTS makes this safely re-runnable.
+    conn.execute(text(
+        "ALTER TABLE alm_practice_schedule ADD COLUMN IF NOT EXISTS limestone_applied_t_ha DOUBLE PRECISION"
+    ))
+    conn.execute(text(
+        "ALTER TABLE alm_practice_schedule ADD COLUMN IF NOT EXISTS dolomite_applied_t_ha DOUBLE PRECISION"
+    ))
     conn.execute(text("""
         CREATE TABLE IF NOT EXISTS alm_livestock_schedule (
             org_id              TEXT NOT NULL DEFAULT 'default',
@@ -693,7 +723,7 @@ ALM_PRACTICE_COLUMNS = [
     "tillage", "tillage_depth_cm", "residue_removed", "residue_burned_kg_ha",
     "synthetic_n_rate_kg_ha", "organic_n_rate_kg_ha",
     "n_fixing_species", "n_fixing_dry_matter_kg_ha", "fuel_use_l_ha",
-    "crop_yield_t_ha",
+    "crop_yield_t_ha", "limestone_applied_t_ha", "dolomite_applied_t_ha",
 ]
 
 

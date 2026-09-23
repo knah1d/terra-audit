@@ -22,6 +22,8 @@ class PracticeScheduleIn(BaseModel):
     n_fixing_dry_matter_kg_ha: float | None = None
     fuel_use_l_ha: float | None = None
     crop_yield_t_ha: float | None = None
+    limestone_applied_t_ha: float | None = None
+    dolomite_applied_t_ha: float | None = None
 
 
 class PracticeScheduleOut(BaseModel):

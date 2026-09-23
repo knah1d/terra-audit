@@ -67,6 +67,8 @@ export interface PracticeScheduleEntry {
   n_fixing_dry_matter_kg_ha?: number | null;
   fuel_use_l_ha?: number | null;
   crop_yield_t_ha?: number | null;
+  limestone_applied_t_ha?: number | null;
+  dolomite_applied_t_ha?: number | null;
 }
 
 export interface PracticeScheduleOut {
