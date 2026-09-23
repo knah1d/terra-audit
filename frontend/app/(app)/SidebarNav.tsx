@@ -1,6 +1,6 @@
 "use client";
 
-import { BrainCircuit, FolderKanban, LayoutGrid, Plus, Users } from "lucide-react";
+import { Activity, BrainCircuit, ClipboardCheck, FolderKanban, LayoutGrid, Plus, Rows3, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LogoutButton } from "@/components/fields/LogoutButton";
@@ -9,14 +9,18 @@ import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import type { SessionClaims } from "@/lib/session";
 
 const NAV_ITEMS = [
+  { href: "/projects", label: "Projects", icon: Rows3, exact: false },
   { href: "/fields", label: "Fields", icon: FolderKanban, exact: false },
   { href: "/fields/new", label: "Register a field", icon: Plus, exact: true },
   { href: "/portfolio", label: "Portfolio", icon: LayoutGrid, exact: false },
+  { href: "/reviews", label: "Reviews", icon: ClipboardCheck, exact: false },
   { href: "/ai-validation", label: "AI Validation", icon: BrainCircuit, exact: false },
 ];
 
 const ADMIN_NAV_ITEMS = [
+  { href: "/admin/setup", label: "Product setup", icon: ClipboardCheck, exact: false },
   { href: "/team", label: "Team", icon: Users, exact: false },
+  { href: "/admin/queue", label: "Worker & queue", icon: Activity, exact: false },
 ];
 
 export function SidebarNav({ session, collapsed = false }: { session: SessionClaims | null; collapsed?: boolean }) {

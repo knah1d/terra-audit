@@ -11,6 +11,7 @@ import datetime
 import jwt
 
 from src.auth import get_user_by_email, verify_password
+from src.account_access import token_version
 from backend.config import JWT_ALGORITHM
 
 
@@ -31,6 +32,7 @@ def create_access_token(user: dict, secret: str, expires_minutes: int) -> str:
         "org_id": user["org_id"],
         "email": user["email"],
         "role": user["role"],
+        "token_version": token_version(user["user_id"]),
         "iat": now,
         "exp": now + datetime.timedelta(minutes=expires_minutes),
     }

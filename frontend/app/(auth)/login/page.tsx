@@ -78,6 +78,7 @@ export default function LoginPage() {
           </form>
           <p className="mt-6 text-sm text-text-secondary">
             Need an account?{" "}
+            <Link href="/account-access" className="mr-3 font-medium text-brand-600 hover:text-brand-700">Forgot password?</Link>
             <Link href="/register" className="font-medium text-brand-600 hover:text-brand-700">
               Create one
             </Link>

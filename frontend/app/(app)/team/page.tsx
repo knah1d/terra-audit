@@ -18,7 +18,7 @@ const ROLES: UserRole[] = ["admin", "analyst", "viewer"];
 
 function InviteSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [inviteUrl, setInviteUrl] = useState("");
   const [role, setRole] = useState<UserRole>("analyst");
   const [error, setError] = useState<string | null>(null);
   const create = useCreateTeamUser();
@@ -27,26 +27,20 @@ function InviteSheet({ open, onClose }: { open: boolean; onClose: () => void }) 
     e.preventDefault();
     setError(null);
     try {
-      await create.mutateAsync({ email, password, role });
-      setEmail("");
-      setPassword("");
-      setRole("analyst");
-      onClose();
+      const result = await create.mutateAsync({ email, role });
+      setInviteUrl(result.invitation_url);
     } catch (err) {
       setError(err instanceof ApiError ? err.detail : "Could not invite teammate");
     }
   }
 
   return (
-    <Sheet open={open} onClose={onClose} title="Invite teammate">
+    <Sheet open={open} onClose={() => { setInviteUrl(""); onClose(); }} title="Invite teammate">
+      {inviteUrl && <div className="mb-4 space-y-2 text-sm"><p>Share this one-time invitation with {email}. It expires in 48 hours and is not emailed automatically.</p><TextInput aria-label="Invitation link" readOnly value={inviteUrl} onFocus={e => e.target.select()} /><p>The teammate chooses their own password. Add them to projects after they accept.</p></div>}
       <form onSubmit={handleSubmit} className="flex flex-col gap-3">
         <div>
           <FieldLabel>Email</FieldLabel>
           <TextInput type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
-        </div>
-        <div>
-          <FieldLabel>Temporary password</FieldLabel>
-          <TextInput type="password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} />
         </div>
         <div>
           <FieldLabel>Role</FieldLabel>
@@ -58,7 +52,7 @@ function InviteSheet({ open, onClose }: { open: boolean; onClose: () => void }) 
         </div>
         <ErrorText>{error ?? undefined}</ErrorText>
         <Button type="submit" loading={create.isPending} className="mt-1">
-          Send invite
+          Create invitation link
         </Button>
       </form>
     </Sheet>

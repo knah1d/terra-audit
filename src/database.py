@@ -77,6 +77,24 @@ def initialize_database():
             _init_postgres(conn)
         from src.monitoring import initialize_tables
         initialize_tables(conn)
+        from src.projects import initialize_tables as initialize_project_tables
+        initialize_project_tables(conn)
+        from src.calculations import initialize_tables as initialize_calculation_tables
+        initialize_calculation_tables(conn)
+        from src.reviews import initialize_tables as initialize_review_tables
+        initialize_review_tables(conn)
+        from src.jobs import initialize_tables as initialize_job_tables
+        initialize_job_tables(conn)
+        from src.monitoring_ops import initialize_tables as initialize_monitoring_ops_tables
+        initialize_monitoring_ops_tables(conn)
+        from src.methodology_registry import initialize_tables as initialize_methodology_registry
+        initialize_methodology_registry(conn)
+        from src.quantification import initialize_tables as initialize_quantification_tables
+        initialize_quantification_tables(conn)
+        from src.ai.workspace import initialize_tables as initialize_ai_tables
+        initialize_ai_tables(conn)
+        from src.account_access import initialize_tables as initialize_account_tables
+        initialize_account_tables(conn)
         conn.execute(text("""CREATE TABLE IF NOT EXISTS timeseries_cache_versions (
             org_id TEXT NOT NULL, field_id TEXT NOT NULL, window_start TEXT NOT NULL,
             window_end TEXT NOT NULL, processing_version TEXT NOT NULL,
@@ -413,20 +431,11 @@ def _init_shared_extra_tables(conn):
             PRIMARY KEY (org_id, field_id, idempotency_key)
         )
     """))
-    conn.execute(text("""
-        CREATE TABLE IF NOT EXISTS background_jobs (
-            job_id      TEXT PRIMARY KEY,
-            org_id      TEXT NOT NULL,
-            job_type    TEXT NOT NULL,
-            status      TEXT NOT NULL DEFAULT 'pending'
-                        CHECK (status IN ('pending', 'running', 'done', 'error')),
-            result_json TEXT,
-            error       TEXT,
-            created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            finished_at TIMESTAMP
-        )
-    """))
-    conn.execute(text("CREATE INDEX IF NOT EXISTS idx_background_jobs_org ON background_jobs(org_id)"))
+    # background_jobs' schema (including its indexes) is owned by
+    # src.jobs.initialize_tables now (Phase 4 durable queue rewrite),
+    # called separately from initialize_database() since it needs real
+    # migration logic (a pre-Phase-4 table rebuild/ALTER), not a plain
+    # CREATE TABLE IF NOT EXISTS the way every other table here is.
 
     # Self-serve org signup (OTP email verification) — no org_id column:
     # this table holds PRE-org state (a signup that hasn't become a real
@@ -828,11 +837,41 @@ def delete_field(org_id: str, field_id: str):
     CASCADE."""
     params = {"org_id": org_id, "field_id": field_id}
     with get_db_connection() as conn:
+        # calculation_attachment_refs has no field_id column of its own —
+        # scoped via the calculations it belongs to instead.
+        conn.execute(text("""
+            DELETE FROM calculation_attachment_refs WHERE org_id = :org_id AND calculation_id IN (
+                SELECT calculation_id FROM calculations WHERE org_id = :org_id AND field_id = :field_id
+            )
+        """), params)
+        # Same pattern for review_submissions' children — reachable only
+        # when the field has no review history at all (the fields router
+        # refuses deletion otherwise; see src.reviews.field_has_submissions),
+        # kept here purely as a defensive, correct cascade.
+        for child_table, fk in (
+            ("reviewer_assignments", "submission_id"), ("review_events", "submission_id"),
+            ("findings", "submission_id"),
+        ):
+            conn.execute(text(f"""
+                DELETE FROM {child_table} WHERE org_id = :org_id AND {fk} IN (
+                    SELECT submission_id FROM review_submissions WHERE org_id = :org_id AND field_id = :field_id
+                )
+            """), params)
+        conn.execute(text("""
+            DELETE FROM finding_comments WHERE org_id = :org_id AND finding_id IN (
+                SELECT finding_id FROM findings WHERE org_id = :org_id AND submission_id IN (
+                    SELECT submission_id FROM review_submissions WHERE org_id = :org_id AND field_id = :field_id
+                )
+            )
+        """), params)
         for table in (
             "fields", "timeseries_cache", "alm_practice_schedule",
             "alm_livestock_schedule", "soc_measurements", "credit_history",
             "crop_seasons", "field_observations", "observation_reviews", "monitoring_runs",
-            "timeseries_cache_versions",
+            "practice_events", "timeseries_cache_versions",
+            "project_fields", "farm_fields", "attachments",
+            "calculations", "calculation_idempotency_keys", "readiness_determinations",
+            "review_submissions", "quantification_units",
         ):
             conn.execute(
                 text(f"DELETE FROM {table} WHERE org_id = :org_id AND field_id = :field_id"),
@@ -1069,7 +1108,10 @@ def commit_carbon_credit_result(
     in the wrong order, so blocked calculations were still recorded as
     issuance rows. See src/issuance.py.
     """
-    issuable, block_reason = result_is_issuable(result)
+    # Lazy import: src.calculations imports from this module at load time,
+    # so importing it back at module level here would be circular.
+    from src.calculations import PATHWAYS
+    issuable, block_reason = result_is_issuable(result, PATHWAYS.get(field_type))
     if not issuable:
         raise NonIssuableResultError(
             f"refusing to persist a non-issuable calculation for field "

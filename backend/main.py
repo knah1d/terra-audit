@@ -27,7 +27,11 @@ from src.database import initialize_database
 from src.issuance import NonIssuableResultError
 
 from backend.config import ALLOWED_ORIGIN_REGEX
-from backend.routers import ai, alm, auth, carbon, export, fields, portfolio, registration, signal, team, monitoring
+from backend.routers import (
+    account_access, ai, ai_workspace, alm, attachments, auth, calculations, carbon, export, farms, fields,
+    methodology, monitoring, monitoring_ops,
+    portfolio, product_ops, projects, registration, reviews, signal, team,
+)
 
 
 @asynccontextmanager
@@ -62,7 +66,10 @@ app.add_middleware(
 )
 
 for router in (auth.router, registration.router, fields.router, alm.router, carbon.router,
-               signal.router, ai.router, portfolio.router, export.router, team.router, monitoring.router):
+               signal.router, ai.router, portfolio.router, export.router, team.router, monitoring.router,
+               projects.router, farms.router, attachments.router, calculations.router, reviews.router,
+               monitoring_ops.router, ai_workspace.router, account_access.router, product_ops.router,
+               methodology.router):
     app.include_router(router)
 
 

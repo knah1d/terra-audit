@@ -1,13 +1,16 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from backend.deps import get_current_user, get_owned_field, get_spatial_engine, require_writer
-from backend.schemas.monitoring import BenchmarkRequest, ObservationCreate, ReviewCreate, SeasonCreate
+from backend.schemas.monitoring import (
+    BenchmarkRequest, ObservationCreate, PracticeEventCreate, ReviewCreate, SeasonCorrection, SeasonCreate,
+)
 from src import monitoring
-from src.ai.crop_benchmark import benchmark, build_corpus
-from src.database import create_job, get_job, list_completed_jobs, mark_job_done, mark_job_error, mark_job_running
-from src.multicrop_data import extract_observations
+from src.ai.crop_benchmark import build_corpus
+from src.database import get_job, list_completed_jobs
+from src.jobs import create_job, request_cancel
+from src.processing import MULTICROP_VERSION
 
 router = APIRouter(tags=["multi-crop-monitoring"])
 _field = get_owned_field()
@@ -28,13 +31,43 @@ def list_seasons(field_id: str, user=Depends(get_current_user), field=Depends(_f
 @router.post("/fields/{field_id}/crop-seasons", status_code=201)
 def create_season(field_id: str, body: SeasonCreate, user=Depends(require_writer), field=Depends(_field)):
     return monitoring.append_record("crop_seasons", user["org_id"], field_id, None,
-                                    {**body.model_dump(mode="json"), "created_by": user["user_id"]})
+                                    {**body.model_dump(mode="json"), "version": 1, "created_by": user["user_id"]})
 
 
 @router.get("/fields/{field_id}/crop-seasons/{season_id}/evidence")
 def evidence(field_id: str, season_id: str, user=Depends(get_current_user), field=Depends(_field)):
     owned_season(user["org_id"], field_id, season_id)
     return monitoring.evidence_package(user["org_id"], field_id, season_id)
+
+
+@router.get("/fields/{field_id}/crop-seasons/{season_id}/versions")
+def season_versions(field_id: str, season_id: str, user=Depends(get_current_user), field=Depends(_field)):
+    """Every version of this season (the original, then each correction in
+    order) — the current/latest one is versions[-1], same as owned_season()
+    returns. Lets a reviewer see what the season looked like at any point
+    without losing the corrected history."""
+    owned_season(user["org_id"], field_id, season_id)
+    return monitoring.season_versions(user["org_id"], field_id, season_id)
+
+
+@router.post("/fields/{field_id}/crop-seasons/{season_id}/corrections", status_code=201)
+def correct_season(field_id: str, season_id: str, body: SeasonCorrection,
+                   user=Depends(require_writer), field=Depends(_field)):
+    """Appends a corrected version of an existing season (new dates/crops/
+    name/notes + a mandatory reason) WITHOUT changing its season_id —
+    every observation/review/monitoring-run already recorded against this
+    season stays linked to it and keeps recording which version was in
+    effect when it was created (see create_observation's season_version)."""
+    prior = owned_season(user["org_id"], field_id, season_id)
+    payload = body.model_dump(mode="json")
+    reason = payload.pop("reason")
+    payload.update(
+        version=prior["payload"].get("version", 1) + 1,
+        correction_reason=reason,
+        corrected_by=user["user_id"],
+        created_by=prior["payload"]["created_by"],
+    )
+    return monitoring.append_record("crop_seasons", user["org_id"], field_id, season_id, payload)
 
 
 @router.post("/fields/{field_id}/crop-seasons/{season_id}/observations", status_code=201)
@@ -49,6 +82,7 @@ def create_observation(field_id: str, season_id: str, body: ObservationCreate,
         raise HTTPException(422, "Field observations cannot be dated in the future")
     payload = body.model_dump(mode="json")
     payload.update(observed_at=observed.isoformat(), created_by=user["user_id"],
+                   season_version=season.get("version", 1),
                    unit="cm_relative_to_soil_surface" if body.kind == "water_level" else
                         "percent" if body.kind == "residue_cover" else None)
     return monitoring.append_record("field_observations", user["org_id"], field_id, season_id, payload)
@@ -68,28 +102,62 @@ def review_observation(field_id: str, season_id: str, observation_id: str, body:
         {**body.model_dump(), "observation_id": observation_id, "reviewed_by": user["user_id"]})
 
 
-def _run_monitoring(job_id, user, field, season):
-    try:
-        mark_job_running(job_id)
-        payload = extract_observations(field["geojson_geometry"], season["payload"]["start_date"], season["payload"]["end_date"])
-        payload.update(field=field, season=season, requested_by=user["user_id"])
-        saved = monitoring.append_record("monitoring_runs", user["org_id"], field["field_id"], season["id"], payload)
-        mark_job_done(job_id, {"run_id": saved["id"], "season_id": season["id"], "quality": payload["quality"]})
-    except Exception as exc:
-        mark_job_error(job_id, str(exc))
+@router.get("/fields/{field_id}/crop-seasons/{season_id}/practice-events")
+def list_practice_events(field_id: str, season_id: str, user=Depends(get_current_user), field=Depends(_field)):
+    owned_season(user["org_id"], field_id, season_id)
+    return monitoring.records("practice_events", user["org_id"], field_id, season_id)
+
+
+@router.post("/fields/{field_id}/crop-seasons/{season_id}/practice-events", status_code=201)
+def create_practice_event(field_id: str, season_id: str, body: PracticeEventCreate,
+                          user=Depends(require_writer), field=Depends(_field)):
+    season = owned_season(user["org_id"], field_id, season_id)["payload"]
+    if not season["start_date"] <= body.event_date.isoformat() <= season["end_date"]:
+        raise HTTPException(422, "Practice event must fall within the crop season")
+    payload = body.model_dump(mode="json")
+    payload.update(created_by=user["user_id"], season_version=season.get("version", 1))
+    return monitoring.append_record("practice_events", user["org_id"], field_id, season_id, payload)
+
+
+def _monitoring_payload(field: dict, season: dict, force_refresh: bool, requested_by: str) -> dict:
+    """Freezes exactly what backend/job_handlers.handle_multicrop_monitoring
+    needs at SUBMISSION time — geometry, season dates, and the processing
+    version in effect right now — so a later edit to the field's geometry
+    or the season's dates can never silently change what an
+    already-queued job computes (Phase 4's "freeze each child job's
+    geometry, season dates, processing version" requirement)."""
+    return {
+        "field_id": field["field_id"], "season_id": season["id"],
+        "geometry": field["geojson_geometry"], "season_start": season["payload"]["start_date"],
+        "season_end": season["payload"]["end_date"], "processing_version": MULTICROP_VERSION,
+        "force_refresh": force_refresh, "requested_by": requested_by,
+    }
 
 
 @router.post("/fields/{field_id}/crop-seasons/{season_id}/monitoring-runs", status_code=202)
-def run_monitoring(field_id: str, season_id: str, background_tasks: BackgroundTasks,
+def run_monitoring(field_id: str, season_id: str, force_refresh: bool = False,
                    user=Depends(require_writer), field=Depends(_field), engine=Depends(get_spatial_engine)):
     # Engine dependency ensures EE initialized; unlike rice signal-runs this
     # generic pipeline is deliberately available to BOTH accounting types.
+    # Hands off to the durable worker (Phase 4) instead of an in-process
+    # BackgroundTask — reuse-vs-refresh is explicit via force_refresh,
+    # honored by backend/job_handlers.handle_multicrop_monitoring.
     season = owned_season(user["org_id"], field_id, season_id)
     if season["payload"]["end_date"] >= datetime.now(timezone.utc).date().isoformat():
         raise HTTPException(422, "Retrospective benchmarks require a completed season ending before today")
-    job_id = create_job(user["org_id"], "multicrop_monitoring")
-    background_tasks.add_task(_run_monitoring, job_id, user, field, season)
+    payload = _monitoring_payload(field, season, force_refresh, user["user_id"])
+    job_id = create_job(user["org_id"], "multicrop_monitoring", payload)
     return {"job_id": job_id}
+
+
+@router.post("/fields/{field_id}/crop-seasons/{season_id}/monitoring-runs/{job_id}/cancel")
+def cancel_monitoring(field_id: str, season_id: str, job_id: str,
+                      user=Depends(require_writer), field=Depends(_field)):
+    job = get_job(user["org_id"], job_id)
+    if job is None:
+        raise HTTPException(404, "Job not found")
+    request_cancel(user["org_id"], job_id)
+    return {"ok": True}
 
 
 @router.get("/multi-crop/jobs/{job_id}")
@@ -112,18 +180,15 @@ def list_benchmarks(user=Depends(get_current_user)):
             for j in list_completed_jobs(user["org_id"], "crop_benchmark")]
 
 
-def _run_benchmark(job_id, corpus, body):
-    try:
-        mark_job_running(job_id)
-        mark_job_done(job_id, benchmark(corpus, body.split, body.models))
-    except Exception as exc:
-        mark_job_error(job_id, str(exc))
-
-
 @router.post("/multi-crop/benchmarks", status_code=202)
-def run_benchmark(body: BenchmarkRequest, background_tasks: BackgroundTasks, user=Depends(require_writer)):
-    # Freeze the dataset at submission so concurrent reviews cannot change it.
+def run_benchmark(body: BenchmarkRequest, user=Depends(require_writer)):
+    # Freeze the dataset at submission so concurrent reviews cannot change
+    # it — stored in the job's own payload (not a Python closure) so the
+    # durable worker (backend/job_handlers.handle_crop_benchmark), which
+    # may run in a different process, computes from the exact same frozen
+    # corpus rather than re-fetching a possibly-different one later.
     corpus = build_corpus(user["org_id"])
-    job_id = create_job(user["org_id"], "crop_benchmark")
-    background_tasks.add_task(_run_benchmark, job_id, corpus, body)
+    job_id = create_job(user["org_id"], "crop_benchmark", {
+        "corpus": corpus, "split": body.split, "models": body.models, "requested_by": user["user_id"],
+    })
     return {"job_id": job_id}

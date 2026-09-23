@@ -65,6 +65,21 @@ if not EMAIL_CONFIGURED:
         stacklevel=2,
     )
 
+WORKER_POLL_INTERVAL_SECONDS = float(os.environ.get("WORKER_POLL_INTERVAL_SECONDS", "2"))
+WORKER_HEARTBEAT_INTERVAL_SECONDS = float(os.environ.get("WORKER_HEARTBEAT_INTERVAL_SECONDS", "15"))
+MAX_CONCURRENT_JOBS_PER_ORG = int(os.environ.get("MAX_CONCURRENT_JOBS_PER_ORG", "3"))
+MAX_BULK_MONITORING_ITEMS = int(os.environ.get("MAX_BULK_MONITORING_ITEMS", "100"))
+
 OTP_EXPIRE_MINUTES = int(os.environ.get("OTP_EXPIRE_MINUTES", "10"))
 OTP_MAX_ATTEMPTS = int(os.environ.get("OTP_MAX_ATTEMPTS", "5"))
 OTP_RESEND_COOLDOWN_SECONDS = int(os.environ.get("OTP_RESEND_COOLDOWN_SECONDS", "60"))
+
+# Document/photo attachments (Phase 1 — see docs/MULTICROP.md). Files
+# themselves live under ATTACHMENTS_DIR (see src/storage.py), not in the
+# database; only metadata is stored in the `attachments` table.
+MAX_ATTACHMENT_SIZE_BYTES = int(os.environ.get("MAX_ATTACHMENT_SIZE_BYTES", str(15 * 1024 * 1024)))
+ALLOWED_ATTACHMENT_CONTENT_TYPES = {
+    "image/jpeg", "image/png", "image/webp", "image/heic",
+    "application/pdf", "text/csv", "text/plain", "application/json",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+}

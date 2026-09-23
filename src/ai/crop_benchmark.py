@@ -7,6 +7,7 @@ but are excluded from this single-label experiment.
 import numpy as np
 import pandas as pd
 import platform
+from datetime import date
 from importlib.metadata import version
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.impute import SimpleImputer
@@ -48,22 +49,28 @@ def seasonal_features(run):
     return features
 
 
-def build_corpus(org_id):
+def build_corpus(org_id, field_ids=None):
     observations = records("field_observations", org_id)
     reviews = records("observation_reviews", org_id)
     runs = records("monitoring_runs", org_id)
     decisions = {r["payload"]["observation_id"]: r["payload"] for r in reviews}
     examples, excluded = [], []
-    for season in records("crop_seasons", org_id):
-        sid, data = season["id"], season["payload"]
+    latest_seasons = {r["season_id"]: r for r in records("crop_seasons", org_id)
+                      if field_ids is None or r["field_id"] in field_ids}
+    for sid, season in latest_seasons.items():
+        data = season["payload"]
         labels = [r for r in observations if r["season_id"] == sid
                   and r["payload"]["kind"] == "crop_identity"
                   and r["payload"]["source"] in {"field_measurement", "expert_observation"}
                   and decisions.get(r["id"], {}).get("decision") == "accepted"]
         candidates = [r for r in runs if r["season_id"] == sid
-                      and r["payload"].get("processing_version") == MULTICROP_VERSION]
+                      and r["payload"].get("processing_version") == MULTICROP_VERSION
+                      and r["payload"].get("window_start") == data["start_date"]
+                      and r["payload"].get("window_end") == data["end_date"]]
         reason = None
-        if len(data["crops"]) != 1:
+        if data["end_date"] >= date.today().isoformat():
+            reason = "Full-season training requires a completed season"
+        elif len(data["crops"]) != 1:
             reason = "Mixed crops require a separate multi-label benchmark"
         elif data["crops"][0] in {"unknown", "other", "mixed"}:
             reason = "An identified crop is required for supervised evaluation"
@@ -80,6 +87,7 @@ def build_corpus(org_id):
             continue
         run = candidates[-1]
         examples.append({"season_id": sid, "field_id": season["field_id"],
+            "season_version_id": season["id"],
             "year": data["start_date"][:4], "district": run["payload"]["field"]["district"],
             "crop": data["crops"][0], "run_id": run["id"], "run_sha256": digest(run["payload"]),
             "label_observation_ids": [r["id"] for r in labels],

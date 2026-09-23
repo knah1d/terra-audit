@@ -11,6 +11,7 @@ import { SESSION_COOKIE } from "@/lib/session";
  * convention was renamed in Next.js 16; this repo is on 16.3.1.)
  */
 export function proxy(request: NextRequest) {
+  if (request.nextUrl.pathname === "/account-access") return NextResponse.next();
   const token = request.cookies.get(SESSION_COOKIE)?.value;
   const isPublicAuthPage =
     request.nextUrl.pathname.startsWith("/login") || request.nextUrl.pathname.startsWith("/register");
