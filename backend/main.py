@@ -30,7 +30,7 @@ from backend.config import ALLOWED_ORIGIN_REGEX
 from backend.routers import (
     account_access, ai, ai_workspace, alm, attachments, auth, calculations, carbon, export, farms, fields,
     methodology, monitoring, monitoring_ops,
-    portfolio, product_ops, projects, registration, reviews, signal, team,
+    portfolio, product_ops, projects, registration, reviews, signal, soil_evidence, team,
 )
 
 
@@ -69,7 +69,7 @@ for router in (auth.router, registration.router, fields.router, alm.router, carb
                signal.router, ai.router, portfolio.router, export.router, team.router, monitoring.router,
                projects.router, farms.router, attachments.router, calculations.router, reviews.router,
                monitoring_ops.router, ai_workspace.router, account_access.router, product_ops.router,
-               methodology.router):
+               methodology.router, soil_evidence.router):
     app.include_router(router)
 
 

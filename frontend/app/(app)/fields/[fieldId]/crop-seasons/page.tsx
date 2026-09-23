@@ -10,7 +10,10 @@ import { Select, TextInput } from "@/components/ui/Field";
 import { apiFetch } from "@/lib/api";
 
 type RecordRow<T> = { id: string; season_id: string; created_at: string; payload: T };
-type Season = { name: string; crops: string[]; start_date: string; end_date: string; notes: string };
+type Season = {
+  name: string; crops: string[]; start_date: string; end_date: string; notes: string;
+  season_type?: string; is_historical?: boolean; fallow_reason?: string; missing_period_reason?: string;
+};
 type Observation = { kind: string; value: string; numeric_value: number | null; unit: string | null; source: string; observed_at: string; evidence_reference: string; created_by: string };
 type Review = { observation_id: string; decision: string; reason: string; reviewed_by: string };
 type Run = { processing_version: string; quality: { status: string; warnings: string[]; sensors: Record<string, { usable_dates: number; max_gap_days: number }> } };
@@ -36,6 +39,8 @@ export default function CropSeasonsPage() {
   const [busy, setBusy] = useState(false);
   const [jobId, setJobId] = useState<string | null>(null);
   const [kind, setKind] = useState("crop_identity");
+  const [seasonType, setSeasonType] = useState("single_crop");
+  const [isHistorical, setIsHistorical] = useState(false);
   const [split, setSplit] = useState("field");
   const seasons = useQuery({ queryKey: ["crop-seasons", field.field_id], queryFn: () => apiFetch<RecordRow<Season>[]>(base) });
   const seasonId = selected || seasons.data?.[0]?.id || "";
@@ -75,19 +80,52 @@ export default function CropSeasonsPage() {
       <h3 className="mb-3 font-medium">Add a crop season</h3>
       <form className="grid gap-3 sm:grid-cols-2" onSubmit={e => {
         e.preventDefault(); const form = e.currentTarget; const data = new FormData(form);
+        const isGap = seasonType === "fallow" || seasonType === "missing_period";
         void perform(async () => {
           const row = await apiFetch<RecordRow<Season>>(base, { method: "POST", json: {
-            name: data.get("name"), crops: String(data.get("crops")).split(","), start_date: data.get("start_date"), end_date: data.get("end_date"), notes: data.get("notes"),
+            name: data.get("name"),
+            crops: isGap ? [] : String(data.get("crops")).split(","),
+            start_date: data.get("start_date"), end_date: data.get("end_date"), notes: data.get("notes"),
+            season_type: seasonType, is_historical: isHistorical,
+            fallow_reason: seasonType === "fallow" ? data.get("fallow_reason") : "",
+            missing_period_reason: seasonType === "missing_period" ? data.get("missing_period_reason") : "",
           } });
-          setSelected(row.id); form.reset(); await queryClient.invalidateQueries({ queryKey: ["crop-seasons", field.field_id] });
+          setSelected(row.id); form.reset(); setSeasonType("single_crop"); setIsHistorical(false);
+          await queryClient.invalidateQueries({ queryKey: ["crop-seasons", field.field_id] });
           await queryClient.invalidateQueries({ queryKey: ["crop-corpus"] }); setNotice("Crop season saved.");
         });
       }}>
         <label className="text-sm">Season name<TextInput name="name" required maxLength={120} placeholder="Winter 2025–26" /></label>
-        <label className="text-sm">Crops, separated by commas<TextInput name="crops" required placeholder="Wheat, lentil" /></label>
+        <label className="text-sm">Season type
+          <Select value={seasonType} onChange={e => setSeasonType(e.target.value)}>
+            <option value="single_crop">Single crop</option>
+            <option value="rotation">Rotation (multiple crops in sequence)</option>
+            <option value="intercrop">Intercrop (crops grown together)</option>
+            <option value="cover_crop">Cover crop</option>
+            <option value="fallow">Fallow (documented, no crop)</option>
+            <option value="missing_period">Missing period (records unavailable)</option>
+          </Select>
+        </label>
+        {seasonType !== "fallow" && seasonType !== "missing_period" && (
+          <label className="text-sm">Crops, separated by commas<TextInput name="crops" required placeholder="Wheat, lentil" /></label>
+        )}
         <label className="text-sm">Start date<TextInput name="start_date" type="date" required /></label>
         <label className="text-sm">End date (inclusive)<TextInput name="end_date" type="date" required /></label>
+        {seasonType === "fallow" && (
+          <label className="text-sm sm:col-span-2">Fallow reason (required)<TextInput name="fallow_reason" required maxLength={500} placeholder="e.g. field rested between rice seasons" /></label>
+        )}
+        {seasonType === "missing_period" && (
+          <label className="text-sm sm:col-span-2">Why records are unavailable (required)<TextInput name="missing_period_reason" required maxLength={500} placeholder="e.g. farmer records lost for this year" /></label>
+        )}
+        <label className="flex items-center gap-2 text-sm sm:col-span-2">
+          <input type="checkbox" checked={isHistorical} onChange={e => setIsHistorical(e.target.checked)} />
+          This is historical/baseline evidence (predates the monitored project period), not a monitored project-period season.
+        </label>
         <label className="text-sm sm:col-span-2">Notes<TextInput name="notes" maxLength={2000} /></label>
+        <p className="text-xs text-text-tertiary sm:col-span-2">
+          Rotation/intercrop crop-sequence sub-periods and grouped-project eligibility areas are not yet editable here — see the
+          field&apos;s Quantification Units tab and the API for the fuller data model.
+        </p>
         <div><Button loading={busy} type="submit">Save season</Button></div>
       </form>
     </Card>}

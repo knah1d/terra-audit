@@ -6,11 +6,26 @@ crediting claim for it are three separate capabilities.").
 This module answers ONLY "what crop is this" (a recordkeeping concern —
 any crop can be entered as a crop-season/practice-event record, per
 Phase 2's "do not assume all crops qualify for carbon accounting").
-`alm_eligible`/`vm0051_eligible` here are coarse, conservative signals
-consumed by src.readiness's substantive applicability check — they are
-NOT a substitute for the real per-methodology applicability conditions
-(soil type, drainage class, prior land use, etc.) that this codebase
-does not measure.
+`alm_eligible`/`vm0051_eligible` here are coarse, INDICATIVE signals
+only — src.readiness's applicability check treats them as a ceiling of
+'needs_review', never as sufficient by itself to mark full methodology
+applicability 'satisfied' (see _methodology_applicability_check). They
+are not a substitute for the real per-methodology applicability
+conditions (actual water regime, drainage class, prior land use, etc.)
+that this codebase does not measure.
+
+Deliberately NOT modeled here: a per-crop "is this land wetland" flag.
+Land-use CONDITION (whether a given field is actually under continuous
+flooding, drained, etc.) is not the same fact as crop IDENTITY (what
+crop is planted), and conflating them would mean e.g. assuming every
+rice declaration describes wetland cropland — rice is grown under both
+continuously-flooded and Alternate-Wetting-and-Drying (deliberately NOT
+continuously flooded) regimes, and this module has no way to tell them
+apart from a crop name alone. src.readiness's vm0042.excludes_wetland_rice
+check is worded around the REAL, narrower fact instead: this codebase
+has not implemented any rice-SOC assessment under VM0042 in any water
+regime, so a rice declaration there is unsupported pending that
+implementation — not because rice "is" wetland.
 
 AI model coverage is deliberately NOT modeled here as a static per-crop
 flag: this codebase now supports per-PROJECT trained/activated models
@@ -30,33 +45,20 @@ that need one; a crop absent from CROPS is treated as `unknown`, never
 silently assumed eligible.
 """
 
-# is_wetland_crop: normally grown under continuous flooding — the basis
-# for VM0042's condition-8 exclusion (methodologies/verra/vm0042/
-# VM0042v2.2.pdf, applicability §4). VM0051 covers rice specifically
-# under Alternate Wetting & Drying (i.e. deliberately NOT continuously
-# flooded) — the two flags below are about the CROP's default regime,
-# not about a specific field's actual practice, which is why
-# `vm0042.excludes_wetland_rice` in src/readiness.py additionally checks
-# the field's own field_type/pathway rather than relying on this alone.
 CROPS: dict[str, dict] = {
-    "rice": {"common_names": ["rice", "paddy"], "is_wetland_crop": True,
-             "alm_eligible": False, "vm0051_eligible": True},
-    "wheat": {"common_names": ["wheat"], "is_wetland_crop": False,
-              "alm_eligible": True, "vm0051_eligible": False},
-    "maize": {"common_names": ["maize", "corn"], "is_wetland_crop": False,
-              "alm_eligible": True, "vm0051_eligible": False},
-    "potato": {"common_names": ["potato"], "is_wetland_crop": False,
-               "alm_eligible": True, "vm0051_eligible": False},
-    "jute": {"common_names": ["jute"], "is_wetland_crop": False,
-             "alm_eligible": True, "vm0051_eligible": False},
-    "lentil": {"common_names": ["lentil", "masoor"], "is_wetland_crop": False,
-               "alm_eligible": True, "vm0051_eligible": False},
-    "mustard": {"common_names": ["mustard", "rapeseed"], "is_wetland_crop": False,
-                "alm_eligible": True, "vm0051_eligible": False},
-    "sugarcane": {"common_names": ["sugarcane", "sugar cane"], "is_wetland_crop": False,
-                  "alm_eligible": True, "vm0051_eligible": False},
-    "vegetables": {"common_names": ["vegetable", "vegetables"], "is_wetland_crop": False,
-                   "alm_eligible": True, "vm0051_eligible": False},
+    "rice": {"common_names": ["rice", "paddy"], "alm_eligible": False, "vm0051_eligible": True,
+             "notes": "vm0051_eligible reflects VM0051's rice-AWD methane scope. alm_eligible is False "
+                      "not because rice 'is' wetland, but because this codebase has not implemented any "
+                      "rice-SOC assessment under VM0042 in any water regime — see "
+                      "src.readiness's vm0042.excludes_wetland_rice."},
+    "wheat": {"common_names": ["wheat"], "alm_eligible": True, "vm0051_eligible": False},
+    "maize": {"common_names": ["maize", "corn"], "alm_eligible": True, "vm0051_eligible": False},
+    "potato": {"common_names": ["potato"], "alm_eligible": True, "vm0051_eligible": False},
+    "jute": {"common_names": ["jute"], "alm_eligible": True, "vm0051_eligible": False},
+    "lentil": {"common_names": ["lentil", "masoor"], "alm_eligible": True, "vm0051_eligible": False},
+    "mustard": {"common_names": ["mustard", "rapeseed"], "alm_eligible": True, "vm0051_eligible": False},
+    "sugarcane": {"common_names": ["sugarcane", "sugar cane"], "alm_eligible": True, "vm0051_eligible": False},
+    "vegetables": {"common_names": ["vegetable", "vegetables"], "alm_eligible": True, "vm0051_eligible": False},
 }
 
 _ALIASES = {alias: key for key, meta in CROPS.items() for alias in meta["common_names"]}
@@ -68,9 +70,9 @@ def classify(crop_name: str) -> dict:
     crop name, or an explicit 'unknown' entry — never a guess."""
     key = _ALIASES.get(crop_name.strip().lower())
     if key is None:
-        return {"key": None, "common_names": [crop_name], "is_wetland_crop": None,
+        return {"key": None, "common_names": [crop_name],
                 "alm_eligible": None, "vm0051_eligible": None, "recognized": False}
-    return {"key": key, **CROPS[key], "recognized": True}
+    return {"key": key, "notes": None, **CROPS[key], "recognized": True}
 
 
 def list_taxonomy() -> list[dict]:

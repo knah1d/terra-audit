@@ -85,6 +85,23 @@ def build_snapshot(org_id: str, field: dict, project_id: str | None, accounting_
         # computes from THIS value, never a second live read at commit time.
         snapshot["prior_cumulative_delta_co2_wp_t"] = get_alm_cumulative_delta(org_id, field_id)
 
+        # Traceable soil evidence (Phase 3, Part B.7) — frozen ALONGSIDE
+        # the aggregate soc_measurements above, clearly labeled as
+        # supplementary. This is NOT what calculate_from_snapshot() reads
+        # (see this module's calculate_from_snapshot, unchanged below) —
+        # it exists so a committed snapshot can show a reviewer the real
+        # sampling plan/strata/geolocated samples behind the aggregate
+        # numbers when they were recorded, without silently claiming the
+        # aggregate itself was derived from them.
+        from src import soil_evidence as soil_evidence_db
+        plans = soil_evidence_db.list_plans(org_id, field_id)
+        snapshot["soil_evidence"] = {
+            "plans": [{**p, "strata": soil_evidence_db.list_strata(org_id, p["plan_id"]),
+                       "samples": soil_evidence_db.list_samples(org_id, p["plan_id"])} for p in plans],
+            "note": "Supplementary traceability evidence, frozen for reference — the calculation itself "
+                    "used the aggregate soc_measurements above, not these samples directly.",
+        }
+
     return snapshot
 
 

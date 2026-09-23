@@ -91,6 +91,8 @@ def initialize_database():
         initialize_methodology_registry(conn)
         from src.quantification import initialize_tables as initialize_quantification_tables
         initialize_quantification_tables(conn)
+        from src.soil_evidence import initialize_tables as initialize_soil_evidence_tables
+        initialize_soil_evidence_tables(conn)
         from src.ai.workspace import initialize_tables as initialize_ai_tables
         initialize_ai_tables(conn)
         from src.account_access import initialize_tables as initialize_account_tables
@@ -844,6 +846,14 @@ def delete_field(org_id: str, field_id: str):
                 SELECT calculation_id FROM calculations WHERE org_id = :org_id AND field_id = :field_id
             )
         """), params)
+        # soil_strata has no field_id column of its own — scoped via the
+        # sampling plan it belongs to (soil_sampling_plans/soil_samples
+        # both DO have field_id, so they're covered by the plain loop below).
+        conn.execute(text("""
+            DELETE FROM soil_strata WHERE org_id = :org_id AND plan_id IN (
+                SELECT plan_id FROM soil_sampling_plans WHERE org_id = :org_id AND field_id = :field_id
+            )
+        """), params)
         # Same pattern for review_submissions' children — reachable only
         # when the field has no review history at all (the fields router
         # refuses deletion otherwise; see src.reviews.field_has_submissions),
@@ -872,6 +882,7 @@ def delete_field(org_id: str, field_id: str):
             "project_fields", "farm_fields", "attachments",
             "calculations", "calculation_idempotency_keys", "readiness_determinations",
             "review_submissions", "quantification_units",
+            "soil_sampling_plans", "soil_samples",
         ):
             conn.execute(
                 text(f"DELETE FROM {table} WHERE org_id = :org_id AND field_id = :field_id"),

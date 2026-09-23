@@ -32,7 +32,7 @@ class SeasonCreate(BaseModel):
     # defaults so an existing pre-Phase-2 SeasonCreate payload (or a
     # historical row read back without these keys) keeps working exactly
     # as before. `season_type='single_crop'` is still the ordinary case.
-    season_type: Literal["single_crop", "rotation", "intercrop", "cover_crop", "fallow"] = "single_crop"
+    season_type: Literal["single_crop", "rotation", "intercrop", "cover_crop", "fallow", "missing_period"] = "single_crop"
     is_historical: bool = Field(
         default=False,
         description="Marks this as a pre-project historical activity record (baseline evidence), not a "
@@ -41,6 +41,12 @@ class SeasonCreate(BaseModel):
     crop_sequence: list[CropSequenceEntry] = Field(default_factory=list, max_length=20)
     intercrop_arrangement: str = Field(default="", max_length=200)
     fallow_reason: str = Field(default="", max_length=500)
+    # 'missing_period' explicitly records "we have no activity records for
+    # this span" (e.g. an unavailable year of farmer history) — distinct
+    # from 'fallow' (a real, known agronomic fallow). Both make a gap in
+    # the historical look-back window VISIBLE and reviewable instead of
+    # silently absent; see src.readiness._historical_lookback_check.
+    missing_period_reason: str = Field(default="", max_length=500)
 
     @field_validator("crops")
     @classmethod
@@ -56,11 +62,15 @@ class SeasonCreate(BaseModel):
             raise ValueError("Season end must be on or after its start")
         if (self.end_date - self.start_date).days > 730:
             raise ValueError("Use monitoring periods of at most two years, including perennial crops")
-        if self.season_type == "fallow":
+        if self.season_type in ("fallow", "missing_period"):
             if self.crops:
-                raise ValueError("A fallow season records no crop — leave 'crops' empty")
+                raise ValueError(f"A '{self.season_type}' season records no crop — leave 'crops' empty")
         elif not self.crops:
-            raise ValueError("At least one crop is required unless season_type is 'fallow'")
+            raise ValueError("At least one crop is required unless season_type is 'fallow' or 'missing_period'")
+        if self.season_type == "fallow" and not self.fallow_reason:
+            raise ValueError("fallow_reason is required for a 'fallow' season")
+        if self.season_type == "missing_period" and not self.missing_period_reason:
+            raise ValueError("missing_period_reason is required for a 'missing_period' season")
         if self.season_type == "rotation" and not self.crop_sequence:
             raise ValueError("A rotation season requires at least one crop_sequence entry")
         for entry in self.crop_sequence:

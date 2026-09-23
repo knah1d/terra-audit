@@ -445,7 +445,7 @@ def list_farms_for_field(org_id: str, field_id: str) -> list[dict]:
 # Attachments (metadata rows — file bytes live in src.storage)
 # --------------------------------------------------------------------------
 
-ATTACHMENT_TARGET_TYPES = {"field", "season", "observation", "practice_event"}
+ATTACHMENT_TARGET_TYPES = {"field", "season", "observation", "practice_event", "soil_sample", "soil_sampling_plan"}
 
 
 def create_attachment(org_id: str, target_type: str, target_id: str, field_id: str, filename: str,

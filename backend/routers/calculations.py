@@ -184,12 +184,18 @@ def get_calculation_chain(calculation_id: str, user=Depends(get_current_user)):
 @router.get("/fields/{field_id}/calculations/readiness/determinations")
 def get_determinations(
     field_id: str, accounting_pathway: str, monitoring_period_start: str, monitoring_period_end: str,
-    project_id: str | None = None, user=Depends(get_current_user), field=Depends(_field),
+    season_ids: str, project_id: str | None = None, user=Depends(get_current_user), field=Depends(_field),
 ):
+    """`season_ids` is a comma-separated list — needed (not just the
+    bundle/dates) to recompute the same evidence fingerprint a
+    determination was scoped against; see src.readiness.
+    compute_evidence_fingerprint."""
     bundle = registry.resolve_bundle_for_project(user["org_id"], project_id, accounting_pathway)
+    sids = [s for s in season_ids.split(",") if s]
+    fingerprint = readiness_engine.compute_evidence_fingerprint(user["org_id"], field_id, accounting_pathway, sids)
     return calculations_db.latest_determinations(
         user["org_id"], field_id, accounting_pathway, bundle["bundle_id"] if bundle else None,
-        monitoring_period_start, monitoring_period_end,
+        monitoring_period_start, monitoring_period_end, fingerprint,
     )
 
 
@@ -200,14 +206,18 @@ def record_determination(
     """Manual determinations (e.g. an expert additionality call) always
     require an actor and a reason — enforced by DeterminationRequest's
     required `reason` field, never accepted as a bare status flip.
-    Scoped to the resolved methodology bundle + the exact reporting
-    period supplied; restricted to reviewable requirements (raises 422
-    via the existing ValueError handler for anything unsupported/
-    automated_only — see src.calculations.record_determination)."""
+    Scoped to the resolved methodology bundle, the exact reporting
+    period, AND the current evidence fingerprint over `season_ids`;
+    restricted to reviewable requirements (raises 422 via the existing
+    ValueError handler for anything unsupported/automated_only — see
+    src.calculations.record_determination)."""
     bundle = registry.resolve_bundle_for_project(user["org_id"], body.project_id, body.accounting_pathway)
+    fingerprint = readiness_engine.compute_evidence_fingerprint(
+        user["org_id"], field_id, body.accounting_pathway, body.season_ids,
+    )
     return calculations_db.record_determination(
         user["org_id"], field_id, body.accounting_pathway, body.requirement_id,
         bundle["bundle_id"] if bundle else None,
         body.monitoring_period_start.isoformat(), body.monitoring_period_end.isoformat(),
-        body.status, body.reason, user["user_id"],
+        fingerprint, body.status, body.reason, user["user_id"],
     )

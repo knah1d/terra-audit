@@ -40,6 +40,17 @@ def _validate_target(org_id: str, field_id: str, target_type: str, target_id: st
         if monitoring.season(org_id, field_id, target_id) is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Crop season not found on this field")
         return
+    if target_type == "soil_sampling_plan":
+        from src import soil_evidence
+        plan = soil_evidence.get_plan(org_id, target_id)
+        if plan is None or plan["field_id"] != field_id:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Soil sampling plan not found on this field")
+        return
+    if target_type == "soil_sample":
+        from src import soil_evidence
+        if not any(s["sample_id"] == target_id for s in soil_evidence.field_samples(org_id, field_id)):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Soil sample not found on this field")
+        return
     table = "field_observations" if target_type == "observation" else "practice_events"
     if not any(r["id"] == target_id for r in monitoring.records(table, org_id, field_id)):
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"{target_type.replace('_', ' ').title()} not found on this field")
