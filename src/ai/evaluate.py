@@ -49,6 +49,8 @@ def summarize_fold_predictions(result: dict) -> dict:
         "model_name": result["model_name"],
         "k_used": result["k_used"],
         "stratified": result["stratified"],
+        "split_strategy": result.get("split_strategy", "unknown"),
+        "label_source": "threshold_gate_not_independent_ground_truth",
         "threshold_agreement_score": float(agreement),
         "macro_avg": {
             "precision": float(macro_p),

@@ -61,6 +61,7 @@ def build_features(df: pd.DataFrame, include_area_ha: bool = False) -> tuple[pd.
     # Absent at inference time (predictor.py has no ground truth to attach) —
     # present at training time (dataset_builder.py's build_dataset output).
     y = df["label"] if "label" in df.columns else None
+    X.attrs["field_groups"] = df["field_id"].tolist()
     return X, y
 
 

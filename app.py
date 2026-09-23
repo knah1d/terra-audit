@@ -1991,7 +1991,11 @@ with tab_validation:
                 st.warning("No training dataset found. Click **Build / Rebuild Dataset** first.")
             else:
                 _train_X, _train_y = build_features(_train_df)
-                _train_result = train_and_evaluate(_train_model_key, _train_X, _train_y)
+                try:
+                    _train_result = train_and_evaluate(_train_model_key, _train_X, _train_y)
+                except ValueError as exc:
+                    st.warning(str(exc))
+                    return
                 # Namespace the saved artifact per org — otherwise one org's
                 # classifier would be trained on/served to another's data
                 # (see multi-tenant auth plan, Phase 2). MODEL_REGISTRY
@@ -2021,7 +2025,11 @@ with tab_validation:
             _val_X, _val_y = build_features(_val_dataset)
             _val_results = {}
             for _mname in ["random_forest", "xgboost"]:
-                _val_result = train_and_evaluate(_mname, _val_X, _val_y)
+                try:
+                    _val_result = train_and_evaluate(_mname, _val_X, _val_y)
+                except ValueError as exc:
+                    st.warning(str(exc))
+                    return
                 _val_results[_mname] = {
                     "result": _val_result,
                     "summary": ai_evaluate.summarize_fold_predictions(_val_result),

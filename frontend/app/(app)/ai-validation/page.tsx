@@ -75,7 +75,9 @@ function ModelSection({ modelKey, label }: { modelKey: "random_forest" | "xgboos
           </div>
           {!result.summary.stratified && (
             <Alert tone="warning">
-              A class had too few samples to stratify — cross-validation fell back to unstratified folds.
+              {result.summary.split_strategy === "field_grouped"
+                ? "Entire fields are held out together. These metrics measure agreement with the threshold gate, not independent field accuracy."
+                : "Legacy evaluation: rebuild and retrain to use field-grouped evaluation."}
             </Alert>
           )}
 

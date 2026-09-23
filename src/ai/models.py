@@ -4,13 +4,13 @@ Random Forest and XGBoost share identical CV/metrics/persistence logic, so
 it lives here once instead of being duplicated per model.
 """
 
-import warnings
 from pathlib import Path
 
 import joblib
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import KFold, StratifiedKFold, cross_val_predict
+from sklearn.model_selection import GroupKFold, cross_val_predict
+from src.processing import PROCESSING_VERSION
 
 from src.ai.feature_engineering import LABEL_CLASSES, encode_labels
 
@@ -34,47 +34,29 @@ MODEL_REGISTRY = {
 }
 
 
-def _make_cv_splitter(y_encoded: np.ndarray, requested_k: int = 3):
-    """
-    Tries StratifiedKFold(k=min(requested_k, smallest_class_count)). When the
-    smallest class can't support k>=2 under stratification (true today: the
-    'drydown' class has 1 sample), falls back to plain unstratified KFold
-    with a warning — so minority-class metrics are visibly provisional
-    rather than a hard crash or a silently dropped class. Automatically
-    upgrades to full stratified k-fold once more labeled data accumulates;
-    fold count is never hardcoded.
-
-    Returns (splitter, k_used, stratified).
-    """
-    n_samples = len(y_encoded)
-    if n_samples < 2:
-        raise ValueError("Need at least 2 samples to cross-validate.")
-
-    _, counts = np.unique(y_encoded, return_counts=True)
-    min_class_count = counts.min()
-
-    if min_class_count >= 2:
-        k = min(requested_k, int(min_class_count))
-        return StratifiedKFold(n_splits=k, shuffle=True, random_state=42), k, True
-
-    k = min(requested_k, n_samples)
-    warnings.warn(
-        f"Smallest class has {min_class_count} sample(s) — cannot stratify. "
-        f"Falling back to unstratified KFold(k={k}); minority-class metrics "
-        "are provisional until more labeled data accumulates.",
-        stacklevel=2,
-    )
-    return KFold(n_splits=k, shuffle=True, random_state=42), k, False
+def _make_cv_splitter(y_encoded, groups, requested_k=3):
+    if groups is None or len(groups) != len(y_encoded):
+        raise ValueError("Field identifiers are required for leakage-safe evaluation. Rebuild the dataset.")
+    n_groups = len(set(groups))
+    if n_groups < 2 or requested_k < 2:
+        raise ValueError("Need at least two independent fields and two folds for evaluation")
+    k = min(requested_k, n_groups)
+    splits = list(GroupKFold(n_splits=k).split(np.zeros(len(y_encoded)), y_encoded, groups))
+    for train, test in splits:
+        if set(y_encoded[train]) != set(range(len(LABEL_CLASSES))):
+            raise ValueError("Each training fold must contain dry, flooded and drydown labels. Collect more independently grouped fields.")
+    return splits, k, False
 
 
-def train_and_evaluate(model_name: str, X, y, k: int = 3) -> dict:
+def train_and_evaluate(model_name: str, X, y, k: int = 3, groups=None) -> dict:
     """
     Runs pooled out-of-fold cross-validation via cross_val_predict, then fits
     one final model on all available data for persistence/inference.
     """
     model_factory = MODEL_REGISTRY[model_name]
     y_encoded = encode_labels(y)
-    splitter, k_used, stratified = _make_cv_splitter(y_encoded, k)
+    groups = groups if groups is not None else X.attrs.get("field_groups")
+    splitter, k_used, stratified = _make_cv_splitter(y_encoded, groups, k)
 
     y_pred = cross_val_predict(model_factory(), X, y_encoded, cv=splitter)
     y_proba = cross_val_predict(
@@ -86,6 +68,8 @@ def train_and_evaluate(model_name: str, X, y, k: int = 3) -> dict:
 
     return {
         "model_name": model_name,
+        "split_strategy": "field_grouped",
+        "processing_version": PROCESSING_VERSION,
         "k_used": k_used,
         "stratified": stratified,
         "y_true": y_encoded,
@@ -105,6 +89,8 @@ def save_model(result: dict) -> Path:
             "model": result["model"],
             "classes": result["classes"],
             "feature_names": result["feature_names"],
+            "processing_version": PROCESSING_VERSION,
+            "split_strategy": "field_grouped",
         },
         path,
     )
@@ -113,4 +99,7 @@ def save_model(result: dict) -> Path:
 
 def load_model(model_name: str) -> dict:
     path = MODEL_DIR / f"{model_name}.joblib"
-    return joblib.load(path)
+    bundle = joblib.load(path)
+    if bundle.get("processing_version") != PROCESSING_VERSION:
+        raise FileNotFoundError("Model uses old satellite features; rebuild the dataset and retrain")
+    return bundle

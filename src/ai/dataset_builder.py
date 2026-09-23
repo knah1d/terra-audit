@@ -17,6 +17,7 @@ from sqlalchemy import text
 
 from src.database import get_db_connection, is_sqlite
 from src.threshold_gate import AdaptiveAWDGate
+from src.processing import PROCESSING_VERSION
 
 DATASET_TABLE = "ai_dataset_rows"
 
@@ -71,6 +72,7 @@ def _ensure_ai_tables(conn) -> None:
             conn.execute(text(f"ALTER TABLE {DATASET_TABLE} ADD COLUMN org_id TEXT NOT NULL DEFAULT 'default'"))
         except Exception:
             pass
+    conn.execute(text("CREATE TABLE IF NOT EXISTS ai_dataset_versions (org_id TEXT PRIMARY KEY, processing_version TEXT NOT NULL)"))
     conn.commit()
 
 
@@ -87,11 +89,13 @@ def _fetch_cache_groups(org_id: str) -> pd.DataFrame:
                        t.vv, t.vh, t.cross_ratio, t.rvi
                 FROM   timeseries_cache t
                 JOIN   fields f ON f.field_id = t.field_id AND f.org_id = t.org_id
-                WHERE  f.org_id = :org_id
+                JOIN timeseries_cache_versions v ON v.org_id=t.org_id AND v.field_id=t.field_id
+                    AND v.window_start=t.window_start AND v.window_end=t.window_end
+                WHERE  f.org_id = :org_id AND v.processing_version = :processing_version
                 ORDER  BY t.field_id, t.window_start, t.window_end, t.observation_date
             """),
             conn,
-            params={"org_id": org_id},
+            params={"org_id": org_id, "processing_version": PROCESSING_VERSION},
         )
 
 
@@ -160,12 +164,19 @@ def save_dataset(org_id: str, df: pd.DataFrame) -> None:
             df = df.copy()
             df["org_id"] = org_id
             df[["org_id", *_DATASET_COLUMNS]].to_sql(DATASET_TABLE, conn, if_exists="append", index=False)
+        conn.execute(text("INSERT INTO ai_dataset_versions VALUES (:org_id,:version) "
+                          "ON CONFLICT(org_id) DO UPDATE SET processing_version=excluded.processing_version"),
+                     {"org_id": org_id, "version": PROCESSING_VERSION})
         conn.commit()
 
 
 def load_dataset(org_id: str) -> pd.DataFrame:
     with get_db_connection() as conn:
         _ensure_ai_tables(conn)
+        version = conn.execute(text("SELECT processing_version FROM ai_dataset_versions WHERE org_id=:org_id"),
+                               {"org_id": org_id}).scalar()
+        if version != PROCESSING_VERSION:
+            return pd.DataFrame(columns=_DATASET_COLUMNS)
         return pd.read_sql_query(
             text(f"SELECT * FROM {DATASET_TABLE} WHERE org_id = :org_id"), conn, params={"org_id": org_id}
         )

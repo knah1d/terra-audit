@@ -13,6 +13,12 @@ Primary geographic focus is Bangladesh/South Asia. Field types are
 pluggable (`src/field_types/`), so a third methodology can be added
 without reworking the first two.
 
+The Next.js **Crop Seasons** workspace adds multi-crop season records, sourced
+field observations and independent review, shared Sentinel-1/Sentinel-2
+observation snapshots, and a field-isolated RF/XGBoost crop benchmark to both
+accounting pathways. It is a research pilot, not a validated classifier for
+every crop. See [multi-crop scope and workflow](docs/MULTICROP.md).
+
 ## Two UIs, one calculation core
 
 This repo currently ships **two** frontends against the **same** `src/`
