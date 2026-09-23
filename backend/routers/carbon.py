@@ -83,7 +83,8 @@ def commit_carbon_credits(
     # credit_result enforces this again at the write path; checking here
     # turns it into a clean 422 with the methodology's own reason instead
     # of surfacing the guard's exception.
-    issuable, block_reason = result_is_issuable(result)
+    from src.calculations import PATHWAYS
+    issuable, block_reason = result_is_issuable(result, PATHWAYS.get(field_type))
     if not issuable:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, block_reason)
 

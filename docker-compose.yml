@@ -31,6 +31,26 @@ services:
       # — give it enough room to not be killed as unhealthy mid-startup.
       start_period: 45s
 
+  # Durable job worker (Phase 4) — same image as `backend`, different
+  # entrypoint. Runs OUT OF PROCESS from the web app; the two only ever
+  # communicate through the background_jobs table (src/jobs.py), never
+  # in-memory, so either can restart independently without losing queued
+  # work. See docs/OPERATIONS.md for what this actually processes
+  # (satellite collection, AI training/benchmark jobs) and how to scale
+  # it (run more than one — claiming is race-safe, see src/jobs.py).
+  worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: ["python", "-m", "backend.worker"]
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - backend_data:/app/data
+    depends_on:
+      backend:
+        condition: service_healthy
+
   frontend:
     build:
       context: ./frontend

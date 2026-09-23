@@ -10,6 +10,7 @@ from backend.config import JWT_SECRET
 from backend.security import decode_access_token
 from src.auth import require_role as _require_role
 from src.database import get_field
+from src.auth import get_user_by_email
 from src.field_types.registry import field_uses_sar
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
@@ -28,12 +29,14 @@ def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
             "Invalid or expired token",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    return {
-        "user_id": claims["user_id"],
-        "org_id": claims["org_id"],
-        "email": claims["email"],
-        "role": claims["role"],
-    }
+    current = get_user_by_email(claims["email"])
+    from src.account_access import token_version
+    if claims.get("token_version", 0) != token_version(claims["user_id"]):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Session expired; sign in again")
+    if not current or current["user_id"] != claims["user_id"] or current["org_id"] != claims["org_id"]:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Account is no longer active")
+    # A role change/deactivation must not wait for a twelve-hour JWT expiry.
+    return {key: current[key] for key in ("user_id", "org_id", "email", "role")}
 
 
 def require_roles(*allowed: str):

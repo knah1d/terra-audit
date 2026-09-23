@@ -109,7 +109,18 @@ def edit_field(field_id: str, body: FieldUpdate, user: dict = Depends(require_wr
 def remove_field(field_id: str, user: dict = Depends(require_admin),
                  field: dict = Depends(_field)):
     """Admin-only, per app.py's own _can_delete() split from _can_write()
-    — deletion is irreversible and cascades across 6 tables."""
+    — deletion is irreversible and cascades across many tables.
+
+    Refuses outright if this field has any review history (Phase 3) —
+    a submitted, in-review, or internally-approved package must stay
+    reproducible; there is no "force delete" escape hatch here."""
     org_id = user["org_id"]
+    from src.reviews import field_has_submissions
+    if field_has_submissions(org_id, field_id):
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "This field has review submissions on record and cannot be deleted — "
+            "its calculations and evidence must remain reproducible.",
+        )
     delete_field(org_id, field_id)
     return None

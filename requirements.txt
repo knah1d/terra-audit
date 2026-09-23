@@ -39,3 +39,8 @@ python-multipart>=0.0.9
 # --- test ---
 pytest>=8.0.0
 httpx>=0.27
+
+# --- source-backed document extraction ---
+pypdf>=5.0
+# Shared private artifact storage for separate API/worker hosts
+boto3>=1.34

@@ -1,15 +1,10 @@
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 
 from backend.deps import get_current_user, require_writer
 from backend.schemas.ai import DatasetBuildResult, TrainAccepted, TrainRequest
 from src.ai.dataset_builder import build_dataset, save_dataset, load_dataset
-from src.ai.feature_engineering import build_features
-from src.ai.models import save_model, train_and_evaluate
-from src.ai import evaluate as ai_evaluate
-from src.database import (
-    create_job, get_job, list_completed_jobs,
-    mark_job_done, mark_job_error, mark_job_running,
-)
+from src.database import get_job, list_completed_jobs
+from src.jobs import create_job
 
 router = APIRouter(tags=["ai-validation"])
 
@@ -37,39 +32,26 @@ def get_ai_dataset(user: dict = Depends(get_current_user)):
     return {"row_count": len(df), "columns": list(df.columns)}
 
 
-def _run_train_job(job_id: str, org_id: str, model_key: str, k: int):
-    try:
-        mark_job_running(job_id)
-        df = load_dataset(org_id)
-        if df.empty:
-            mark_job_error(job_id, "No training dataset found. Build the dataset first.")
-            return
-        X, y = build_features(df)
-        result = train_and_evaluate(model_key, X, y, k)
-        # Namespace the artifact per org — same convention app.py uses for
-        # predict_awd_states, so a model trained here is servable there too.
-        result["model_name"] = f"{org_id}_{model_key}"
-        save_model(result)
-        summary = ai_evaluate.summarize_fold_predictions(result)
-        mark_job_done(job_id, {
-            "summary": summary,
-            "feature_importance": ai_evaluate.feature_importance(result),
-            "roc_curve": ai_evaluate.roc_curve_data(result),
-        })
-    except Exception as exc:
-        mark_job_error(job_id, str(exc))
-
-
 @router.post("/ai/train")
-def submit_train_job(
-    body: TrainRequest, background_tasks: BackgroundTasks, response: Response,
-    user: dict = Depends(require_writer),
-):
+def submit_train_job(body: TrainRequest, response: Response, user: dict = Depends(require_writer)):
+    """Hands off to the durable worker (backend/job_handlers.
+    handle_ai_train) instead of an in-process BackgroundTask — Phase 4."""
     org_id = user["org_id"]
-    job_id = create_job(org_id, "ai_train")
-    background_tasks.add_task(_run_train_job, job_id, org_id, body.model_key, body.k)
+    job_id = create_job(org_id, "ai_train", {
+        "model_key": body.model_key, "k": body.k, "requested_by": user["user_id"],
+    })
     response.status_code = status.HTTP_202_ACCEPTED
     return TrainAccepted(job_id=job_id)
+
+
+@router.post("/ai/train/{job_id}/cancel")
+def cancel_train_job(job_id: str, user: dict = Depends(require_writer)):
+    from src.jobs import request_cancel
+    job = get_job(user["org_id"], job_id)
+    if job is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Job not found")
+    request_cancel(user["org_id"], job_id)
+    return {"ok": True}
 
 
 @router.get("/ai/train/{job_id}")

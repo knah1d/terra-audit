@@ -14,8 +14,8 @@ export function useTeamUsers() {
 export function useCreateTeamUser() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (body: { email: string; password: string; role: UserRole }) =>
-      apiFetch<TeamUserOut>("/team/users", { method: "POST", json: body }),
+    mutationFn: (body: { email: string; role: UserRole }) =>
+      apiFetch<{ invitation_url: string; expires_in_hours: number }>("/team/invitations", { method: "POST", json: body }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["team-users"] });
     },
