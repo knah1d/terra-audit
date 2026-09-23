@@ -321,21 +321,30 @@ def _methodology_applicability_check(org_id, field, accounting_pathway, season_i
     return checks
 
 
-def _historical_lookback_check(org_id, field_id, season_ids, monitoring_period_start, bundle_id):
+def _historical_lookback_check(org_id, field_id, season_ids, monitoring_period_start, practice_schedule, bundle_id):
     """Substantive VM0042 historical look-back check (Phase 1 gap #2,
-    strengthened): the methodology's OWN text (not an invented number)
-    requires "at minimum three years and one complete crop rotation"
-    immediately preceding the project start date, used to build the
-    baseline schedule of activities (see the registry's
-    vm0042.historical_lookback entry for exact citations). A single
-    historical season is not enough — this checks actual DAY-BY-DAY
-    coverage of the 3-year window (gaps explicitly recorded as
-    fallow/missing_period seasons count as documented, not silent) and
-    that every crop appearing in the project-period seasons also
-    appears somewhere in that historical window (a "complete rotation"
-    proxy: we cannot verify true agronomic rotation completeness without
-    a rotation plan, but a project-period crop entirely absent from
-    history is a real, checkable gap)."""
+    strengthened, then split per docs/RESEARCH_IMPLEMENTATION_PLAN_2026-
+    09-23.md Phase 3 Priority 5): the methodology's OWN text requires
+    "at minimum three years and one complete crop rotation" immediately
+    preceding the project start date, used to build the baseline
+    schedule of activities (see the registry's vm0042.historical_lookback
+    and vm0042.rotation_completeness entries for exact citations). This
+    function covers ONLY the date-coverage half of that requirement —
+    actual DAY-BY-DAY coverage of the 3-year window, where a gap
+    explicitly recorded as a "fallow" season counts as documented
+    coverage (a known, observed state) but a "missing_period" season
+    does NOT (VM0042 §6 requires practices to be "determined" for the
+    look-back years — a documented ADMISSION that a period's activity is
+    unknown is not itself evidence of what happened during it, so it
+    must not silently count as coverage). Rotation completeness is a
+    separate, distinct concern handled by _rotation_completeness_check
+    below — VM0042's own text ties "complete crop rotation" to whether
+    the BASELINE schedule of activities itself cycles through a full
+    rotation, not to whether a later project-period crop happens to
+    match history (a newly introduced project-period crop is an
+    explicitly permitted "Improved agricultural land management
+    practice" per VM0042's own definition — see that function's
+    docstring)."""
     from datetime import date, timedelta
 
     start = date.fromisoformat(monitoring_period_start)
@@ -344,6 +353,7 @@ def _historical_lookback_check(org_id, field_id, season_ids, monitoring_period_s
 
     covered_days = set()
     documented_gaps = []
+    undocumented_gap = False
     historical_crops = set()
     for s in all_seasons:
         p = s["payload"]
@@ -351,45 +361,98 @@ def _historical_lookback_check(org_id, field_id, season_ids, monitoring_period_s
         clip_start, clip_end = max(s_start, lookback_start), min(s_end, start - timedelta(days=1))
         if clip_start > clip_end:
             continue
+        historical_crops.update(p.get("crops", []))
+        if p.get("season_type") == "missing_period":
+            # Documented as a KNOWN gap, but a missing_period explicitly
+            # records that the activity during it is NOT known — it must
+            # not count toward "practices were determined" coverage.
+            documented_gaps.append({"season_id": s["id"], "season_type": p["season_type"],
+                                     "start_date": p["start_date"], "end_date": p["end_date"]})
+            continue
         for ordinal in range(clip_start.toordinal(), clip_end.toordinal() + 1):
             covered_days.add(ordinal)
-        historical_crops.update(p.get("crops", []))
-        if p.get("season_type") in ("fallow", "missing_period"):
+        if p.get("season_type") == "fallow":
             documented_gaps.append({"season_id": s["id"], "season_type": p["season_type"],
                                      "start_date": p["start_date"], "end_date": p["end_date"]})
 
     total_window_days = (start - lookback_start).days
     coverage_ratio = len(covered_days) / total_window_days if total_window_days else 1.0
-    project_crops = _declared_crops(org_id, field_id, season_ids)
-    missing_rotation_crops = sorted(project_crops - historical_crops)
     gap_refs = [{"type": "season", "id": g["season_id"]} for g in documented_gaps]
 
-    if coverage_ratio >= 0.97 and not missing_rotation_crops:
+    if coverage_ratio >= 0.97:
         status = "satisfied"
         explanation = (
             f"Historical records cover {len(covered_days)} of {total_window_days} days in the "
-            f"{_HISTORICAL_LOOKBACK_MIN_YEARS}-year look-back window ending at the monitoring period "
-            f"start, and project-period crop(s) {sorted(project_crops)} all appear in that history."
+            f"{_HISTORICAL_LOOKBACK_MIN_YEARS}-year look-back window ending at the monitoring period start "
+            f"({len(documented_gaps)} gap period(s) explicitly documented as fallow/missing)."
         )
-    elif coverage_ratio >= 0.5 and (documented_gaps or missing_rotation_crops):
+    elif coverage_ratio >= 0.5 and documented_gaps:
         status = "needs_review"
         explanation = (
             f"Historical records cover {len(covered_days)} of {total_window_days} days in the look-back "
-            f"window ({len(documented_gaps)} gap period(s) explicitly documented as fallow/missing)."
-            + (f" Look-back history does not show project-period crop(s) {missing_rotation_crops} — a "
-               "reviewer must confirm this still represents a complete crop rotation." if missing_rotation_crops else
-               " A reviewer must confirm the documented gaps do not undermine the look-back requirement.")
+            f"window ({len(documented_gaps)} gap period(s) explicitly documented as fallow/missing) — a "
+            "reviewer must confirm the documented gaps do not undermine the look-back requirement."
         )
     else:
         status = "missing"
         explanation = (
             f"Historical activity records cover only {len(covered_days)} of {total_window_days} days "
-            f"required by VM0042's minimum {_HISTORICAL_LOOKBACK_MIN_YEARS}-year/one-complete-rotation "
-            "look-back period, with undocumented gaps (no fallow/missing_period season recorded)."
-            + (f" Project-period crop(s) {missing_rotation_crops} do not appear anywhere in the look-back "
-               "history." if missing_rotation_crops else "")
+            f"required by VM0042's minimum {_HISTORICAL_LOOKBACK_MIN_YEARS}-year look-back period, with "
+            "undocumented gaps (no fallow/missing_period season recorded, or missing_period days not "
+            "otherwise covered by another recorded season)."
         )
-    return _check("vm0042.historical_lookback", status, explanation, evidence_references=gap_refs, bundle_id=bundle_id)
+    return _check("vm0042.historical_lookback", status, explanation, evidence_references=gap_refs,
+                   bundle_id=bundle_id), historical_crops
+
+
+def _rotation_completeness_check(org_id, field_id, historical_crops, practice_schedule, bundle_id):
+    """VM0042 §6 ("Development of Schedule of Activities in the Baseline
+    Scenario"): "must include at least one complete crop rotation, where
+    applicable. Where a crop rotation is not implemented in the
+    baseline, x >= 3 years [alone applies]." So this requirement is
+    ONLY about whether the BASELINE's own historical schedule evidences
+    a full rotation cycle — NOT about whether a project-period crop
+    happens to match history. A crop newly introduced as a project
+    activity (VM0042's own "Improved agricultural land management
+    practice" definition explicitly includes "crop planting and
+    harvesting" changes) is a legitimate project design choice, not a
+    baseline-documentation defect, so it is never penalized here.
+
+    Limitation (disclosed, not silently assumed away): this cannot
+    verify true agronomic rotation-cycle completeness (e.g., that a
+    declared N-crop rotation returns to its starting crop) without a
+    recorded rotation plan/cycle length, which this codebase does not
+    collect. It uses a weaker, honestly-labeled proxy: when the
+    baseline practice schedule declares crop_rotation=True, the
+    look-back window must show at least 2 distinct historical crops as
+    minimal evidence that *some* rotation actually occurred (not just a
+    single continuously-repeated crop under a mislabeled flag)."""
+    baseline = (practice_schedule or {}).get("baseline") or {}
+    if not baseline.get("crop_rotation"):
+        return _check(
+            "vm0042.rotation_completeness", "not_applicable",
+            "Baseline practice schedule does not declare a crop rotation (VM0042 §6: where a rotation is "
+            "not implemented in the baseline, the 3-year look-back window alone applies) — see "
+            "vm0042.historical_lookback for that check.",
+            bundle_id=bundle_id,
+        )
+    if len(historical_crops) >= 2:
+        return _check(
+            "vm0042.rotation_completeness", "satisfied",
+            f"Baseline declares a crop rotation, and the historical look-back window records "
+            f"{len(historical_crops)} distinct crop(s) ({sorted(historical_crops)}) — minimal evidence a "
+            "rotation actually occurred. This does not verify the rotation returns to its starting crop "
+            "(no rotation-cycle length is recorded by this system) — a reviewer should confirm agronomic "
+            "completeness against the project's actual rotation plan.",
+            bundle_id=bundle_id,
+        )
+    return _check(
+        "vm0042.rotation_completeness", "needs_review",
+        "Baseline practice schedule declares a crop rotation, but the historical look-back window records "
+        f"{len(historical_crops)} distinct crop(s) — insufficient to evidence a rotation cycle occurred. "
+        "A reviewer must confirm the baseline schedule genuinely reflects a complete crop rotation.",
+        bundle_id=bundle_id,
+    )
 
 
 def _rice_checks(org_id, field_id, engine_inputs, preview_result, bundle_id):
@@ -436,10 +499,16 @@ def _alm_checks(org_id, field_id, season_ids, monitoring_period_start, engine_in
         checks.append(_check("vm0042.baseline_documentation", "satisfied",
                               "Baseline practice schedule is recorded.", bundle_id=bundle_id))
     # Substantive historical look-back check (Phase 1 gap #2, strengthened
-    # further per the follow-up review): a real day-by-day, complete-
-    # rotation evaluation against VM0042's own 3-year/one-rotation text —
-    # see _historical_lookback_check's docstring.
-    checks.append(_historical_lookback_check(org_id, field_id, season_ids, monitoring_period_start, bundle_id))
+    # further per the follow-up review, then split into two distinct
+    # checks per docs/RESEARCH_IMPLEMENTATION_PLAN_2026-09-23.md Phase 3
+    # Priority 5): date-coverage vs. rotation-completeness are evaluated
+    # separately, since VM0042's own text treats them as distinct
+    # conditions — see both functions' docstrings.
+    lookback_check, historical_crops = _historical_lookback_check(
+        org_id, field_id, season_ids, monitoring_period_start, practice_schedule, bundle_id
+    )
+    checks.append(lookback_check)
+    checks.append(_rotation_completeness_check(org_id, field_id, historical_crops, practice_schedule, bundle_id))
 
     soc_problems = [p for p in problems if p.startswith("SOC samples")]
     if soc_problems:

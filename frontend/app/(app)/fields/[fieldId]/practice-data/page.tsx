@@ -34,6 +34,7 @@ const EMPTY_PRACTICE: PracticeScheduleEntry = {
   tillage: false, tillage_depth_cm: 0, residue_removed: false, residue_burned_kg_ha: 0,
   synthetic_n_rate_kg_ha: 0, organic_n_rate_kg_ha: 0, n_fixing_species: false,
   n_fixing_dry_matter_kg_ha: 0, fuel_use_l_ha: 0, crop_yield_t_ha: 0,
+  limestone_applied_t_ha: 0, dolomite_applied_t_ha: 0,
 };
 
 function PracticeScenarioForm({
@@ -86,6 +87,14 @@ function PracticeScenarioForm({
         <div>
           <FieldLabel>Crop yield (t/ha)</FieldLabel>
           <TextInput type="number" value={values.crop_yield_t_ha ?? 0} onChange={(e) => set("crop_yield_t_ha", Number(e.target.value))} />
+        </div>
+        <div>
+          <FieldLabel>Limestone applied (t/ha)</FieldLabel>
+          <TextInput type="number" value={values.limestone_applied_t_ha ?? 0} onChange={(e) => set("limestone_applied_t_ha", Number(e.target.value))} />
+        </div>
+        <div>
+          <FieldLabel>Dolomite applied (t/ha)</FieldLabel>
+          <TextInput type="number" value={values.dolomite_applied_t_ha ?? 0} onChange={(e) => set("dolomite_applied_t_ha", Number(e.target.value))} />
         </div>
       </div>
       <div className="mt-4 flex flex-wrap gap-x-6 gap-y-3">
