@@ -265,9 +265,15 @@ REQUIREMENTS = [
     {"requirement_id": "vm0042.soc_measurements", "bundle_id": "vm0042-2026-06",
      "title": "Paired project/control SOC samples at both timepoints",
      "source_document_id": "vm0042-v2.2", "source_section": "§8.2.1/8.3 Eqs. 3-5, 46-47",
-     "required_evidence": ">=3 samples per (site type, timepoint) cell — aggregate values only in this "
-                           "codebase, not full sampling-plan/strata/chain-of-custody records (Phase 3).",
-     "implementation_support": "partial", "reviewer_authority": "reviewable", "blocking": True},
+     "required_evidence": ">=3 samples per (site type, timepoint) cell. Each cell's engine input is now "
+                           "resolved from either (a) a reviewer-adopted set of specific, traceable sample "
+                           "rows (src.soil_evidence.record_soc_evidence_review — raw per-sample values "
+                           "preserved for Eq. 70/71's variance-from-replicates calculation) with full "
+                           "sampling-plan/strata/lab-result/chain-of-custody records behind it, or (b) the "
+                           "legacy manually-entered aggregate, honestly labeled as such and never presented "
+                           "as complete sampling evidence. A reviewed mapping that has gone stale (new "
+                           "samples recorded since it was adopted) is not honored until re-reviewed.",
+     "implementation_support": "implemented", "reviewer_authority": "reviewable", "blocking": True},
     {"requirement_id": "vm0042.project_practice_schedule", "bundle_id": "vm0042-2026-06",
      "title": "Project-scenario practice schedule",
      "source_document_id": "vm0042-v2.2", "source_section": "Table 4",
@@ -278,37 +284,30 @@ REQUIREMENTS = [
      "source_document_id": "vm0042-v2.2", "source_section": "§8.2.6/8.2.7",
      "required_evidence": "Livestock schedule recorded, or not applicable if none.",
      "implementation_support": "implemented", "reviewer_authority": "automated_only", "blocking": False},
-    {"requirement_id": "vm0042.leakage_step1_production_change", "bundle_id": "vm0042-2026-06",
-     "title": "VMD0054 Step 1: commodity-by-commodity change in production",
-     "source_document_id": "vmd0054-v1.1", "source_section": "§5.1 (Eqs. 1-3), §5.1.1 historical reference period",
-     "required_evidence": "This engine approximates Step 1's spirit with a single baseline-vs-project crop "
-                           "yield comparison (VM0042 Table 4's crop_yield_t_ha) rather than the full "
-                           "commodity-by-commodity Eqs. 1-3 computation over a properly determined "
-                           "historical reference period (the longer of 3 years or one complete crop "
-                           "rotation, §5.1.1) — it blocks issuance on any detected decline rather than "
-                           "fabricating a leakage quantity.",
-     "implementation_support": "partial", "reviewer_authority": "automated_only", "blocking": True},
-    {"requirement_id": "vm0042.leakage_step2_mitigation", "bundle_id": "vm0042-2026-06",
-     "title": "VMD0054 Step 2: impact of leakage mitigation activities (optional)",
-     "source_document_id": "vmd0054-v1.1", "source_section": "§5.2",
-     "required_evidence": "Not implemented.", "implementation_support": "unsupported",
-     "reviewer_authority": "automated_only", "blocking": False},
-    {"requirement_id": "vm0042.leakage_step3_land_impact", "bundle_id": "vm0042-2026-06",
-     "title": "VMD0054 Step 3: determine land impact",
-     "source_document_id": "vmd0054-v1.1", "source_section": "§5.3",
-     "required_evidence": "Not implemented.", "implementation_support": "unsupported",
-     "reviewer_authority": "automated_only", "blocking": False},
-    {"requirement_id": "vm0042.leakage_step4_new_land_carbon_stock", "bundle_id": "vm0042-2026-06",
-     "title": "VMD0054 Step 4: change in carbon stocks on new land brought into production",
-     "source_document_id": "vmd0054-v1.1", "source_section": "§5.4 Eq. 11",
-     "required_evidence": "Requires regional ecoregion/forest-biomass and deforestation-rate data "
-                           "(Global Forest Watch) this codebase does not source. Not implemented.",
-     "implementation_support": "unsupported", "reviewer_authority": "automated_only", "blocking": False},
-    {"requirement_id": "vm0042.leakage_step5_emissions", "bundle_id": "vm0042-2026-06",
-     "title": "VMD0054 Step 5: determine leakage emissions",
-     "source_document_id": "vmd0054-v1.1", "source_section": "§5.5 Eq. 13",
-     "required_evidence": "Depends on Step 4 output, which is not implemented. Not implemented.",
-     "implementation_support": "unsupported", "reviewer_authority": "automated_only", "blocking": False},
+    *[
+        {"requirement_id": requirement_id, "bundle_id": "vm0042-2026-06", "title": title,
+         "source_document_id": "vmd0054-v1.1", "source_section": section,
+         "required_evidence": evidence, "implementation_support": "partial",
+         "reviewer_authority": authority, "blocking": True}
+        for requirement_id, title, section, evidence, authority in [
+            ("vm0042.leakage_step1_production_change", "VMD0054 Step 1: production change", "§5.1 Eqs.1–3",
+             "Frozen commodity records for each selected historical/monitoring year, matching units, dates and sources. Single-field projects and full-year periods supported; project-wide aggregation for multiple fields remains blocked.", "automated_only"),
+            ("vm0042.leakage_step2_mitigation", "VMD0054 Step 2: optional mitigation", "§5.2",
+             "An explicit no-mitigation choice and reason permits omission with LM=ELM=0. Claimed mitigation remains unsupported and blocking.", "automated_only"),
+            ("vm0042.leakage_step3_land_impact", "VMD0054 Step 3: land impact", "§5.3 Eqs.9–10, Table 1",
+             "Integrated commodity-specific yields and source-backed factors; cross-commodity mode requires agricultural scope and national production evidence. No scalar fallback.", "automated_only"),
+            ("vm0042.leakage_step4_new_land_carbon_stock", "VMD0054 Step 4: carbon-stock change", "§5.4 Eqs.11–12",
+             "Source-cited regional biomass/SOC factors and land-cover justification required for positive net land impact; zero impact is explicitly not applicable.", "automated_only"),
+            ("vm0042.leakage_step5_emissions", "VMD0054 Step 5 and VM0042 allocation", "§5.5 Eq.13; VM0042 Eq.36 and corrected Eqs.39/42",
+             "Cumulative leakage, prior external verification value/reference, annual increment and ER/CR allocations frozen in the result. No double deduction.", "automated_only"),
+            ("vm0042.leakage_evidence_review", "Review leakage scope and evidence", "§§5.1–5.5",
+             "Confirm complete commodity/rotation coverage, units and annual labels, scope without field double counting, project-wide mode consistency, Step 2 declaration, regional assumptions and prior external verification evidence.", "reviewable"),
+        ]
+    ],
+    {"requirement_id": "vm0042.other_leakage_scope", "bundle_id": "vm0042-2026-06",
+     "title": "Other leakage applicability", "source_document_id": "vm0042-v2.2",
+     "source_section": "§8.4", "required_evidence": "Document non-applicability of other leakage sources; applicable unimplemented sources remain blocked.",
+     "implementation_support": "partial", "reviewer_authority": "reviewable", "blocking": True},
     {"requirement_id": "vm0042.historical_lookback", "bundle_id": "vm0042-2026-06",
      "title": "Historical look-back period date coverage",
      "source_document_id": "vm0042-v2.2",
@@ -329,12 +328,18 @@ REQUIREMENTS = [
                         "implemented in the baseline, x >= 3 years.'",
      "required_evidence": "Only applies when the baseline practice schedule declares crop_rotation=True — "
                            "otherwise the 3-year window alone (vm0042.historical_lookback) satisfies this "
-                           "clause per VM0042's own text. When a rotation is declared, this is a PARTIAL, "
-                           "disclosed proxy (>=2 distinct historical crops recorded in the look-back window) "
-                           "— not a verification that the rotation returns to its starting crop, since no "
-                           "rotation-cycle length is collected. A project-period crop absent from history is "
-                           "NEVER treated as a rotation-completeness defect — introducing a new crop is an "
-                           "explicitly permitted 'Improved agricultural land management practice.'",
+                           "clause per VM0042's own text. When a rotation is declared, this checks the "
+                           "field's actual recorded crop_sequence entries (frontend: crop-seasons page, "
+                           "'rotation'/'intercrop' season types) for CYCLE CLOSURE — the same crop "
+                           "recurring after other crop(s), which is candidate evidence requiring review, "
+                           "not automatic proof of a complete rotation. Cannot verify a "
+                           "declared N-crop rotation's full intended cycle length without a recorded "
+                           "rotation plan, so a reviewer must confirm via src.calculations."
+                           "record_determination (scoped to this field's exact evidence — invalidated the "
+                           "moment a new season changes the recorded sequence). A project-period crop "
+                           "absent from history is NEVER treated as a rotation-completeness defect — "
+                           "introducing a new crop is an explicitly permitted 'Improved agricultural land "
+                           "management practice.'",
      "implementation_support": "partial", "reviewer_authority": "reviewable", "blocking": False},
     {"requirement_id": "vm0042.liming_co2", "bundle_id": "vm0042-2026-06",
      "title": "CO2 from liming",

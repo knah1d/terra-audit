@@ -2,13 +2,11 @@
 multi-crop plan (docs/MULTICROP.md's roadmap; see also src/projects.py's
 Phase 1 docstring).
 
-Compatibility strategy: this is ADDITIVE. The existing stateless
-preview/commit endpoints (backend/routers/carbon.py) and their
-credit_history table are untouched and keep working exactly as before —
-existing PDF/JSON/CSV exports still read credit_history. This module
-introduces a *parallel* `calculations` table for the new evidence-linked,
-versioned, project/season-aware flow. A caller can tell the two apart:
-credit_history rows have no calculation_id; new-flow rows always do.
+Compatibility: existing credit_history remains readable and is never
+backfilled with invented evidence. New ALM writes use this evidence-linked
+workflow; legacy ALM write entry points reject requests with a migration
+message. Rice keeps its existing calculation path. Calculations have a
+calculation_id and immutable evidence snapshot; legacy rows do not.
 Existing fields, seasons, practice data and credit history are never
 migrated or backfilled into this table — a pre-Phase-2 commit is
 permanently a "legacy calculation, no snapshot" (see list_calculations()'s
@@ -53,7 +51,7 @@ METHODOLOGY_VERSION = {
 # of a plain, hand-maintained version string rather than a build hash.
 ENGINE_VERSION = {
     "vm0051_rice_awd": "carbon_calculator-v1",
-    "vm0042_alm": "carbon_calculator_alm-v1",
+    "vm0042_alm": "carbon_calculator_alm-v2-vmd0054-integrated",
 }
 
 STATUSES = {"draft", "ready_for_review", "superseded"}
@@ -210,6 +208,12 @@ def record_determination(org_id: str, field_id: str, accounting_pathway: str, re
         raise ValueError(f"status must be one of {sorted(DETERMINATION_STATUSES)}")
     from src import methodology_registry as registry
     meta = registry.get_requirement_meta(requirement_id, bundle_id)
+    if meta is None:
+        raise ValueError("Unknown requirement; no manual determination is permitted.")
+    if requirement_id == "vm0042.leakage_evidence_review" and status == "not_applicable":
+        raise ValueError("Leakage evidence review is mandatory; it cannot be marked not applicable.")
+    if requirement_id == "vm0042.other_leakage_scope" and status not in ("not_applicable", "missing", "needs_review", "unsupported"):
+        raise ValueError("Other leakage sources are not quantified. Only an evidence-backed non-applicability decision can clear this check.")
     if meta is not None:
         if meta["implementation_support"] == "unsupported":
             raise ValueError(
@@ -338,7 +342,16 @@ def commit_calculation(
 
     Returns {"calculation": <decoded row>, "already_committed": bool}.
     """
-    blocking = any(_is_blocking(item) for item in readiness)
+    from src.issuance import result_is_issuable, NonIssuableResultError
+    issuable, reason = result_is_issuable(result, accounting_pathway)
+    if not issuable:
+        raise NonIssuableResultError(reason)
+    if accounting_pathway == "vm0042_alm":
+        from src.readiness import compute_evidence_fingerprint
+        current_fingerprint = compute_evidence_fingerprint(org_id, field_id, accounting_pathway, season_ids, project_id)
+        if not snapshot.get("evidence_fingerprint") or snapshot["evidence_fingerprint"] != current_fingerprint:
+            raise ValueError("Evidence changed after the snapshot was created. Run a fresh calculation.")
+    blocking = not readiness or any(_is_blocking(item) for item in readiness)
     status = "draft" if blocking else "ready_for_review"
 
     with get_db_connection() as conn:
@@ -418,12 +431,11 @@ def commit_calculation(
 
 
 def _is_blocking(item: dict) -> bool:
-    """A calculation cannot become 'ready_for_review' while any check is
-    'missing' or 'needs_review'. 'unsupported' items are surfaced but do
-    NOT block by themselves — they describe an engine limitation the user
-    is expected to already know is out of scope (documented, not hidden),
-    not an outstanding task the user could resolve here."""
-    return item["status"] in ("missing", "needs_review")
+    """Mandatory missing, unreviewed, or unsupported requirements block readiness.
+
+    Nonblocking informational limitations remain visible without being gates.
+    """
+    return item["status"] in ("missing", "needs_review", "unsupported") and item.get("blocking", True)
 
 
 def referenced_attachment_ids(org_id: str) -> set[str]:

@@ -8,9 +8,10 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Select, TextInput } from "@/components/ui/Field";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, apiFetchBlob } from "@/lib/api";
+import { downloadBlob } from "@/lib/download";
 import {
-  useCalculationHistory, useCommitCalculation, usePreviewCalculation, useReadiness,
+  useCalculationHistory, useCommitCalculation, usePreviewCalculation, useReadiness, useRecordDetermination,
 } from "@/hooks/use-calculations";
 import { useProjects } from "@/hooks/use-projects";
 import { useCreateSubmission } from "@/hooks/use-reviews";
@@ -76,6 +77,7 @@ export default function CalculationsPage() {
   const readiness = useReadiness(field.field_id);
   const preview = usePreviewCalculation(field.field_id);
   const commit = useCommitCalculation(field.field_id);
+  const determination = useRecordDetermination(field.field_id);
   const projects = useProjects();
   const createSubmission = useCreateSubmission();
 
@@ -264,7 +266,41 @@ export default function CalculationsPage() {
         <Card>
           <h3 className="mb-3 font-medium">Preview result</h3>
           <p className="text-sm">Final issuance: <span className="font-mono">{String(preview.data.result.final_issuance ?? "—")}</span></p>
+          {pathway === "vm0042_alm" && <div className="mt-2 space-y-1 text-sm">
+            <p>Annual displacement leakage: {String(preview.data.result.lk_disp_t ?? "blocked")} tCO2e/year</p>
+            <p>Allocated to reductions / removals: {String(preview.data.result.lk_er_t ?? "—")} / {String(preview.data.result.lk_cr_t ?? "—")} tCO2e/year</p>
+            {!!preview.data.result.leakage_block_reason && <p className="text-danger-700">{String(preview.data.result.leakage_block_reason)}</p>}
+            <Link className="underline" href={`/fields/${field.field_id}/production-records`}>Manage production and leakage evidence</Link>
+            <details><summary>Leakage steps and sources</summary><pre className="overflow-auto whitespace-pre-wrap text-xs">{JSON.stringify(preview.data.result.leakage, null, 2)}</pre></details>
+          </div>}
           <div className="mt-3"><ReadinessList checklist={preview.data.readiness} /></div>
+        </Card>
+      )}
+
+      {writable && projectId && selectedSeasons.length > 0 && periodStart && periodEnd && (preview.data || readiness.data) && (
+        <Card>
+          <h3 className="font-medium">Record an evidence review</h3>
+          <p className="my-2 text-sm text-text-secondary">Project leads and administrators can decide reviewable requirements. Decisions apply to the selected project, dates and current evidence. Changed leakage inputs or production records require a new review.</p>
+          <form className="space-y-2" onSubmit={(e) => {
+            e.preventDefault();
+            const data = new FormData(e.currentTarget);
+            void perform(async () => {
+              await determination.mutateAsync({ project_id: projectId, accounting_pathway: pathway,
+                season_ids: selectedSeasons, monitoring_period_start: periodStart, monitoring_period_end: periodEnd,
+                requirement_id: String(data.get("requirement")), status: String(data.get("decision")), reason: String(data.get("reason")) });
+              preview.reset();
+              await readiness.mutateAsync({ project_id: projectId, accounting_pathway: pathway, season_ids: selectedSeasons,
+                monitoring_period_start: periodStart, monitoring_period_end: periodEnd });
+              setNotice("Review saved. Run a fresh preview before committing.");
+            });
+          }}>
+            <Select name="requirement" required defaultValue=""><option value="">Select reviewable requirement</option>
+              {(preview.data?.readiness ?? readiness.data?.checklist ?? []).filter((c) => c.reviewer_authority !== "automated_only" && c.implementation_support !== "unsupported").map((c) => <option key={c.requirement_id} value={c.requirement_id}>{c.requirement_id}</option>)}
+            </Select>
+            <Select name="decision" defaultValue="satisfied"><option value="satisfied">Evidence accepted</option><option value="not_applicable">Not applicable (where permitted)</option><option value="needs_review">Further review needed</option></Select>
+            <TextInput name="reason" required placeholder="Decision, source references and justification" />
+            <Button type="submit" loading={determination.isPending}>Record review</Button>
+          </form>
         </Card>
       )}
 
@@ -309,6 +345,10 @@ export default function CalculationsPage() {
                   <Button variant="ghost" size="sm" onClick={() => download(row, row.legacy ? `credit-history-${row.credit_history_id}.json` : `calculation-${row.calculation_id}.json`)}>
                     Download JSON
                   </Button>
+                  {!row.legacy && pathway === "vm0042_alm" && <Button variant="ghost" size="sm" onClick={() => void perform(async () => {
+                    const blob = await apiFetchBlob(`/calculations/${row.calculation_id}/evidence/pdf`);
+                    downloadBlob(blob, `calculation-${row.calculation_id}.pdf`);
+                  })}>Download PDF</Button>}
                 </div>
               </div>
             ))}

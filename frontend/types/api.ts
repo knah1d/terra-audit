@@ -414,3 +414,147 @@ export interface NotificationOut {
   read_at: string | null;
   created_at: string;
 }
+
+// ---------------------------------------------------------------------
+// Soil evidence (sampling plans, strata, samples, lab results,
+// chain-of-custody, and the reviewed SOC evidence mapping) — mirrors
+// backend/schemas/soil_evidence.py and src/soil_evidence.py's row shapes.
+// ---------------------------------------------------------------------
+
+export type SoilSiteType = "project" | "control";
+export type SoilTimepoint = "t_start" | "t_final";
+
+export interface SoilSamplingPlanOut {
+  plan_id: string;
+  field_id: string;
+  name: string;
+  description: string;
+  measurement_method: "dry_combustion" | "wet_oxidation" | "loss_on_ignition" | "other";
+  remeasurement_interval_years: number | null;
+  created_by: string;
+  created_at: string;
+}
+
+export interface SoilStratumOut {
+  stratum_id: string;
+  plan_id: string;
+  name: string;
+  description: string;
+  area_ha: number | null;
+}
+
+export interface SoilSampleOut {
+  sample_id: string;
+  plan_id: string;
+  stratum_id: string | null;
+  field_id: string;
+  site_type: SoilSiteType;
+  timepoint: SoilTimepoint;
+  sample_date: string;
+  latitude: number | null;
+  longitude: number | null;
+  depth_top_cm: number;
+  depth_bottom_cm: number;
+  bulk_density_g_cm3: number | null;
+  soc_percent: number | null;
+  soc_value_tco2e_ha: number | null;
+  lab_name: string;
+  lab_method: string;
+  chain_of_custody_ref: string;
+  notes: string;
+  created_by: string;
+  created_at: string;
+}
+
+export interface SoilLabResultOut {
+  result_id: string;
+  sample_id: string;
+  analyte: "soc_percent" | "bulk_density_g_cm3" | "soc_stock_tco2e_ha" | "other";
+  method: string;
+  unit: string;
+  value: number;
+  lab_name: string;
+  analyzed_at: string | null;
+  notes: string;
+  entered_by: string;
+  created_at: string;
+}
+
+export interface SoilCustodyEventOut {
+  event_id: string;
+  sample_id: string;
+  event_type: "collected" | "packaged" | "shipped" | "received_by_lab" | "analyzed" | "disposed" | "other";
+  event_at: string;
+  actor: string;
+  location: string;
+  notes: string;
+  created_by: string;
+  created_at: string;
+}
+
+export interface SocEvidenceReviewOut {
+  id: string;
+  field_id: string;
+  site_type: SoilSiteType;
+  timepoint: SoilTimepoint;
+  sample_ids: string[];
+  evidence_fingerprint: string;
+  status: "adopted" | "rejected";
+  reason: string;
+  decided_by: string;
+  decided_at: string;
+  stale: boolean;
+}
+
+export interface SocEvidenceCellOut {
+  values: number[];
+  source: "reviewed_evidence" | "legacy_aggregate" | "missing";
+  note?: string;
+  review: SocEvidenceReviewOut | null;
+  eligible_sample_ids: string[];
+}
+
+// ---------------------------------------------------------------------
+// Commodity / historical production records (VMD0054 leakage input)
+// ---------------------------------------------------------------------
+
+export type ProductionPeriodType = "historical_year" | "project_period";
+export type ProductionStatus = "produced" | "zero_production" | "missing" | "not_applicable";
+
+export interface ProductionRecordOut {
+  record_id: string;
+  field_id: string;
+  commodity: string;
+  period_type: ProductionPeriodType;
+  period_label: string;
+  crop_cycle_index: number;
+  harvest_start_date: string | null;
+  harvest_end_date: string | null;
+  harvested_area_ha: number | null;
+  area_share_pct: number;
+  production_status: ProductionStatus;
+  production_quantity: number | null;
+  unit: string;
+  evidence_ref: string;
+  notes: string;
+  created_by: string;
+  created_at: string;
+}
+
+export interface Vmd0054CommodityResultOut {
+  plan: { computable: boolean; reason: string | null; [key: string]: unknown };
+  step1?: { BP_t: number; MP_t: number; CP_t: number; growth_rate_pct: number; growth_rate_source: string };
+  step3?: { computable: boolean; reason?: string; INL_j_t?: number; is_pct?: number; nl_pct?: number };
+}
+
+export interface Vmd0054ResultOut {
+  annual_displacement_leakage_tco2e?: number | null;
+  computable?: boolean;
+  commodities: Record<string, Vmd0054CommodityResultOut>;
+  AL_t_ha: number;
+  accounting_mode: string;
+  blocked_commodities: string[];
+  leakage_emissions_tco2e: number | null;
+  leakage_block_reason: string | null;
+  step4?: { computable: boolean; reason?: string; delta_cs_t_c_ha?: number };
+}

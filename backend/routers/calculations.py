@@ -128,13 +128,16 @@ def commit_calculation(
         engine_inputs, preview_result=result, project_id=body.project_id,
     )
 
-    outcome = calculations_db.commit_calculation(
-        org_id, field_id, idempotency_key, snapshot, engine_inputs, result, checklist,
-        field["field_type"], body.accounting_pathway, body.project_id,
-        body.monitoring_period_start.isoformat(), body.monitoring_period_end.isoformat(),
-        body.season_ids, body.attachment_ids, user["user_id"], body.supersedes_calculation_id,
-        bundle_id=bundle_id,
-    )
+    try:
+        outcome = calculations_db.commit_calculation(
+            org_id, field_id, idempotency_key, snapshot, engine_inputs, result, checklist,
+            field["field_type"], body.accounting_pathway, body.project_id,
+            body.monitoring_period_start.isoformat(), body.monitoring_period_end.isoformat(),
+            body.season_ids, body.attachment_ids, user["user_id"], body.supersedes_calculation_id,
+            bundle_id=bundle_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
     return outcome
 
 
@@ -192,7 +195,7 @@ def get_determinations(
     compute_evidence_fingerprint."""
     bundle = registry.resolve_bundle_for_project(user["org_id"], project_id, accounting_pathway)
     sids = [s for s in season_ids.split(",") if s]
-    fingerprint = readiness_engine.compute_evidence_fingerprint(user["org_id"], field_id, accounting_pathway, sids)
+    fingerprint = readiness_engine.compute_evidence_fingerprint(user["org_id"], field_id, accounting_pathway, sids, project_id)
     return calculations_db.latest_determinations(
         user["org_id"], field_id, accounting_pathway, bundle["bundle_id"] if bundle else None,
         monitoring_period_start, monitoring_period_end, fingerprint,
@@ -211,13 +214,22 @@ def record_determination(
     restricted to reviewable requirements (raises 422 via the existing
     ValueError handler for anything unsupported/automated_only — see
     src.calculations.record_determination)."""
+    _validate_pathway(field, body.accounting_pathway)
+    if body.project_id:
+        from backend.access import require_project_lead
+        require_project_lead(user["org_id"], body.project_id, user)
+    elif body.accounting_pathway == "vm0042_alm":
+        raise HTTPException(422, "Select a project before recording an ALM determination.")
     bundle = registry.resolve_bundle_for_project(user["org_id"], body.project_id, body.accounting_pathway)
     fingerprint = readiness_engine.compute_evidence_fingerprint(
-        user["org_id"], field_id, body.accounting_pathway, body.season_ids,
+        user["org_id"], field_id, body.accounting_pathway, body.season_ids, body.project_id,
     )
-    return calculations_db.record_determination(
-        user["org_id"], field_id, body.accounting_pathway, body.requirement_id,
-        bundle["bundle_id"] if bundle else None,
-        body.monitoring_period_start.isoformat(), body.monitoring_period_end.isoformat(),
-        fingerprint, body.status, body.reason, user["user_id"],
-    )
+    try:
+        return calculations_db.record_determination(
+            user["org_id"], field_id, body.accounting_pathway, body.requirement_id,
+            bundle["bundle_id"] if bundle else None,
+            body.monitoring_period_start.isoformat(), body.monitoring_period_end.isoformat(),
+            fingerprint, body.status, body.reason, user["user_id"],
+        )
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc

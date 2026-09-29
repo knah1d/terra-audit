@@ -1,6 +1,6 @@
 "use client";
 
-import { Calculator, ClipboardList, FlaskConical, Pencil, Satellite, Wallet, Sprout } from "lucide-react";
+import { Calculator, ClipboardList, FlaskConical, Microscope, Pencil, Satellite, Wallet, Sprout, Wheat } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -32,7 +32,11 @@ export function FieldTabs({ fieldId, fieldType }: { fieldId: string; fieldType: 
     { href: `/fields/${fieldId}/ledger`, label: "Carbon Asset Ledger", icon: Wallet },
     { href: `/fields/${fieldId}/calculations`, label: "Calculations", icon: Calculator },
     ...(fieldType === "cropland_alm_vm0042"
-      ? [{ href: `/fields/${fieldId}/practice-data`, label: "Practice & Soil Data", icon: FlaskConical }]
+      ? [
+          { href: `/fields/${fieldId}/practice-data`, label: "Practice & Soil Data", icon: FlaskConical },
+          { href: `/fields/${fieldId}/soil-evidence`, label: "Soil Evidence", icon: Microscope },
+          { href: `/fields/${fieldId}/production-records`, label: "Production Records", icon: Wheat },
+        ]
       : []),
     { href: `/fields/${fieldId}/edit`, label: "Edit", icon: Pencil },
   ];

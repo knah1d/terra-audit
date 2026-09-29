@@ -6,7 +6,9 @@ soc_measurements the calculation engine actually reads.
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from backend.deps import get_current_user, get_owned_field, require_writer
-from backend.schemas.soil_evidence import SamplingPlanCreate, SampleCreate, StratumCreate
+from backend.schemas.soil_evidence import (
+    CustodyEventCreate, LabResultCreate, SamplingPlanCreate, SampleCreate, SocEvidenceReviewCreate, StratumCreate,
+)
 from src import soil_evidence
 
 router = APIRouter(tags=["soil-evidence"])
@@ -74,6 +76,83 @@ def create_sample(field_id: str, plan_id: str, body: SampleCreate,
     except ValueError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
     return next(s for s in soil_evidence.list_samples(user["org_id"], plan_id) if s["sample_id"] == sample_id)
+
+
+def _owned_sample(org_id: str, field_id: str, sample_id: str) -> dict:
+    sample = soil_evidence._get_sample(org_id, sample_id)
+    if sample is None or sample["field_id"] != field_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Sample not found on this field")
+    return sample
+
+
+@router.get("/fields/{field_id}/soil-samples/{sample_id}/lab-results")
+def list_lab_results(field_id: str, sample_id: str, user=Depends(get_current_user), field=Depends(_alm_field)):
+    _owned_sample(user["org_id"], field_id, sample_id)
+    return soil_evidence.list_lab_results(user["org_id"], sample_id)
+
+
+@router.post("/fields/{field_id}/soil-samples/{sample_id}/lab-results", status_code=status.HTTP_201_CREATED)
+def create_lab_result(field_id: str, sample_id: str, body: LabResultCreate,
+                       user=Depends(require_writer), field=Depends(_alm_field)):
+    _owned_sample(user["org_id"], field_id, sample_id)
+    try:
+        result_id = soil_evidence.create_lab_result(
+            user["org_id"], sample_id, body.analyte, body.method, body.unit, body.value, body.lab_name,
+            body.analyzed_at.isoformat() if body.analyzed_at else None, body.notes, user["user_id"],
+        )
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+    return next(r for r in soil_evidence.list_lab_results(user["org_id"], sample_id) if r["result_id"] == result_id)
+
+
+@router.get("/fields/{field_id}/soil-samples/{sample_id}/custody-events")
+def list_custody_events(field_id: str, sample_id: str, user=Depends(get_current_user), field=Depends(_alm_field)):
+    _owned_sample(user["org_id"], field_id, sample_id)
+    return soil_evidence.list_custody_events(user["org_id"], sample_id)
+
+
+@router.post("/fields/{field_id}/soil-samples/{sample_id}/custody-events", status_code=status.HTTP_201_CREATED)
+def create_custody_event(field_id: str, sample_id: str, body: CustodyEventCreate,
+                          user=Depends(require_writer), field=Depends(_alm_field)):
+    _owned_sample(user["org_id"], field_id, sample_id)
+    try:
+        event_id = soil_evidence.create_custody_event(
+            user["org_id"], sample_id, body.event_type, body.event_at.isoformat(), body.actor,
+            body.location, body.notes, user["user_id"],
+        )
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+    return next(e for e in soil_evidence.list_custody_events(user["org_id"], sample_id) if e["event_id"] == event_id)
+
+
+@router.get("/fields/{field_id}/soc-evidence")
+def get_soc_evidence(field_id: str, user=Depends(get_current_user), field=Depends(_alm_field)):
+    """The resolved engine input per (site_type, timepoint) cell — which
+    source governs it (reviewed_evidence / legacy_aggregate / missing),
+    plus every eligible sample for that cell so a reviewer can decide
+    what to adopt next."""
+    org_id = user["org_id"]
+    resolved = soil_evidence.resolved_soc_measurements(org_id, field_id)
+    cells = {}
+    for (site_type, timepoint), cell in resolved.items():
+        eligible = soil_evidence._eligible_sample_ids(org_id, field_id, site_type, timepoint)
+        cells[f"{site_type}_{timepoint}"] = {
+            **cell, "eligible_sample_ids": eligible,
+            "review": soil_evidence.latest_soc_evidence_review(org_id, field_id, site_type, timepoint),
+        }
+    return cells
+
+
+@router.post("/fields/{field_id}/soc-evidence/reviews", status_code=status.HTTP_201_CREATED)
+def create_soc_evidence_review(field_id: str, body: SocEvidenceReviewCreate,
+                                user=Depends(require_writer), field=Depends(_alm_field)):
+    try:
+        return soil_evidence.record_soc_evidence_review(
+            user["org_id"], field_id, body.site_type, body.timepoint, body.sample_ids,
+            body.status, body.reason, user["user_id"],
+        )
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
 
 
 @router.get("/fields/{field_id}/soil-samples/aggregate-comparison")

@@ -42,3 +42,32 @@ class SampleCreate(BaseModel):
         if self.depth_bottom_cm <= self.depth_top_cm:
             raise ValueError("depth_bottom_cm must be greater than depth_top_cm")
         return self
+
+
+class LabResultCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    analyte: Literal["soc_percent", "bulk_density_g_cm3", "soc_stock_tco2e_ha", "other"]
+    method: str = Field(min_length=1, max_length=200)
+    unit: str = Field(min_length=1, max_length=50)
+    value: float
+    lab_name: str = Field(default="", max_length=200)
+    analyzed_at: date | None = None
+    notes: str = Field(default="", max_length=2000)
+
+
+class CustodyEventCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    event_type: Literal["collected", "packaged", "shipped", "received_by_lab", "analyzed", "disposed", "other"]
+    event_at: date
+    actor: str = Field(default="", max_length=200)
+    location: str = Field(default="", max_length=200)
+    notes: str = Field(default="", max_length=2000)
+
+
+class SocEvidenceReviewCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    site_type: Literal["project", "control"]
+    timepoint: Literal["t_start", "t_final"]
+    sample_ids: list[str] = Field(min_length=0)
+    status: Literal["adopted", "rejected"]
+    reason: str = Field(min_length=1, max_length=2000)

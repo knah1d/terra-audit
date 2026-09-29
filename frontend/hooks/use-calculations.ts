@@ -54,6 +54,7 @@ export function useRecordDetermination(fieldId: string) {
   return useMutation({
     mutationFn: (body: {
       project_id: string | null; accounting_pathway: string; requirement_id: string;
+      season_ids: string[];
       monitoring_period_start: string; monitoring_period_end: string; status: string; reason: string;
     }) => apiFetch(`/fields/${fieldId}/calculations/readiness/determinations`, { method: "POST", json: body }),
   });

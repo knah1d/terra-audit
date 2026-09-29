@@ -11,13 +11,15 @@ drift this function exists to prevent.
 from src import methodology_registry as registry
 from src import monitoring
 from src import projects as projects_db
-from src.database import get_alm_livestock_schedule, get_alm_practice_schedule, get_soc_measurements
+from src.database import get_alm_livestock_schedule, get_alm_practice_schedule
 
 
 def build_snapshot(org_id: str, field: dict, project_id: str | None, accounting_pathway: str,
                     season_ids: list[str], monitoring_period_start: str, monitoring_period_end: str,
                     engine_inputs: dict, monitoring_run_ids: list[str], attachment_ids: list[str]) -> dict:
     field_id = field["field_id"]
+    from src.readiness import compute_evidence_fingerprint
+    initial_fingerprint = compute_evidence_fingerprint(org_id, field_id, accounting_pathway, season_ids, project_id)
 
     seasons = []
     for sid in season_ids:
@@ -58,7 +60,7 @@ def build_snapshot(org_id: str, field: dict, project_id: str | None, accounting_
     methodology_bundle = registry.resolve_bundle_for_project(org_id, project_id, accounting_pathway)
 
     snapshot = {
-        "schema_version": "calculation-snapshot-v2",
+        "schema_version": "calculation-snapshot-v3",
         "field": {
             "field_id": field_id, "name": field["name"], "district": field["district"],
             "area_ha": field["area_ha"], "field_type": field["field_type"],
@@ -75,33 +77,68 @@ def build_snapshot(org_id: str, field: dict, project_id: str | None, accounting_
     }
 
     if accounting_pathway == "vm0042_alm":
+        from src.production_records import leakage_snapshot
+        snapshot["leakage_evidence"] = leakage_snapshot(
+            org_id, field_id, project_id, (methodology_bundle or {}).get("bundle_id"),
+            monitoring_period_start, monitoring_period_end,
+        )
         from src.database import get_alm_cumulative_delta
+        from src import soil_evidence as soil_evidence_db
         snapshot["alm_practice_schedule"] = get_alm_practice_schedule(org_id, field_id)
         snapshot["alm_livestock_schedule"] = get_alm_livestock_schedule(org_id, field_id)
+
+        # THE actual engine input, resolved cell-by-cell: a current,
+        # reviewer-adopted set of specific sample rows when one exists
+        # (raw per-sample values preserved, never pre-averaged, so the
+        # engine's own Eq. 70/71 variance-from-replicates calculation is
+        # unaffected), else the legacy manually-entered aggregate,
+        # honestly labeled either way — see
+        # src.soil_evidence.resolved_soc_measurements's docstring. Both
+        # the resolved values AND the full per-cell provenance (review id,
+        # sample ids, reviewer, reason, decided_at, evidence fingerprint OR
+        # "legacy_aggregate" note) are frozen into the snapshot, never
+        # re-derived later.
+        resolved = soil_evidence_db.resolved_soc_measurements(org_id, field_id)
         snapshot["soc_measurements"] = {
-            f"{site}_{tp}": values for (site, tp), values in get_soc_measurements(org_id, field_id).items()
+            f"{site}_{tp}": cell["values"] for (site, tp), cell in resolved.items()
+        }
+        snapshot["soc_measurements_provenance"] = {
+            f"{site}_{tp}": {k: v for k, v in cell.items() if k != "values"}
+            for (site, tp), cell in resolved.items()
         }
         # Read once, frozen into the snapshot — the calculation engine
         # computes from THIS value, never a second live read at commit time.
         snapshot["prior_cumulative_delta_co2_wp_t"] = get_alm_cumulative_delta(org_id, field_id)
 
-        # Traceable soil evidence (Phase 3, Part B.7) — frozen ALONGSIDE
-        # the aggregate soc_measurements above, clearly labeled as
-        # supplementary. This is NOT what calculate_from_snapshot() reads
-        # (see this module's calculate_from_snapshot, unchanged below) —
-        # it exists so a committed snapshot can show a reviewer the real
-        # sampling plan/strata/geolocated samples behind the aggregate
-        # numbers when they were recorded, without silently claiming the
-        # aggregate itself was derived from them.
-        from src import soil_evidence as soil_evidence_db
+        # Full soil evidence (Phase 3, Part B.7, extended): every plan,
+        # stratum, sample, per-analyte lab result, chain-of-custody event,
+        # and evidence review decided for this field — frozen for
+        # reference/audit even where a cell above resolved to the legacy
+        # aggregate instead of a reviewed sample set (so a reviewer can
+        # still see what evidence existed and why it wasn't — or was —
+        # adopted at commit time).
         plans = soil_evidence_db.list_plans(org_id, field_id)
+        samples_by_plan = {p["plan_id"]: soil_evidence_db.list_samples(org_id, p["plan_id"]) for p in plans}
+        for samples in samples_by_plan.values():
+            for s in samples:
+                s["lab_results"] = soil_evidence_db.list_lab_results(org_id, s["sample_id"])
+                s["custody_events"] = soil_evidence_db.list_custody_events(org_id, s["sample_id"])
         snapshot["soil_evidence"] = {
             "plans": [{**p, "strata": soil_evidence_db.list_strata(org_id, p["plan_id"]),
-                       "samples": soil_evidence_db.list_samples(org_id, p["plan_id"])} for p in plans],
-            "note": "Supplementary traceability evidence, frozen for reference — the calculation itself "
-                    "used the aggregate soc_measurements above, not these samples directly.",
+                       "samples": samples_by_plan[p["plan_id"]]} for p in plans],
+            "reviews": {
+                f"{site}_{tp}": soil_evidence_db.latest_soc_evidence_review(org_id, field_id, site, tp)
+                for site in sorted(soil_evidence_db.SITE_TYPES) for tp in sorted(soil_evidence_db.TIMEPOINTS)
+            },
+            "note": "Full soil sampling evidence, frozen for reference. See soc_measurements_provenance "
+                    "above for exactly which cells this calculation actually used a reviewed sample set for, "
+                    "versus the legacy aggregate.",
         }
 
+    final_fingerprint = compute_evidence_fingerprint(org_id, field_id, accounting_pathway, season_ids, project_id)
+    if final_fingerprint != initial_fingerprint:
+        raise ValueError("Evidence changed while building the snapshot. Refresh and try again.")
+    snapshot["evidence_fingerprint"] = final_fingerprint
     return snapshot
 
 
@@ -138,6 +175,9 @@ def calculate_from_snapshot(snapshot: dict) -> dict:
             baseline_amendments=inputs.get("baseline_amendments"),
             project_amendments=inputs.get("project_amendments"),
         )
+    from src.leakage_vmd0054 import calculate_frozen_leakage
+    leakage = calculate_frozen_leakage(snapshot.get("leakage_evidence", {}),
+        snapshot.get("methodology_bundle"), snapshot["monitoring_period"], inputs.get("verification_years", 1.0))
     return engine.calculate_credits(
         practice_schedule=snapshot["alm_practice_schedule"],
         soc_measurements=_decode_soc_measurements(snapshot["soc_measurements"]),
@@ -147,4 +187,5 @@ def calculate_from_snapshot(snapshot: dict) -> dict:
         prior_cumulative_delta_co2_wp_t=snapshot["prior_cumulative_delta_co2_wp_t"],
         baseline_livestock=snapshot["alm_livestock_schedule"].get("baseline"),
         project_livestock=snapshot["alm_livestock_schedule"].get("project"),
+        leakage_result=leakage,
     )
