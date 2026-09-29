@@ -91,7 +91,7 @@ export function FieldTabs({ fieldId, fieldType }: { fieldId: string; fieldType: 
               onPointerEnter={trackLiquidPointer}
               onPointerMove={trackLiquidPointer}
               onPointerLeave={resetLiquidPointer}
-              className={`liquid-hover press relative z-10 flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors duration-[var(--dur-base)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 ${
+              className={`liquid-hover press relative z-10 flex min-h-10 shrink-0 items-center gap-2 whitespace-nowrap rounded-full px-3.5 text-sm font-medium transition-colors duration-[var(--dur-base)] ${
                 active ? "text-brand-700" : "text-text-secondary hover:text-text-primary"
               }`}
             >

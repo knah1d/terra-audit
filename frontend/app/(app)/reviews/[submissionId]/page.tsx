@@ -53,8 +53,8 @@ function ReadinessList({ checklist }: { checklist: ReadinessCheck[] }) {
           <div className="min-w-0 flex-1">
             <p className="font-mono text-xs text-text-tertiary">{c.requirement_id}</p>
             <p>{c.explanation}</p>
-            {c.source_reference && <p className="text-xs text-text-tertiary">{c.source_reference}</p>}
-            {c.required_evidence && <p className="text-xs text-text-tertiary">Required evidence: {c.required_evidence}</p>}
+            {c.source_reference && <p className="ui-meta">{c.source_reference}</p>}
+            {c.required_evidence && <p className="ui-meta">Required evidence: {c.required_evidence}</p>}
             {c.implementation_support && c.implementation_support !== "implemented" && (
               <p className="text-xs text-warning-700">Implementation: {c.implementation_support === "unsupported" ? "not implemented by this system" : "partially implemented"}</p>
             )}
@@ -164,7 +164,7 @@ export default function SubmissionDetailPage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-5">
+    <div className="ui-container space-y-6">
       <PageHeader
         title={<span className="flex items-center gap-2">Submission <Badge tone={STATUS_TONE[submission.status]}>{submission.status.replace(/_/g, " ")}</Badge></span>}
         subtitle="Internal approval only. This never sets or implies external verification or registry issuance."
@@ -173,11 +173,11 @@ export default function SubmissionDetailPage() {
       {notice && <p role="status" className="text-sm text-success-700">{notice}</p>}
 
       <Card>
-        <h3 className="mb-2 font-medium">Calculation</h3>
+        <h3 className="ui-subsection-title mb-2">Calculation</h3>
         <p className="text-sm">Field <span className="font-mono">{calculation.field_id}</span> · {calculation.accounting_pathway} · v{calculation.version}</p>
         <p className="text-sm">Monitoring period {calculation.monitoring_period_start} to {calculation.monitoring_period_end}</p>
         <p className="text-sm font-mono">Final issuance: {calculation.final_issuance ?? "—"} tCO2e</p>
-        <p className="text-xs text-text-tertiary">{calculation.methodology_version} · engine {calculation.engine_version}</p>
+        <p className="ui-meta">{calculation.methodology_version} · engine {calculation.engine_version}</p>
         {submission.previous_submission_id && (
           <Button variant="ghost" size="sm" className="mt-2" onClick={() => setShowDiff((v) => !v)}>
             {showDiff ? "Hide" : "Compare to previous version"}
@@ -202,15 +202,15 @@ export default function SubmissionDetailPage() {
       </Card>
 
       <Card>
-        <h3 className="mb-2 font-medium">Frozen readiness checklist</h3>
-        <p className="mb-2 text-xs text-text-tertiary">As recorded at commit time — not a certification of full methodology compliance.</p>
+        <h3 className="ui-subsection-title mb-2">Frozen readiness checklist</h3>
+        <p className="ui-meta mb-2">As recorded at commit time — not a certification of full methodology compliance.</p>
         <ReadinessList checklist={calculation.readiness} />
       </Card>
 
       <Card>
-        <h3 className="mb-2 font-medium">Reviewer</h3>
+        <h3 className="ui-subsection-title mb-2">Reviewer</h3>
         <p className="text-sm">Currently assigned: <span className="font-mono">{submission.assigned_reviewer_id ?? "unassigned"}</span></p>
-        <p className="mt-1 text-xs text-text-tertiary">
+        <p className="ui-meta mt-1">
           The picker below only lists current project members — assigning a reviewer never grants project
           access on its own. To assign someone new, add them as a project member first (below).
         </p>
@@ -254,7 +254,7 @@ export default function SubmissionDetailPage() {
 
       {!!options.length && (
         <Card>
-          <h3 className="mb-2 font-medium">Decision</h3>
+          <h3 className="ui-subsection-title mb-2">Decision</h3>
           {!!openBlockers.length && (
             <Alert tone="warning" title="Blocking findings open">
               {openBlockers.length} blocking finding(s) must be closed before this can be internally approved.
@@ -278,8 +278,8 @@ export default function SubmissionDetailPage() {
       )}
 
       <Card>
-        <h3 className="mb-2 font-medium">Findings</h3>
-        {!findings.length ? <p className="text-sm text-text-secondary">No findings recorded.</p> :
+        <h3 className="ui-subsection-title mb-2">Findings</h3>
+        {!findings.length ? <p className="ui-secondary">No findings recorded.</p> :
           findings.map((f) => <FindingCard key={f.finding_id} finding={f} submissionId={submissionId} />)}
         <form className="mt-3 grid gap-2 sm:grid-cols-2" onSubmit={(e) => {
           e.preventDefault();
@@ -302,7 +302,7 @@ export default function SubmissionDetailPage() {
       </Card>
 
       <Card>
-        <h3 className="mb-2 font-medium">Activity</h3>
+        <h3 className="ui-subsection-title mb-2">Activity</h3>
         <div className="space-y-1 text-sm">
           {[...events.map((e) => ({ at: e.created_at, text: `${e.from_status || "—"} → ${e.to_status}${e.reason ? `: ${e.reason}` : ""}` })),
             ...assignment_history.map((a) => ({ at: a.created_at, text: `Reviewer set to ${a.reviewer_id ?? "unassigned"}: ${a.reason}` }))]

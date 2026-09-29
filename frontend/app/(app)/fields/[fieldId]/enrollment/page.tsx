@@ -26,9 +26,9 @@ export default function EnrollmentPage() {
   const totalUnitArea = (units.data ?? []).reduce((sum, u) => sum + u.area_ha, 0);
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5">
+    <div className="ui-container space-y-6">
       <div>
-        <h2 className="text-lg font-semibold">Guided enrollment</h2>
+        <h2 className="ui-section-title">Guided enrollment</h2>
         <p className="mt-1 text-sm text-text-secondary">
           Shows which pathway this field&apos;s type maps to, what this codebase does and does not implement for it,
           and the most basic missing-evidence flags — not a substitute for the full readiness checklist run at
@@ -40,7 +40,7 @@ export default function EnrollmentPage() {
       {enrollment.isLoading ? <Skeleton className="h-64" /> : enrollment.data && (
         <>
           <Card>
-            <h3 className="mb-2 font-medium">Pathway</h3>
+            <h3 className="ui-subsection-title mb-2">Pathway</h3>
             <p className="text-sm">
               Field type <span className="font-mono">{enrollment.data.field_type}</span> maps to pathway{" "}
               <span className="font-mono">{enrollment.data.accounting_pathway ?? "none"}</span>.
@@ -54,9 +54,9 @@ export default function EnrollmentPage() {
           </Card>
 
           <Card>
-            <h3 className="mb-2 font-medium">Declared crops</h3>
+            <h3 className="ui-subsection-title mb-2">Declared crops</h3>
             {!enrollment.data.declared_crops.length ? (
-              <p className="text-sm text-text-secondary">No crops declared yet — add a crop season first.</p>
+              <p className="ui-secondary">No crops declared yet — add a crop season first.</p>
             ) : (
               <div className="space-y-2">
                 {enrollment.data.declared_crops.map((c, i) => (
@@ -69,27 +69,27 @@ export default function EnrollmentPage() {
                     ) : (
                       <span className="ml-2 text-text-secondary">Not in the recognized taxonomy — a reviewer must confirm applicability.</span>
                     )}
-                    {c.notes && <p className="ml-1 mt-0.5 text-xs text-text-tertiary">{c.notes}</p>}
+                    {c.notes && <p className="ui-meta ml-1 mt-0.5">{c.notes}</p>}
                   </div>
                 ))}
               </div>
             )}
-            <p className="mt-2 text-xs text-text-tertiary">
+            <p className="ui-meta mt-2">
               These are indicative signals only — never a full applicability determination by themselves.
             </p>
           </Card>
 
           <Card>
-            <h3 className="mb-2 font-medium">Unsupported / partial scope for this bundle</h3>
+            <h3 className="ui-subsection-title mb-2">Unsupported / partial scope for this bundle</h3>
             {!enrollment.data.unsupported_or_partial_scope.length ? (
-              <p className="text-sm text-text-secondary">Nothing flagged.</p>
+              <p className="ui-secondary">Nothing flagged.</p>
             ) : (
               <div className="space-y-2">
                 {enrollment.data.unsupported_or_partial_scope.map((s) => (
                   <div key={s.requirement_id} className="border-t border-border pt-2 text-sm first:border-t-0 first:pt-0">
                     <Badge tone={SUPPORT_TONE[s.implementation_support]}>{s.implementation_support}</Badge>{" "}
                     <span className="font-medium">{s.title}</span>
-                    <p className="text-xs text-text-tertiary">{s.required_evidence}</p>
+                    <p className="ui-meta">{s.required_evidence}</p>
                   </div>
                 ))}
               </div>
@@ -97,7 +97,7 @@ export default function EnrollmentPage() {
           </Card>
 
           <Card>
-            <h3 className="mb-2 font-medium">Missing evidence</h3>
+            <h3 className="ui-subsection-title mb-2">Missing evidence</h3>
             {!enrollment.data.missing_evidence.length ? (
               <p className="text-sm text-success-700">No basic evidence gaps flagged.</p>
             ) : (
@@ -110,14 +110,14 @@ export default function EnrollmentPage() {
       )}
 
       <Card>
-        <h3 className="mb-2 font-medium">Quantification units</h3>
-        <p className="mb-3 text-xs text-text-tertiary">
+        <h3 className="ui-subsection-title mb-2">Quantification units</h3>
+        <p className="ui-meta mb-3">
           Named subdivisions of this field&apos;s registered area for eligibility purposes — this never resizes the
           field itself, only records how much of it is currently considered eligible and why. Field area:{" "}
           {field.area_ha?.toFixed(2)} ha · allocated so far: {totalUnitArea.toFixed(2)} ha.
         </p>
         {units.isLoading ? <Skeleton className="h-16" /> : !units.data?.length ? (
-          <p className="text-sm text-text-secondary">No quantification units recorded — the whole field is treated as needs_review by default.</p>
+          <p className="ui-secondary">No quantification units recorded — the whole field is treated as needs_review by default.</p>
         ) : (
           <div className="mb-3 space-y-1 text-sm">
             {units.data.map((u) => (

@@ -25,8 +25,8 @@ const STATUS_TONE: Record<SubmissionStatus, "brand" | "success" | "warning" | "n
 function SubmissionRow({ row }: { row: ReviewSubmissionOut }) {
   const overdue = !!row.overdue;
   return (
-    <Link href={`/reviews/${row.submission_id}`} className="flex flex-wrap items-center justify-between gap-2 border-t border-border py-3 text-sm first:border-t-0 focus-visible:outline-2 focus-visible:outline-brand-600">
-      <div className="flex items-center gap-2">
+    <Link href={`/reviews/${row.submission_id}`} className="flex flex-wrap items-center justify-between gap-2 border-t border-border py-3 text-sm first:border-t-0">
+      <div className="flex flex-wrap items-center gap-2">
         <Badge tone={STATUS_TONE[row.status]}>{row.status.replace(/_/g, " ")}</Badge>
         {overdue && <Badge tone="danger">overdue</Badge>}
         <span className="font-mono text-xs text-text-tertiary">{row.field_id}</span>
@@ -46,13 +46,13 @@ export default function ReviewsPage() {
   const markRead = useMarkNotificationRead();
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
+    <div className="ui-container space-y-6">
       <PageHeader title="Reviews" subtitle="Internal review only — this is not external verification or registry issuance." />
 
       <Card>
-        <div className="flex items-center gap-2 mb-3"><Bell className="size-4" /><h3 className="font-medium">Notifications</h3></div>
+        <div className="flex items-center gap-2 mb-3"><Bell className="size-4" /><h3 className="ui-subsection-title">Notifications</h3></div>
         {notifications.isLoading ? <Skeleton className="h-16" /> : !notifications.data?.length ? (
-          <p className="text-sm text-text-secondary">No notifications.</p>
+          <p className="ui-secondary">No notifications.</p>
         ) : (
           <div className="space-y-1">
             {notifications.data.slice(0, 8).map((n) => (
@@ -71,7 +71,7 @@ export default function ReviewsPage() {
       </Card>
 
       <Card>
-        <h3 className="mb-3 font-medium">My reviews</h3>
+        <h3 className="ui-subsection-title mb-3">My reviews</h3>
         {myReviews.isLoading ? <Skeleton className="h-24" /> : !myReviews.data?.length ? (
           <EmptyState icon={ClipboardCheck} title="Nothing assigned to you" description="Submissions assigned to you for review will appear here." />
         ) : (
@@ -80,14 +80,14 @@ export default function ReviewsPage() {
       </Card>
 
       <Card>
-        <h3 className="mb-3 font-medium">Project review queue</h3>
-        <div className="mb-3 flex flex-wrap gap-3">
-          <Select value={projectId} onChange={(e) => setProjectId(e.target.value)} className="max-w-xs">
+        <h3 className="ui-subsection-title mb-3">Project review queue</h3>
+        <div className="ui-filters mb-4">
+          <Select value={projectId} onChange={(e) => setProjectId(e.target.value)} aria-label="Project">
             <option value="">Select a project…</option>
             {(projects.data ?? []).map((p) => <option key={p.project_id} value={p.project_id}>{p.name}</option>)}
           </Select>
           {projectId && (
-            <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="max-w-xs">
+            <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status">
               <option value="">All statuses</option>
               {["submitted", "in_review", "changes_requested", "internally_approved", "rejected", "withdrawn"].map((s) => (
                 <option key={s} value={s}>{s.replace(/_/g, " ")}</option>
@@ -96,7 +96,7 @@ export default function ReviewsPage() {
           )}
         </div>
         {!projectId ? (
-          <p className="text-sm text-text-secondary">Select a project to see its submissions.</p>
+          <p className="ui-secondary">Select a project to see its submissions.</p>
         ) : queue.isLoading ? <Skeleton className="h-24" /> : queue.error ? (
           <Alert tone="danger" title="Could not load submissions">{queue.error.message}</Alert>
         ) : !queue.data?.length ? (

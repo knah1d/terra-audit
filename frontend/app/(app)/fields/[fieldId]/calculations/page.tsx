@@ -48,12 +48,12 @@ function ReadinessList({ checklist }: { checklist: ReadinessCheck[] }) {
           <div className="min-w-0 flex-1">
             <p className="font-mono text-xs text-text-tertiary">{c.requirement_id} {c.determination === "expert" && <span className="italic">· expert determination</span>}</p>
             <p>{c.explanation}</p>
-            {c.source_reference && <p className="text-xs text-text-tertiary">{c.source_reference}</p>}
-            {c.required_evidence && <p className="text-xs text-text-tertiary">Required evidence: {c.required_evidence}</p>}
+            {c.source_reference && <p className="ui-meta">{c.source_reference}</p>}
+            {c.required_evidence && <p className="ui-meta">Required evidence: {c.required_evidence}</p>}
             {c.implementation_support && c.implementation_support !== "implemented" && (
               <p className="text-xs text-warning-700">Implementation: {c.implementation_support === "unsupported" ? "not implemented by this system" : "partially implemented"}</p>
             )}
-            {c.reviewer_authority === "automated_only" && <p className="text-xs text-text-tertiary">Cannot be manually overridden.</p>}
+            {c.reviewer_authority === "automated_only" && <p className="ui-meta">Cannot be manually overridden.</p>}
             {c.decided_by && <p className="text-xs text-text-secondary">Recorded decision: {c.reason}</p>}
           </div>
         </div>
@@ -131,9 +131,9 @@ export default function CalculationsPage() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="ui-container-wide space-y-6">
       <div>
-        <h2 className="text-lg font-semibold">Evidence-linked calculations</h2>
+        <h2 className="ui-section-title">Evidence-linked calculations</h2>
         <p className="mt-1 text-sm text-text-secondary">
           Committing here freezes the exact field geometry, crop-season versions, practice records, and
           measurements used into an immutable snapshot. This is separate from the original Carbon Asset Ledger
@@ -146,9 +146,9 @@ export default function CalculationsPage() {
       {notice && <p role="status" className="text-sm text-success-700">{notice} <Link href="/reviews" className="underline">Go to Reviews</Link></p>}
 
       <Card>
-        <h3 className="mb-3 font-medium">Calculation context</h3>
+        <h3 className="ui-subsection-title mb-3">Calculation context</h3>
         {!seasons.data?.length ? (
-          <p className="text-sm text-text-secondary">No crop seasons recorded yet — add one under Crop Seasons first.</p>
+          <p className="ui-secondary">No crop seasons recorded yet — add one under Crop Seasons first.</p>
         ) : (
           <div className="space-y-3 text-sm">
             <div>
@@ -172,7 +172,7 @@ export default function CalculationsPage() {
                 {(projects.data ?? []).map((p) => <option key={p.project_id} value={p.project_id}>{p.name}</option>)}
               </Select>
             </label>
-            <p className="text-xs text-text-tertiary">Accounting pathway: <span className="font-mono">{pathway}</span> (fixed by this field&apos;s registered methodology — never inferred from a crop declaration).</p>
+            <p className="ui-meta">Accounting pathway: <span className="font-mono">{pathway}</span> (fixed by this field&apos;s registered methodology — never inferred from a crop declaration).</p>
             <Button
               variant="secondary" loading={readiness.isPending}
               disabled={!selectedSeasons.length || !periodStart || !periodEnd}
@@ -191,8 +191,8 @@ export default function CalculationsPage() {
 
       {readiness.data && (
         <Card>
-          <h3 className="mb-3 font-medium">Readiness checklist</h3>
-          <p className="mb-3 text-xs text-text-tertiary">
+          <h3 className="ui-subsection-title mb-3">Readiness checklist</h3>
+          <p className="ui-meta mb-3">
             This reflects what this implementation can check automatically, plus any recorded expert
             determinations — it is not a certification of full methodology compliance.
           </p>
@@ -202,7 +202,7 @@ export default function CalculationsPage() {
 
       {writable && !!selectedSeasons.length && periodStart && periodEnd && (
         <Card>
-          <h3 className="mb-3 font-medium">Engine inputs</h3>
+          <h3 className="ui-subsection-title mb-3">Engine inputs</h3>
           <form className="grid gap-3 sm:grid-cols-2" onSubmit={(e) => {
             e.preventDefault();
             const submitter = (e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
@@ -264,7 +264,7 @@ export default function CalculationsPage() {
 
       {preview.data && (
         <Card>
-          <h3 className="mb-3 font-medium">Preview result</h3>
+          <h3 className="ui-subsection-title mb-3">Preview result</h3>
           <p className="text-sm">Final issuance: <span className="font-mono">{String(preview.data.result.final_issuance ?? "—")}</span></p>
           {pathway === "vm0042_alm" && <div className="mt-2 space-y-1 text-sm">
             <p>Annual displacement leakage: {String(preview.data.result.lk_disp_t ?? "blocked")} tCO2e/year</p>
@@ -279,7 +279,7 @@ export default function CalculationsPage() {
 
       {writable && projectId && selectedSeasons.length > 0 && periodStart && periodEnd && (preview.data || readiness.data) && (
         <Card>
-          <h3 className="font-medium">Record an evidence review</h3>
+          <h3 className="ui-subsection-title">Record an evidence review</h3>
           <p className="my-2 text-sm text-text-secondary">Project leads and administrators can decide reviewable requirements. Decisions apply to the selected project, dates and current evidence. Changed leakage inputs or production records require a new review.</p>
           <form className="space-y-2" onSubmit={(e) => {
             e.preventDefault();
@@ -305,8 +305,8 @@ export default function CalculationsPage() {
       )}
 
       <Card>
-        <div className="flex items-center justify-between">
-          <h3 className="font-medium">Calculation history</h3>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="ui-subsection-title">Calculation history</h3>
           {!!legacyCount && <Badge tone="neutral">{legacyCount} legacy (no snapshot)</Badge>}
         </div>
         {history.isLoading ? <p className="mt-2 text-sm">Loading…</p> : !history.data?.length ? (
@@ -340,7 +340,7 @@ export default function CalculationsPage() {
                     </Button>
                   )}
                   {!row.legacy && row.status === "ready_for_review" && !row.project_id && (
-                    <span className="text-xs text-text-tertiary">Select a project above, then re-commit to submit this for review.</span>
+                    <span className="ui-meta">Select a project above, then re-commit to submit this for review.</span>
                   )}
                   <Button variant="ghost" size="sm" onClick={() => download(row, row.legacy ? `credit-history-${row.credit_history_id}.json` : `calculation-${row.calculation_id}.json`)}>
                     Download JSON

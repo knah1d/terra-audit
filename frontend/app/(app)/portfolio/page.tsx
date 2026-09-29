@@ -6,7 +6,7 @@ import { useState } from "react";
 import { Alert } from "@/components/ui/Alert";
 import { sortPortfolio, type PortfolioSortKey } from "@/lib/field-filters";
 import { PortfolioBarChart } from "@/components/portfolio/PortfolioBarChart";
-import { Button } from "@/components/ui/Button";
+import { ButtonLink } from "@/components/ui/Button";
 import { StatCard } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { IconTile } from "@/components/ui/IconTile";
@@ -45,7 +45,7 @@ export default function PortfolioPage() {
     .reduce((sum, e) => sum + (e.final_issuance as number), 0) ?? 0;
 
   return (
-    <div className="mx-auto max-w-5xl">
+    <div className="ui-container">
       <PageHeader title="Portfolio" subtitle="Aggregated carbon-credit position across every registered field." />
 
       {error && <Alert tone="danger" title="Unable to load portfolio">{error.message}</Alert>}
@@ -62,9 +62,7 @@ export default function PortfolioPage() {
           title="No fields registered yet"
           description="Register a field to start tracking its carbon-credit position here."
           action={
-            <Link href="/fields/new">
-              <Button size="sm">Register a field</Button>
-            </Link>
+            <ButtonLink href="/fields/new">Register a field</ButtonLink>
           }
         />
       )}
@@ -78,7 +76,7 @@ export default function PortfolioPage() {
             <StatCard label="Cropland ALM Credits" value={`${formatNumber(almCredits, "tco2e")} tCO2e`} tone="success" />
           </div>
 
-          <div className="surface-card rounded-xl p-4">
+          <div className="ui-card">
             <PortfolioBarChart entries={entries} />
             {entries.every((e) => e.final_issuance === null) && (
               <p className="py-8 text-center text-sm text-text-tertiary">
@@ -87,10 +85,10 @@ export default function PortfolioPage() {
             )}
           </div>
 
-          <div className="surface-card overflow-x-auto rounded-xl">
+          <div className="ui-card overflow-x-auto p-0">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left text-xs font-medium uppercase tracking-wide text-text-tertiary">
+                <tr className="ui-meta text-left font-medium uppercase tracking-wide">
                   {columns.map(({ key, label }) => (
                     <th key={key} aria-sort={sortKey === key ? (direction === "asc" ? "ascending" : "descending") : "none"} className="px-4 pb-2.5 pt-4">
                       <button type="button" onClick={() => changeSort(key)} className="inline-flex items-center gap-2 rounded-md py-1 text-left hover:text-text-primary">

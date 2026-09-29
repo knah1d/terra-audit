@@ -30,7 +30,7 @@ function PathwaySection({ projectId, pathway, label }: { projectId: string; path
 
   return (
     <Card>
-      <h3 className="mb-2 font-medium">{label}</h3>
+      <h3 className="ui-subsection-title mb-2">{label}</h3>
       {applicability.isLoading ? <Skeleton className="h-16" /> : (
         <>
           <p className="text-sm">
@@ -42,7 +42,7 @@ function PathwaySection({ projectId, pathway, label }: { projectId: string; path
               Explicitly pinned: {explicit.reason} (decided {new Date(explicit.decided_at).toLocaleDateString()})
             </p>
           ) : (
-            <p className="mt-1 text-xs text-text-tertiary">No explicit decision recorded — using whichever bundle is currently marked current.</p>
+            <p className="ui-meta mt-1">No explicit decision recorded — using whichever bundle is currently marked current.</p>
           )}
         </>
       )}
@@ -77,9 +77,9 @@ export default function ProjectMethodologyPage() {
   const eligibleArea = useProjectEligibleArea(project.project_id);
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5">
+    <div className="ui-container space-y-6">
       <div>
-        <h2 className="text-lg font-semibold">Methodology</h2>
+        <h2 className="ui-section-title">Methodology</h2>
         <p className="mt-1 text-sm text-text-secondary">
           Every new calculation freezes the resolved bundle below into its snapshot. Pinning a project to a specific
           bundle (e.g. a superseded version a project is transition-eligible for) overrides the default
@@ -92,7 +92,7 @@ export default function ProjectMethodologyPage() {
       ))}
 
       <Card>
-        <h3 className="mb-2 font-medium">Grouped-project eligible area</h3>
+        <h3 className="ui-subsection-title mb-2">Grouped-project eligible area</h3>
         {eligibleArea.isLoading ? <Skeleton className="h-16" /> : eligibleArea.data && (
           <>
             <p className="text-sm">
@@ -101,9 +101,9 @@ export default function ProjectMethodologyPage() {
               Excluded: <Badge tone="danger">{eligibleArea.data.totals_ha.excluded?.toFixed(2) ?? 0} ha</Badge>{" "}
               Needs review: <Badge tone="warning">{eligibleArea.data.totals_ha.needs_review?.toFixed(2) ?? 0} ha</Badge>
             </p>
-            <p className="mt-2 text-xs text-text-tertiary">{eligibleArea.data.note}</p>
+            <p className="ui-meta mt-2">{eligibleArea.data.note}</p>
             {!!eligibleArea.data.fields_without_quantification_units.length && (
-              <p className="mt-1 text-xs text-text-tertiary">
+              <p className="ui-meta mt-1">
                 Fields with no quantification unit recorded (counted in full under needs_review):{" "}
                 {eligibleArea.data.fields_without_quantification_units.join(", ")}
               </p>

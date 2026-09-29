@@ -53,7 +53,7 @@ function LeakageCalculator({ fieldId, commodities, writable }: { fieldId: string
   const [selected, setSelected] = useState("");
   const initial = saved.data?.find((a) => a.assessment_id === selected);
   return <Card>
-    <h3 className="font-medium">Saved leakage assessments</h3>
+    <h3 className="ui-subsection-title">Saved leakage assessments</h3>
     <p className="my-2 text-sm text-text-secondary">Each revision belongs to a project, methodology bundle and reporting period. Calculations use the latest matching revision and freeze its evidence. Saving inputs does not approve them.</p>
     {saved.error && <p role="alert">Unable to load saved assessments.</p>}
     <Select value={selected} onChange={(e) => setSelected(e.target.value)}>
@@ -173,9 +173,9 @@ export default function ProductionRecordsPage() {
   const commodities = Array.from(new Set((records.data ?? []).map((r) => r.commodity)));
 
   return (
-    <div className="space-y-5">
+    <div className="ui-container-wide space-y-6">
       <div>
-        <h2 className="text-lg font-semibold">Production records</h2>
+        <h2 className="ui-section-title">Production records</h2>
         <p className="mt-1 text-sm text-text-secondary">
           Commodity-level, multi-year harvest records feeding VMD0054&apos;s leakage Steps 1/3/4/5. The
           legacy scalar crop yield field on Practice &amp; Soil Data remains as a separate, legacy input.
@@ -185,7 +185,7 @@ export default function ProductionRecordsPage() {
 
       {writable && (
         <Card>
-          <h3 className="mb-3 font-medium">New production record</h3>
+          <h3 className="ui-subsection-title mb-3">New production record</h3>
           <form
             className="grid gap-2 sm:grid-cols-3"
             onSubmit={(e) => {
@@ -237,8 +237,8 @@ export default function ProductionRecordsPage() {
 
       {writable && (
         <Card>
-          <h3 className="mb-2 font-medium">Bulk import</h3>
-          <p className="mb-2 text-xs text-text-tertiary">
+          <h3 className="ui-subsection-title mb-2">Bulk import</h3>
+          <p className="ui-meta mb-2">
             Paste a JSON array of records (same fields as the form above). Imports stop at the first
             invalid row and report exactly how far it got.
           </p>
@@ -261,7 +261,7 @@ export default function ProductionRecordsPage() {
       )}
 
       <Card>
-        <h3 className="mb-3 font-medium">Records</h3>
+        <h3 className="ui-subsection-title mb-3">Records</h3>
         <RecordsTable records={records.data ?? []} />
       </Card>
 

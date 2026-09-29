@@ -20,7 +20,7 @@ export default function ProjectsPage() {
   const [error, setError] = useState("");
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="ui-container">
       <PageHeader
         title="Projects"
         subtitle="Operational grouping of fields for monitoring and internal review — separate from carbon-claim allocation."
@@ -33,10 +33,10 @@ export default function ProjectsPage() {
       <div className="grid gap-3">
         {(projects.data ?? []).map((p) => (
           <Link key={p.project_id} href={`/projects/${p.project_id}`}>
-            <Card interactive className="flex items-center justify-between p-4">
+            <Card interactive className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="font-medium">{p.name}</p>
-                <p className="text-sm text-text-secondary">{p.description}</p>
+                <p className="ui-secondary">{p.description}</p>
               </div>
               <Badge tone="brand">{p.status}</Badge>
             </Card>

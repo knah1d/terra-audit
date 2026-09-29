@@ -29,7 +29,7 @@ function DerivationStepCard({ step, index, total }: { step: DerivationStep; inde
         <div className="flex items-center gap-2">
           <ChevronRight className="size-3.5 shrink-0 text-text-tertiary transition-transform group-open:rotate-90" />
           <div>
-            <span className="text-xs font-medium uppercase tracking-wide text-text-tertiary">
+            <span className="ui-meta font-medium uppercase tracking-wide">
               Step {index + 1} of {total}
             </span>
             <p className="font-medium text-text-primary">{step.title}</p>

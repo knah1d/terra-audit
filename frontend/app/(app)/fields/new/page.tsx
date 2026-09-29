@@ -60,7 +60,7 @@ export default function NewFieldPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl">
+    <div className="ui-container">
       <PageHeader
         title="Register a Field"
         subtitle="Draw, upload, or paste a boundary, then confirm its details."
@@ -116,7 +116,7 @@ export default function NewFieldPage() {
                   </option>
                 ))}
               </Select>
-              <p className="mt-1 text-xs text-text-tertiary">
+              <p className="ui-meta mt-1">
                 Immutable after creation — determines which methodology (and which subsequent
                 data-entry tabs) this field uses.
               </p>

@@ -36,9 +36,9 @@ function ModelSection({ modelKey, label }: { modelKey: "random_forest" | "xgboos
   }
 
   return (
-    <div className="surface-card flex flex-col gap-4 rounded-xl p-4">
-      <div className="flex items-center justify-between">
-        <h3 className="font-medium text-text-primary">{label}</h3>
+    <div className="ui-card flex flex-col gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="ui-subsection-title">{label}</h3>
         <RoleGate allow={["admin", "analyst"]}>
           <Button size="sm" icon={Play} loading={training} onClick={handleTrain}>
             Train &amp; Save
@@ -55,21 +55,21 @@ function ModelSection({ modelKey, label }: { modelKey: "random_forest" | "xgboos
         <div className="flex flex-col gap-5">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 text-sm">
             <div>
-              <p className="text-xs uppercase tracking-wide text-text-tertiary">Threshold agreement</p>
+              <p className="ui-meta uppercase tracking-wide">Threshold agreement</p>
               <p className="font-mono text-lg tabular-nums text-text-primary">
                 {(result.summary.threshold_agreement_score * 100).toFixed(1)}%
               </p>
             </div>
             <div>
-              <p className="text-xs uppercase tracking-wide text-text-tertiary">Macro F1</p>
+              <p className="ui-meta uppercase tracking-wide">Macro F1</p>
               <p className="font-mono text-lg tabular-nums text-text-primary">{result.summary.macro_avg.f1.toFixed(3)}</p>
             </div>
             <div>
-              <p className="text-xs uppercase tracking-wide text-text-tertiary">CV folds</p>
+              <p className="ui-meta uppercase tracking-wide">CV folds</p>
               <p className="font-mono text-lg tabular-nums text-text-primary">{result.summary.k_used}</p>
             </div>
             <div>
-              <p className="text-xs uppercase tracking-wide text-text-tertiary">Stratified</p>
+              <p className="ui-meta uppercase tracking-wide">Stratified</p>
               <p className="font-mono text-lg tabular-nums text-text-primary">{result.summary.stratified ? "Yes" : "No"}</p>
             </div>
           </div>
@@ -108,7 +108,7 @@ export default function AiValidationPage() {
   const buildDataset = useBuildDataset();
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-6">
+    <div className="ui-container flex flex-col gap-6">
       <PageHeader
         title="AI Validation"
         subtitle="Cross-validate the Random Forest / XGBoost detectors against the Threshold Gate's own labels."
@@ -121,10 +121,10 @@ export default function AiValidationPage() {
       </Alert>
 
       <RoleGate allow={["admin", "analyst"]}>
-        <div className="surface-card flex items-center justify-between rounded-xl p-4">
+        <div className="ui-card flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
             <Database className="size-4 text-brand-600" />
-            <span className="text-sm text-text-secondary">
+            <span className="ui-secondary">
               Build the labeled training dataset from cached field timeseries before training either model.
             </span>
           </div>

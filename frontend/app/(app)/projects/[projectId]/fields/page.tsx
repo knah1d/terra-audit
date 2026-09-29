@@ -23,11 +23,11 @@ export default function ProjectFieldsPage() {
   const assignable = (fields.data ?? []).filter((f) => !assignedFieldIds.has(f.field_id));
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5">
+    <div className="ui-container space-y-6">
       {error && <p role="alert" className="rounded-lg bg-danger-50 p-3 text-danger-700">{error}</p>}
       <Card>
-        <h3 className="mb-3 font-medium">Assign an existing field</h3>
-        <p className="mb-3 text-xs text-text-tertiary">
+        <h3 className="ui-subsection-title mb-3">Assign an existing field</h3>
+        <p className="ui-meta mb-3">
           This never guesses an assignment or touches the field&apos;s history — it only records that this field
           is part of this project as of the effective date below. A field can belong to more than one project at once.
         </p>
@@ -46,8 +46,8 @@ export default function ProjectFieldsPage() {
       </Card>
 
       <Card>
-        <h3 className="mb-3 font-medium">Fields in this project</h3>
-        {!openMemberships.length ? <p className="text-sm text-text-secondary">No fields assigned yet.</p> : (
+        <h3 className="ui-subsection-title mb-3">Fields in this project</h3>
+        {!openMemberships.length ? <p className="ui-secondary">No fields assigned yet.</p> : (
           <div className="space-y-2">
             {openMemberships.map((m) => (
               <EndMembershipRow key={m.membership_id} membershipId={m.membership_id} fieldId={m.field_id}

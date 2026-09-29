@@ -32,7 +32,7 @@ export function PortfolioBarChart({ entries }: { entries: PortfolioEntry[] }) {
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2 text-xs text-text-secondary">
         {Object.entries(FIELD_TYPE_LABELS).map(([type, label], index) => (
-          <button key={type} type="button" aria-pressed={!hiddenTypes.includes(type)} onClick={() => setHiddenTypes((current) => current.includes(type) ? current.filter((item) => item !== type) : [...current, type])} className={`glass-control flex items-center gap-2 rounded-full px-3 py-2 transition-opacity ${hiddenTypes.includes(type) ? "opacity-50" : "opacity-100"}`}>
+          <button key={type} type="button" aria-pressed={!hiddenTypes.includes(type)} onClick={() => setHiddenTypes((current) => current.includes(type) ? current.filter((item) => item !== type) : [...current, type])} className={`glass-control flex min-h-9 items-center gap-2 rounded-full px-3 transition-opacity ${hiddenTypes.includes(type) ? "opacity-50" : "opacity-100"}`}>
             <span className="size-2.5 rounded-full" style={{ background: `var(--chart-series-${index + 1})` }} />{label}
           </button>
         ))}

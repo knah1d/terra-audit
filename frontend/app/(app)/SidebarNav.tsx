@@ -38,7 +38,7 @@ export function SidebarNav({ session, collapsed = false }: { session: SessionCla
 
   return (
     <>
-      <nav className="flex flex-col gap-0.5 text-sm">
+      <nav className="flex flex-col gap-1 text-sm">
         {items.map(({ href, label, icon: Icon }) => {
           const active = href === activeHref;
           return (
@@ -51,7 +51,7 @@ export function SidebarNav({ session, collapsed = false }: { session: SessionCla
               onPointerEnter={trackLiquidPointer}
               onPointerMove={trackLiquidPointer}
               onPointerLeave={resetLiquidPointer}
-              className={`liquid-hover press flex items-center gap-2.5 rounded-xl px-3 py-3 font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 ${
+              className={`liquid-hover press flex min-h-11 items-center gap-3 rounded-lg px-3 font-medium ${
                 active ? "liquid-active text-brand-700" : "text-text-secondary hover:text-text-primary"
               }`}
             >
@@ -65,13 +65,13 @@ export function SidebarNav({ session, collapsed = false }: { session: SessionCla
       {/* Its own tinted card — a "control center" corner rather than
        * profile info + a toggle just sitting loose above the logout
        * button. */}
-      <div className={`${collapsed ? "hidden" : "flex"} mt-auto flex-col gap-3 rounded-xl glass-control p-3`}>
+      <div className={`${collapsed ? "hidden" : "flex"} mt-auto flex-col gap-3 rounded-lg glass-control p-3`}>
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
             {session && (
               <>
                 <p className="truncate text-sm font-medium text-text-primary">{session.email}</p>
-                <p className="text-xs capitalize text-text-tertiary">{session.role}</p>
+                <p className="ui-meta capitalize">{session.role}</p>
               </>
             )}
           </div>

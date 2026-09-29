@@ -19,7 +19,7 @@ export default function AccountAccessPage() {
       setNotice(result.message); if (token) { setDone(true); setToken(""); setPassword(""); }
     } catch (e) { setError(e instanceof Error ? e.message : "Request failed"); } finally { setBusy(false); }
   }
-  return <div className="mx-auto max-w-md space-y-4 p-6"><h1 className="text-2xl font-semibold">{token ? "Set your password" : "Account recovery"}</h1>
+  return <div className="ui-container-narrow space-y-4 p-6"><h1 className="ui-page-title">{token ? "Set your password" : "Account recovery"}</h1>
     {notice && <p role="status">{notice}</p>}{error && <p role="alert" className="text-danger-700">{error}</p>}
     {!done && <form className="space-y-4" onSubmit={submit}>{token ? <label className="block text-sm">New password (at least 12 characters)<PasswordInput required minLength={12} maxLength={72} autoComplete="new-password" value={password} onChange={e => setPassword(e.target.value)} /></label> : <label className="block text-sm">Account email<TextInput type="email" required autoComplete="email" value={email} onChange={e => setEmail(e.target.value)} /></label>}
       <Button type="submit" loading={busy}>{token ? "Save password" : "Send recovery link"}</Button></form>}

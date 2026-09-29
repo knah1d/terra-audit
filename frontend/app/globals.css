@@ -50,6 +50,27 @@
   --border-c: #dbe8e0;
   --border-strong: #c3d9cc;
 
+  /* Border roles: subtle = dividers/cards, default = controls,
+   * focus = the single 2px keyboard-focus indicator. */
+  --border-subtle: #dbe8e0;
+  --border-default: #c3d3ca;
+  --border-focus: var(--pine-600);
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+
+  /* Menu surface for custom dropdowns (dark in both themes). */
+  --menu-bg: #13211b;
+  --menu-border: rgba(180, 214, 196, 0.16);
+  --menu-text: #e8f1ec;
+  --menu-muted: #9fb6ab;
+  --menu-hover: rgba(85, 186, 131, 0.14);
+  --menu-selected: rgba(85, 186, 131, 0.22);
+  --menu-check: #7fd1a3;
+
+  /* Solid card surface + neutral border. */
+  --card-bg: var(--glass-bg);
+  --card-border: var(--border-subtle);
+
   --text-primary: #0a0a0a;
   --text-secondary: #435c54;
   --text-tertiary: #52675f;
@@ -144,6 +165,24 @@
   --dur-base: 180ms;
   --dur-slow: 240ms;
 
+  /* --- Layout spacing scale (4px only for icon/text details) --- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+
+  /* --- Controls / cards / layout --- */
+  --control-h: 44px;
+  --control-r: 8px;
+  --control-px: 12px;
+  --control-fs: 14px;
+  --card-r: 12px;
+  --content-max: 1200px;
+  --content-wide-max: 1600px;
+
   /* --- Chart palette: the dataviz skill's validated 8-hue categorical
    * order (CVD ΔE ≥ 8, normal-vision ΔE ≥ 15 on every adjacent pair, both
    * modes) — used verbatim rather than re-deriving from the Pine ramp,
@@ -187,6 +226,13 @@
   --surface-muted: #152420;
   --border-c: rgba(133, 209, 167, 0.11);
   --border-strong: rgba(133, 209, 167, 0.2);
+
+  --border-subtle: rgba(180, 214, 196, 0.1);
+  --border-default: rgba(180, 214, 196, 0.2);
+  --border-focus: var(--pine-300);
+
+  --menu-bg: #0d1813;
+  --menu-border: rgba(180, 214, 196, 0.14);
 
   /* Barely-green-tinted off-white — stark #fff on a green-black surface
    * reads as harsh; this keeps near-white legibility without the clash. */
@@ -270,6 +316,9 @@
   --color-surface-muted: var(--surface-muted);
   --color-border: var(--border-c);
   --color-border-strong: var(--border-strong);
+  --color-border-subtle: var(--border-subtle);
+  --color-border-default: var(--border-default);
+  --color-border-focus: var(--border-focus);
 
   --color-text-primary: var(--text-primary);
   --color-text-secondary: var(--text-secondary);
@@ -579,18 +628,6 @@ body {
   }
 }
 
-/* Subtle inset top highlight on recessed controls (text inputs) — the
- * same specular-edge idea .glass-chrome uses on its top edge, scaled down
- * so a field reads as a recessed glass surface rather than a flat box.
- * Light-mode only: on a near-black dark surface the equivalent highlight
- * would just look like a border, not a light catch. */
-.field-inset {
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
-}
-[data-theme="dark"] .field-inset {
-  box-shadow: none;
-}
-
 /* ============================================================
  * Motion
  * ============================================================ */
@@ -608,7 +645,8 @@ body {
   transition: transform var(--dur-base) var(--curve-out),
     box-shadow var(--dur-base) var(--curve-out), border-color var(--dur-base) var(--curve-out);
 }
-.lift:hover {
+.lift:hover,
+a:hover > .lift {
   transform: translateY(-1px);
   /* Lift and edge feedback are reserved for clickable cards. */
   box-shadow: var(--shadow-l), inset 0 0 0 1px color-mix(in srgb, var(--brand-600) 18%, transparent);
@@ -638,20 +676,26 @@ body {
 }
 button:not(:disabled), select, summary { cursor: pointer; }
 a, button, input, select, textarea { -webkit-tap-highlight-color: transparent; }
-a:focus-visible, button:focus-visible, select:focus-visible {
-  outline: 2px solid var(--brand-600);
-  outline-offset: 3px;
+/* One keyboard-focus indicator for every interactive element: a 2px
+ * outline in --border-focus. No glows, no border-color swaps. */
+:where(a, button, summary, [role="button"], [role="tab"], [role="combobox"], [tabindex]:not([tabindex="-1"])):focus-visible,
+:where(input, textarea, select):focus-visible {
+  outline: var(--focus-ring-width) solid var(--border-focus);
+  outline-offset: var(--focus-ring-offset);
+  box-shadow: none;
 }
-a:focus-visible > .lift {
-  box-shadow: inset 0 1px 0 var(--glass-specular), var(--shadow-l);
+:where(a, button, input, textarea, select, [role="combobox"]):focus:not(:focus-visible) {
+  outline: none;
 }
-.surface-card tbody tr {
+/* Nav items and tabs often sit in scroll containers that would clip an
+ * outset ring; draw theirs just inside the edge instead. */
+.liquid-hover:focus-visible { outline-offset: -2px; }
+.surface-card tbody tr, .ui-card tbody tr {
   transition: background-color var(--dur-base) var(--curve-out);
 }
-.surface-card tbody tr:hover {
+.surface-card tbody tr:hover, .ui-card tbody tr:hover {
   background: color-mix(in srgb, var(--brand-100) 50%, transparent);
 }
-select option { background: var(--surface); color: var(--text-primary); }
 .recharts-default-tooltip {
   background: var(--glass-bg-strong) !important;
   backdrop-filter: blur(24px);
@@ -661,12 +705,12 @@ select option { background: var(--surface); color: var(--text-primary); }
 }
 .sheet-backdrop { background: rgb(5 18 13 / 0.38); }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .surface-card, .glass-chrome, .glass-chrome-strong, .glass-control {
+  .surface-card, .ui-card, .glass-chrome, .glass-chrome-strong, .glass-control {
     background: var(--surface);
   }
 }
 @media (prefers-reduced-transparency: reduce) {
-  .surface-card, .glass-chrome, .glass-chrome-strong, .glass-control {
+  .surface-card, .ui-card, .glass-chrome, .glass-chrome-strong, .glass-control {
     background: var(--surface);
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
@@ -687,4 +731,130 @@ select option { background: var(--surface); color: var(--text-primary); }
 
 @media (prefers-reduced-motion: reduce) {
   .liquid-hover::after { display: none; }
+}
+
+/* ============================================================
+ * Shared UI system — controls, select, cards, typography, layout.
+ * In @layer components so Tailwind utilities passed via className
+ * (widths, margins) still override these defaults.
+ * ============================================================ */
+@layer components {
+  /* --- Form controls --- */
+  .ui-control {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    min-height: var(--control-h);
+    padding: 0 var(--control-px);
+    border: 1px solid var(--border-default);
+    border-radius: var(--control-r);
+    background: color-mix(in srgb, var(--surface) 72%, transparent);
+    color: var(--text-primary);
+    font-size: var(--control-fs);
+    line-height: 20px;
+    transition: border-color var(--dur-fast) var(--curve-out), background-color var(--dur-fast) var(--curve-out);
+  }
+  .ui-control::placeholder { color: var(--text-tertiary); }
+  .ui-control:hover:not(:disabled) { border-color: var(--border-strong); }
+  .ui-control:disabled {
+    cursor: not-allowed;
+    background: var(--surface-muted);
+    color: var(--text-tertiary);
+  }
+  .ui-control[aria-invalid="true"], .ui-control:user-invalid { border-color: var(--danger-600); }
+  input.ui-control[type="file"] { padding: 10px var(--control-px); }
+  input.ui-control[type="checkbox"], input.ui-control[type="radio"] {
+    width: auto; min-height: 0; padding: 0;
+  }
+  textarea.ui-control, .ui-textarea {
+    min-height: 96px;
+    padding: 10px var(--control-px);
+  }
+
+  /* --- Custom select --- */
+  .ui-select { position: relative; display: block; width: 100%; min-width: 0; }
+  .ui-select-native {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    opacity: 0; pointer-events: none; appearance: none;
+  }
+  .ui-select-trigger {
+    display: flex; align-items: center; gap: var(--space-2);
+    text-align: left; cursor: pointer;
+  }
+  .ui-select-chevron {
+    width: 16px; height: 16px; flex-shrink: 0; color: var(--text-tertiary);
+    transition: transform var(--dur-fast) var(--curve-out);
+  }
+  .ui-select[data-open] .ui-select-chevron { transform: rotate(180deg); }
+  .ui-select-menu {
+    z-index: 60;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: var(--space-1);
+    border: 1px solid var(--menu-border);
+    border-radius: var(--control-r);
+    background: var(--menu-bg);
+    color: var(--menu-text);
+    box-shadow: 0 8px 24px -8px rgb(0 0 0 / 0.45);
+    font-size: var(--control-fs);
+  }
+  .ui-select-option {
+    display: flex; align-items: center; gap: var(--space-2);
+    min-height: 44px; padding: 10px var(--space-3);
+    border-radius: 6px; cursor: pointer; user-select: none;
+  }
+  .ui-select-option[data-active] { background: var(--menu-hover); }
+  .ui-select-option[aria-selected="true"] { background: var(--menu-selected); }
+  .ui-select-option[aria-selected="true"] svg { color: var(--menu-check); }
+  .ui-select-option[data-active] { outline: 1px solid color-mix(in srgb, var(--menu-check) 40%, transparent); outline-offset: -1px; }
+  .ui-select-option[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; background: none; outline: none; }
+  .ui-select-group {
+    padding: var(--space-2) var(--space-3) var(--space-1);
+    font-size: 12px; font-weight: 600; color: var(--menu-muted);
+  }
+
+  /* --- Cards --- */
+  .ui-card {
+    border: 1px solid var(--card-border);
+    border-radius: var(--card-r);
+    background: var(--card-bg);
+    backdrop-filter: blur(24px) saturate(140%);
+    -webkit-backdrop-filter: blur(24px) saturate(140%);
+    padding: var(--space-4);
+  }
+  @media (min-width: 768px) { .ui-card { padding: var(--space-6); } }
+  .ui-card .ui-card { backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .ui-card-interactive {
+    cursor: pointer;
+    transition: border-color var(--dur-base) var(--curve-out), background-color var(--dur-base) var(--curve-out);
+  }
+  .ui-card-interactive:hover, a:hover > .ui-card-interactive { border-color: var(--border-strong); background: color-mix(in srgb, var(--card-bg) 70%, var(--surface)); }
+  .ui-card-interactive:active { background: var(--surface-muted); }
+  .ui-card-interactive[aria-selected="true"], .ui-card-interactive[data-selected] { border-color: var(--brand-600); }
+  .ui-card-interactive[aria-disabled="true"] { opacity: 0.55; cursor: not-allowed; }
+
+  /* --- Typography --- */
+  .ui-page-title { font-size: 28px; line-height: 36px; font-weight: 600; letter-spacing: -0.01em; color: var(--text-heading); }
+  @media (min-width: 768px) { .ui-page-title { font-size: 32px; line-height: 40px; } }
+  .ui-section-title { font-size: 18px; line-height: 26px; font-weight: 600; color: var(--text-heading); }
+  .ui-subsection-title { font-size: 16px; line-height: 24px; font-weight: 600; color: var(--text-primary); }
+  .ui-body { font-size: 14px; line-height: 22px; color: var(--text-primary); }
+  .ui-secondary { font-size: 14px; line-height: 20px; color: var(--text-secondary); }
+  .ui-label { font-size: 14px; line-height: 20px; font-weight: 500; color: var(--text-primary); }
+  .ui-meta { font-size: 12px; line-height: 16px; color: var(--text-tertiary); }
+  .ui-badge {
+    display: inline-flex; align-items: center; gap: var(--space-1);
+    padding: 2px var(--space-2); border: 1px solid; border-radius: 9999px;
+    font-size: 12px; line-height: 16px; font-weight: 500;
+  }
+
+  /* --- Layout --- */
+  .ui-container { width: 100%; max-width: var(--content-max); margin-inline: 0; }
+  .ui-container-wide { width: 100%; max-width: var(--content-wide-max); margin-inline: 0; }
+  .ui-container-narrow { width: 100%; max-width: 720px; margin-inline: 0; }
+  .ui-container-full { width: 100%; max-width: none; }
+  .ui-stack > * + * { margin-top: var(--space-6); }
+  .ui-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-3); }
+  .ui-filters > * { min-width: 0; flex: 1 1 180px; }
+  @media (min-width: 640px) { .ui-filters > * { flex: 0 1 240px; } }
 }
