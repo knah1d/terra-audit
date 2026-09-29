@@ -58,14 +58,14 @@
   --focus-ring-width: 2px;
   --focus-ring-offset: 2px;
 
-  /* Menu surface for custom dropdowns (dark in both themes). */
-  --menu-bg: #13211b;
-  --menu-border: rgba(180, 214, 196, 0.16);
-  --menu-text: #e8f1ec;
-  --menu-muted: #9fb6ab;
-  --menu-hover: rgba(85, 186, 131, 0.14);
-  --menu-selected: rgba(85, 186, 131, 0.22);
-  --menu-check: #7fd1a3;
+  /* Menu surface for custom dropdowns — translucent glass per theme. */
+  --menu-bg: rgba(255, 255, 255, 0.72);
+  --menu-border: rgba(10, 10, 10, 0.08);
+  --menu-text: #0a0a0a;
+  --menu-muted: #52675f;
+  --menu-hover: rgba(31, 127, 78, 0.08);
+  --menu-selected: rgba(31, 127, 78, 0.14);
+  --menu-check: #1f7f4e;
 
   /* Solid card surface + neutral border. */
   --card-bg: var(--glass-bg);
@@ -231,8 +231,13 @@
   --border-default: rgba(180, 214, 196, 0.2);
   --border-focus: var(--pine-300);
 
-  --menu-bg: #0d1813;
+  --menu-bg: rgba(13, 24, 19, 0.72);
   --menu-border: rgba(180, 214, 196, 0.14);
+  --menu-text: #e8f1ec;
+  --menu-muted: #9fb6ab;
+  --menu-hover: rgba(85, 186, 131, 0.14);
+  --menu-selected: rgba(85, 186, 131, 0.22);
+  --menu-check: #7fd1a3;
 
   /* Barely-green-tinted off-white — stark #fff on a green-black surface
    * reads as harsh; this keeps near-white legibility without the clash. */
@@ -705,12 +710,12 @@ a, button, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 }
 .sheet-backdrop { background: rgb(5 18 13 / 0.38); }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .surface-card, .ui-card, .glass-chrome, .glass-chrome-strong, .glass-control {
+  .surface-card, .ui-card, .ui-select-menu, .glass-chrome, .glass-chrome-strong, .glass-control {
     background: var(--surface);
   }
 }
 @media (prefers-reduced-transparency: reduce) {
-  .surface-card, .ui-card, .glass-chrome, .glass-chrome-strong, .glass-control {
+  .surface-card, .ui-card, .ui-select-menu, .glass-chrome, .glass-chrome-strong, .glass-control {
     background: var(--surface);
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
@@ -794,8 +799,10 @@ a, button, input, select, textarea { -webkit-tap-highlight-color: transparent; }
     border: 1px solid var(--menu-border);
     border-radius: var(--control-r);
     background: var(--menu-bg);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
     color: var(--menu-text);
-    box-shadow: 0 8px 24px -8px rgb(0 0 0 / 0.45);
+    box-shadow: inset 0 1px 0 var(--glass-specular), 0 8px 24px -8px rgb(var(--shadow-rgb) / 0.3);
     font-size: var(--control-fs);
   }
   .ui-select-option {
