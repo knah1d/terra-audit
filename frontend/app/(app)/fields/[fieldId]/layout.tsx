@@ -32,14 +32,14 @@ export default async function FieldLayout({
 
   return (
     <FieldProvider field={field}>
-      <div className="mb-6 border-b border-border pb-4">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl font-semibold tracking-tight text-text-primary">{field.name}</h1>
+      <div className="ui-container mb-6 border-b border-border-subtle pb-4">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="ui-page-title">{field.name}</h1>
               <span className="font-mono text-xs text-text-tertiary">{field.field_id}</span>
             </div>
-            <div className="mt-1.5 flex items-center gap-2 text-sm text-text-secondary">
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-text-secondary">
               <span>{field.district}</span>
               <span className="text-text-tertiary">·</span>
               <Badge tone="brand">{FIELD_TYPE_LABELS[field.field_type] ?? field.field_type}</Badge>

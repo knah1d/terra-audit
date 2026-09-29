@@ -15,10 +15,10 @@ export function AuditTrailTable({ rows }: { rows: Array<Record<string, unknown>>
   }
 
   return (
-    <div className="surface-card max-h-[420px] overflow-auto rounded-xl">
+    <div className="ui-card max-h-[420px] overflow-auto p-0">
       <table className="w-full text-sm">
         <thead className="sticky top-0 glass-chrome-strong">
-          <tr className="text-left text-xs font-medium uppercase tracking-wide text-text-tertiary">
+          <tr className="ui-meta text-left font-medium uppercase tracking-wide">
             <th className="px-3 pb-2.5 pt-3">Date</th>
             <th className="px-3 pb-2.5 pt-3 text-right">VV smoothed</th>
             <th className="px-3 pb-2.5 pt-3 text-right">VH smoothed</th>

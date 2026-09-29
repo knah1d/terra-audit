@@ -60,7 +60,7 @@ export function ExportButtons({
         </Button>
       </div>
       {!committed && (
-        <p className="text-xs text-text-tertiary">Calculate &amp; save carbon credits first to enable export.</p>
+        <p className="ui-meta">Calculate &amp; save carbon credits first to enable export.</p>
       )}
       {error && <Alert tone="danger">{error}</Alert>}
     </div>

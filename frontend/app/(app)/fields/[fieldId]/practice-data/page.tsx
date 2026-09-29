@@ -58,7 +58,7 @@ function PracticeScenarioForm({
 
   return (
     <Card>
-      <h3 className="mb-3 font-medium capitalize text-text-primary">{scenario} scenario</h3>
+      <h3 className="ui-subsection-title mb-3 capitalize">{scenario} scenario</h3>
       <div className="grid grid-cols-2 gap-3">
         <div>
           <FieldLabel>Crop type</FieldLabel>
@@ -156,7 +156,7 @@ function LivestockScenarioForm({
 
   return (
     <Card>
-      <h3 className="mb-3 font-medium capitalize text-text-primary">{scenario} scenario — livestock</h3>
+      <h3 className="ui-subsection-title mb-3 capitalize">{scenario} scenario — livestock</h3>
       <Switch checked={hasLivestock} onChange={setHasLivestock} label="Integrated crop-livestock system (pasture-based grazing)" />
       {hasLivestock && (
         <div className="mt-4 flex flex-col gap-3">
@@ -238,7 +238,7 @@ function SocMeasurementsFormBody({
 
   return (
     <Card>
-      <h3 className="mb-1 flex items-center gap-1.5 font-medium text-text-primary">
+      <h3 className="ui-subsection-title mb-1 flex items-center gap-2">
         <FlaskConical className="size-4 text-brand-600" />
         Soil Organic Carbon Samples
       </h3>
@@ -279,8 +279,8 @@ export default function PracticeDataPage() {
   const { data: livestock, isLoading: livestockLoading } = useLivestockSchedule(field.field_id);
 
   return (
-    <div className="flex flex-col gap-6">
-      <h2 className="flex items-center gap-2.5 text-lg font-semibold text-text-primary">
+    <div className="ui-container flex flex-col gap-6">
+      <h2 className="ui-section-title flex items-center gap-3">
         <IconTile icon={FlaskConical} size="sm" />
         Practice &amp; Soil Data
       </h2>

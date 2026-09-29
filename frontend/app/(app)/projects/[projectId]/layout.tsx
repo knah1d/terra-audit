@@ -25,12 +25,12 @@ export default async function ProjectLayout({
 
   return (
     <ProjectProvider project={project}>
-      <div className="mb-6 border-b border-border pb-4">
-        <div className="flex items-center gap-2">
-          <h1 className="text-xl font-semibold tracking-tight text-text-primary">{project.name}</h1>
+      <div className="ui-container mb-6 border-b border-border-subtle pb-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <h1 className="ui-page-title">{project.name}</h1>
           <Badge tone="brand">{project.status}</Badge>
         </div>
-        {project.description && <p className="mt-1 text-sm text-text-secondary">{project.description}</p>}
+        {project.description && <p className="ui-secondary mt-2">{project.description}</p>}
         <div className="mt-4">
           <ProjectTabs projectId={project.project_id} />
         </div>

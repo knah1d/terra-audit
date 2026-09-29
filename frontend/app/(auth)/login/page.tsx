@@ -58,7 +58,7 @@ export default function LoginPage() {
           <span className="font-semibold tracking-tight text-text-primary">Terra Audit</span>
         </div>
         <div className="glass-chrome-strong rounded-xl p-8">
-          <h1 className="mb-1 text-lg font-semibold text-text-primary">Sign in</h1>
+          <h1 className="ui-page-title mb-2">Sign in</h1>
           <p className="mb-6 text-sm text-text-secondary">Use your organization&apos;s credentials to continue.</p>
           <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
             <div>

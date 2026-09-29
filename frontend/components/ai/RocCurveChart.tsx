@@ -77,7 +77,7 @@ export function RocCurveChart({ roc }: { roc: AiRocCurveData }) {
         </LineChart>
       </ResponsiveContainer>
       {classes.some((c) => roc[c].auc === null) && (
-        <p className="mt-1 text-xs text-text-tertiary">
+        <p className="ui-meta mt-1">
           A class with too few samples in a fold shows AUC: N/A — its curve isn&apos;t statistically meaningful.
         </p>
       )}

@@ -7,7 +7,7 @@ import { TextInput, Select } from "@/components/ui/Field";
 import { filterFields } from "@/lib/field-filters";
 import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
+import { Button, ButtonLink } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { IconTile } from "@/components/ui/IconTile";
@@ -29,32 +29,28 @@ export default function FieldsPage() {
   const visibleFields = filterFields(fields ?? [], query, methodology, sort);
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="ui-container">
       <PageHeader
         title="Fields"
         subtitle="Registered field boundaries and their carbon-credit methodology."
         actions={
-          <Link href="/fields/new">
-            <Button icon={Plus} size="sm">
-              Register a field
-            </Button>
-          </Link>
+          <ButtonLink href="/fields/new" icon={Plus}>Register a field</ButtonLink>
         }
       />
 
       {!!fields?.length && (
-        <div className="glass-chrome mb-6 rounded-xl p-4">
+        <div className="ui-card mb-6">
           <div className="grid gap-3 sm:grid-cols-[1fr_180px_150px]">
-            <label className="text-xs font-medium text-text-secondary">Find a field
-              <TextInput className="mt-1.5" type="search" placeholder="Search name, district or ID…" value={query} onChange={(e) => setQuery(e.target.value)} />
+            <label className="ui-label">Find a field
+              <TextInput className="mt-2" type="search" placeholder="Search name, district or ID…" value={query} onChange={(e) => setQuery(e.target.value)} />
             </label>
-            <label className="text-xs font-medium text-text-secondary">Methodology
-              <Select className="mt-1.5" value={methodology} onChange={(e) => setMethodology(e.target.value)}>
+            <label className="ui-label">Methodology
+              <Select className="mt-2" value={methodology} onChange={(e) => setMethodology(e.target.value)}>
                 <option value="all">All methodologies</option><option value="rice_awd">Rice AWD</option><option value="cropland_alm_vm0042">Cropland ALM</option>
               </Select>
             </label>
-            <label className="text-xs font-medium text-text-secondary">Sort by
-              <Select className="mt-1.5" value={sort} onChange={(e) => setSort(e.target.value)}>
+            <label className="ui-label">Sort by
+              <Select className="mt-2" value={sort} onChange={(e) => setSort(e.target.value)}>
                 <option value="name">Name A–Z</option><option value="area">Largest area</option><option value="newest">Newest first</option>
               </Select>
             </label>
@@ -88,11 +84,7 @@ export default function FieldsPage() {
           title="No fields registered yet"
           description="Register your first field boundary to start tracking carbon credits."
           action={
-            <Link href="/fields/new">
-              <Button icon={Plus} size="sm">
-                Register a field
-              </Button>
-            </Link>
+            <ButtonLink href="/fields/new" icon={Plus}>Register a field</ButtonLink>
           }
         />
       )}
@@ -102,10 +94,10 @@ export default function FieldsPage() {
           <Link
             key={field.field_id}
             href={`/fields/${field.field_id}`}
-            className="enter rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-brand-600"
+            className="enter rounded-lg"
             style={{ animationDelay: `${Math.min(i, 8) * 30}ms` }}
           >
-            <Card interactive className="flex flex-wrap items-center justify-between gap-3 p-5">
+            <Card interactive className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-3">
                 <IconTile icon={FolderKanban} />
                 <div>
@@ -113,7 +105,7 @@ export default function FieldsPage() {
                     <span className="font-medium text-text-primary">{field.name}</span>
                     <span className="font-mono text-xs text-text-tertiary">{field.field_id}</span>
                   </div>
-                  <div className="mt-0.5 flex items-center gap-2 text-sm text-text-secondary">
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-text-secondary">
                     <span className="inline-flex items-center gap-1">
                       <MapPin className="size-3.5" />
                       {field.district}

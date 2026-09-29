@@ -28,7 +28,7 @@ export function EmptyState({
   motif?: boolean;
 }) {
   return (
-    <div className="surface-card enter relative flex flex-col items-center gap-2 overflow-hidden rounded-lg px-6 py-10 text-center">
+    <div className="ui-card enter relative flex flex-col items-center gap-2 overflow-hidden px-6 py-12 text-center">
       {motif && (
         <BotanicalMotif
           size="sm"

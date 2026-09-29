@@ -85,7 +85,7 @@ export default function RegisterPage() {
           <span className="font-semibold tracking-tight text-text-primary">Terra Audit</span>
         </div>
         <div className="glass-chrome-strong rounded-xl p-8">
-          <h1 className="mb-1 text-lg font-semibold text-text-primary">
+          <h1 className="ui-page-title mb-2">
             {step === "details" ? "Create your organization" : "Verify your email"}
           </h1>
           <p className="mb-6 text-sm text-text-secondary">

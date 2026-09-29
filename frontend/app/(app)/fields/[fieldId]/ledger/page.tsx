@@ -40,13 +40,13 @@ export default function LedgerPage() {
   const field = useFieldContext();
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="ui-container flex flex-col gap-6">
       <div>
-        <h2 className="flex items-center gap-2.5 text-lg font-semibold text-text-primary">
+        <h2 className="ui-section-title flex items-center gap-3">
           <IconTile icon={Wallet} size="sm" />
           Carbon Asset Ledger
         </h2>
-        <p className="text-sm text-text-secondary">
+        <p className="ui-secondary">
           {field.field_type === "rice_awd"
             ? "VM0051 QA3 (Default Emission Factors) pathway."
             : "VM0042 — Improved Agricultural Land Management."}

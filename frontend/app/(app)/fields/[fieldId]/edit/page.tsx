@@ -40,7 +40,7 @@ export default function EditFieldPage() {
   }
 
   return (
-    <div className="mx-auto max-w-md">
+    <div className="ui-container-narrow">
       <Card>
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
           <div>
@@ -53,7 +53,7 @@ export default function EditFieldPage() {
             <TextInput {...register("district")} />
             <ErrorText>{errors.district?.message}</ErrorText>
           </div>
-          <p className="text-xs text-text-tertiary">
+          <p className="ui-meta">
             Field type and boundary are not editable here — they determine which cached data
             belongs to this field. Remove and re-register to change either.
           </p>

@@ -14,14 +14,15 @@ export function ProjectTabs({ projectId }: { projectId: string }) {
     { href: `/reviews?project=${projectId}`, label: "Reviews", icon: LayoutList },
   ];
   return (
-    <div className="flex gap-1 border-b border-border">
+    <nav aria-label="Project sections" className="flex gap-1 overflow-x-auto border-b border-border-subtle">
       {options.map(({ href, label, icon: Icon }) => {
         const active = pathname === href;
         return (
           <Link
             key={href}
             href={href}
-            className={`flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium ${
+            aria-current={active ? "page" : undefined}
+            className={`flex min-h-11 shrink-0 items-center gap-2 rounded-t-lg border-b-2 px-3 text-sm font-medium ${
               active ? "border-brand-600 text-brand-700" : "border-transparent text-text-secondary hover:text-text-primary"
             }`}
           >
@@ -30,6 +31,6 @@ export function ProjectTabs({ projectId }: { projectId: string }) {
           </Link>
         );
       })}
-    </div>
+    </nav>
   );
 }

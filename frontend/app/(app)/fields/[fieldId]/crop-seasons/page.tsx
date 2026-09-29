@@ -71,15 +71,15 @@ export default function CropSeasonsPage() {
   const result = job.data?.result && "models" in job.data.result ? job.data.result : null;
   const numeric = kind === "water_level" || kind === "residue_cover";
 
-  return <div className="space-y-5">
+  return <div className="ui-container space-y-6">
     <div>
-      <h2 className="text-lg font-semibold">Crop seasons & evidence</h2>
+      <h2 className="ui-section-title">Crop seasons & evidence</h2>
       <p className="mt-1 text-sm text-text-secondary">Record any crop or crop mixture, collect observations, and explore satellite coverage. These records support both accounting pathways; they do not change the field’s carbon methodology.</p>
     </div>
     {(error || seasons.error || evidence.error || corpus.error || job.error || job.data?.error) && <p role="alert" className="rounded-lg bg-danger-50 p-3 text-danger-700">{error || seasons.error?.message || evidence.error?.message || corpus.error?.message || job.error?.message || job.data?.error}</p>}
     {notice && <p role="status" className="text-sm text-success-700">{notice}</p>}
     {writable && <Card>
-      <h3 className="mb-3 font-medium">Add a crop season</h3>
+      <h3 className="ui-subsection-title mb-3">Add a crop season</h3>
       <form className="grid gap-3 sm:grid-cols-2" onSubmit={e => {
         e.preventDefault(); const form = e.currentTarget; const data = new FormData(form);
         const isGap = seasonType === "fallow" || seasonType === "missing_period";
@@ -126,7 +126,7 @@ export default function CropSeasonsPage() {
         </label>
         <label className="text-sm sm:col-span-2">Notes<TextInput name="notes" maxLength={2000} /></label>
         {(seasonType === "rotation" || seasonType === "intercrop") && (
-          <div className="sm:col-span-2 space-y-2 rounded-lg border border-border p-3">
+          <div className="sm:col-span-2 space-y-2 rounded-lg border border-border-subtle p-3">
             <p className="text-sm font-medium">
               {seasonType === "rotation" ? "Crop sequence (sequential cycles within this season)" : "Intercropped commodities"}
             </p>
@@ -153,14 +153,14 @@ export default function CropSeasonsPage() {
             >
               Add {seasonType === "rotation" ? "cycle" : "commodity"}
             </Button>
-            <p className="text-xs text-text-tertiary">
+            <p className="ui-meta">
               For a rotation, list each sequential crop cycle with its own start/end dates — recording the
               same crop again after other cycles is the evidence a reviewer uses to confirm a complete
               rotation (see the Historical Look-Back / Rotation Completeness readiness check).
             </p>
           </div>
         )}
-        <p className="text-xs text-text-tertiary sm:col-span-2">
+        <p className="ui-meta sm:col-span-2">
           Grouped-project eligibility areas are not yet editable here — see the field&apos;s Quantification
           Units tab and the API for the fuller data model.
         </p>
@@ -168,12 +168,12 @@ export default function CropSeasonsPage() {
       </form>
     </Card>}
     {seasons.isLoading ? <p role="status">Loading seasons…</p> : !seasons.data?.length ? <Card>No crop seasons recorded yet.</Card> : <>
-      <label className="block text-sm font-medium">Selected season<Select value={seasonId} onChange={e => setSelected(e.target.value)}>
+      <label className="ui-label block">Selected season<Select value={seasonId} onChange={e => setSelected(e.target.value)}>
         {seasons.data.map(s => <option key={s.id} value={s.id}>{s.payload.name} · {s.payload.crops.join(" + ")} · {s.payload.start_date} to {s.payload.end_date}</option>)}
       </Select></label>
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h3 className="font-medium">Satellite observations</h3>
+          <h3 className="ui-subsection-title">Satellite observations</h3>
           {writable && <Button variant="secondary" loading={busy || running} onClick={() => void perform(async () => {
             const accepted = await apiFetch<{ job_id: string }>(`${path}/monitoring-runs`, { method: "POST" }); setJobId(accepted.job_id);
           })}>Collect completed-season observations</Button>}
@@ -188,7 +188,7 @@ export default function CropSeasonsPage() {
         {evidence.data && <Button className="mt-3" variant="ghost" onClick={() => download(evidence.data, `evidence-${seasonId}.json`)}>Download evidence with source records</Button>}
       </Card>
       {writable && <Card>
-        <h3 className="mb-3 font-medium">Record a field observation</h3>
+        <h3 className="ui-subsection-title mb-3">Record a field observation</h3>
         <form key={seasonId} className="grid gap-3 sm:grid-cols-2" onSubmit={e => {
           e.preventDefault(); const form = e.currentTarget; const data = new FormData(form);
           void perform(async () => {
@@ -215,8 +215,8 @@ export default function CropSeasonsPage() {
         </form>
       </Card>}
       <Card>
-        <h3 className="mb-3 font-medium">Evidence review</h3>
-        {evidence.isLoading ? <p>Loading evidence…</p> : !evidence.data?.observations.length ? <p className="text-sm text-text-secondary">No field observations yet.</p> : evidence.data.observations.map(o => {
+        <h3 className="ui-subsection-title mb-3">Evidence review</h3>
+        {evidence.isLoading ? <p>Loading evidence…</p> : !evidence.data?.observations.length ? <p className="ui-secondary">No field observations yet.</p> : evidence.data.observations.map(o => {
           const reviews = evidence.data!.reviews.filter(r => r.payload.observation_id === o.id);
           const review = reviews.at(-1);
           return <div key={o.id} className="border-t border-border py-4 text-sm">
@@ -241,7 +241,7 @@ export default function CropSeasonsPage() {
       </Card>
     </>}
     <Card>
-      <h3 className="font-medium">Multi-crop benchmark · your organization</h3>
+      <h3 className="ui-subsection-title">Multi-crop benchmark · your organization</h3>
       <p className="mt-2 text-sm text-text-secondary">Compare Random Forest and XGBoost on reviewed single-crop seasons across your fields. Mixed crops remain in your records but need a separate multi-label model. Models are evaluated here, not deployed.</p>
       <p className="mt-3 text-sm">{corpus.data?.examples.length ?? 0} eligible seasons · {corpus.data?.excluded.length ?? 0} excluded seasons</p>
       {!!corpus.data?.excluded.length && <details className="mt-2 text-sm"><summary>Why seasons are excluded</summary><ul className="mt-2 list-disc pl-5">{corpus.data.excluded.map(r => <li key={r.season_id}>{seasons.data?.find(s => s.id === r.season_id)?.payload.name ?? r.season_id}: {r.reason}</li>)}</ul></details>}
@@ -252,7 +252,7 @@ export default function CropSeasonsPage() {
         })}>Run comparison</Button>}
         {corpus.data && <Button variant="ghost" onClick={() => download(corpus.data, "crop-benchmark-dataset.json")}>Export benchmark dataset</Button>}
       </div>
-      <p className="mt-2 text-xs text-text-tertiary">Needs at least four eligible seasons, two crops, and enough independent groups to represent each held-out crop in training. WorldCereal/Presto remains a follow-up experiment.</p>
+      <p className="ui-meta mt-2">Needs at least four eligible seasons, two crops, and enough independent groups to represent each held-out crop in training. WorldCereal/Presto remains a follow-up experiment.</p>
       {!!history.data?.length && <label className="mt-3 block text-sm">Saved comparisons<Select value={history.data.some(h => h.job_id === jobId) ? jobId! : ""} onChange={e => { if (e.target.value) setJobId(e.target.value); }} disabled={running}>
         <option value="">Choose a completed comparison</option>
         {history.data.map((h, i) => <option value={h.job_id} key={h.job_id}>{i === 0 ? "Latest" : `Run ${history.data.length - i}`} · hold out {h.split} · dataset {h.dataset_sha256.slice(0, 8)}</option>)}

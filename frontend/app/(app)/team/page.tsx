@@ -65,7 +65,7 @@ export default function TeamPage() {
 
   return (
     <RoleGate allow={["admin"]} fallback={<Alert tone="danger" title="Admins only">You don&apos;t have access to this page.</Alert>}>
-      <div className="mx-auto max-w-3xl">
+      <div className="ui-container">
         <PageHeader
           title="Team"
           subtitle="Everyone with access to this organization."
@@ -79,10 +79,10 @@ export default function TeamPage() {
         )}
 
         {users && users.length > 0 && (
-          <div className="surface-card overflow-x-auto rounded-xl">
+          <div className="ui-card overflow-x-auto p-0">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left text-xs font-medium uppercase tracking-wide text-text-tertiary">
+                <tr className="ui-meta text-left font-medium uppercase tracking-wide">
                   <th className="px-4 pb-2.5 pt-4">Email</th>
                   <th className="px-4 pb-2.5 pt-4">Role</th>
                   <th className="px-4 pb-2.5 pt-4">Active</th>

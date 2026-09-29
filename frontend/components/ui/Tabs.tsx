@@ -29,8 +29,8 @@ export function Tabs<T extends string>({ options, value, onChange }: {
   }, [value]);
 
   return (
-    <div ref={ref} className="glass-chrome relative inline-flex max-w-full flex-wrap gap-1 rounded-2xl p-1 text-sm">
-      {indicator && <span aria-hidden className="pointer-events-none absolute rounded-xl bg-[var(--liquid-active-bg)] shadow-[inset_0_1px_0_var(--glass-specular)] transition-[left,top,width,height] duration-200" style={indicator} />}
+    <div ref={ref} className="glass-chrome relative inline-flex max-w-full flex-wrap gap-1 rounded-xl p-1 text-sm">
+      {indicator && <span aria-hidden className="pointer-events-none absolute rounded-lg bg-[var(--liquid-active-bg)] shadow-[inset_0_1px_0_var(--glass-specular)] transition-[left,top,width,height] duration-200" style={indicator} />}
       {options.map((opt) => {
         const Icon = opt.icon;
         const active = opt.value === value;
@@ -38,7 +38,7 @@ export function Tabs<T extends string>({ options, value, onChange }: {
           <button key={opt.value} type="button" onClick={() => onChange(opt.value)}
             onPointerEnter={trackLiquidPointer} onPointerMove={trackLiquidPointer} onPointerLeave={resetLiquidPointer}
             aria-pressed={active}
-            className={`liquid-hover press flex items-center gap-1.5 rounded-xl px-3 py-2 font-medium ${active ? "text-brand-700" : "text-text-secondary hover:text-text-primary"}`}>
+            className={`liquid-hover press flex min-h-10 items-center gap-2 rounded-lg px-3 font-medium ${active ? "text-brand-700" : "text-text-secondary hover:text-text-primary"}`}>
             {Icon && <Icon className="size-3.5" />}<span>{opt.label}</span>
           </button>
         );

@@ -35,7 +35,7 @@ export default function ThemeToggleControl() {
           onPointerEnter={trackLiquidPointer}
           onPointerMove={trackLiquidPointer}
           onPointerLeave={resetLiquidPointer}
-          className={`liquid-hover press flex size-7 items-center justify-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 ${
+          className={`liquid-hover press flex size-7 items-center justify-center rounded-full ${
             theme === value
               ? "liquid-active text-brand-700"
               : "text-text-tertiary hover:text-text-secondary"

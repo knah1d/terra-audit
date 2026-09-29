@@ -25,13 +25,14 @@ function SampleRow({ fieldId, planId, sample }: { fieldId: string; planId: strin
   const createCustodyEvent = useCreateCustodyEvent(fieldId, sample.sample_id);
 
   return (
-    <div className="rounded-lg border border-border">
+    <div className="rounded-lg border border-border-subtle">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm"
+        aria-expanded={open}
+        className="flex min-h-11 w-full flex-wrap items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm hover:bg-surface-muted"
       >
-        <span className="flex items-center gap-2">
+        <span className="flex flex-wrap items-center gap-2">
           <Badge tone="neutral">{sample.site_type}</Badge>
           <Badge tone="neutral">{sample.timepoint}</Badge>
           <span className="text-text-secondary">{sample.sample_date}</span>
@@ -43,7 +44,7 @@ function SampleRow({ fieldId, planId, sample }: { fieldId: string; planId: strin
         <div className="space-y-4 border-t border-border p-3">
           {error && <p role="alert" className="rounded bg-danger-50 p-2 text-xs text-danger-700">{error}</p>}
           <div>
-            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-tertiary">Lab results</h4>
+            <h4 className="ui-meta mb-2 font-semibold uppercase tracking-wide">Lab results</h4>
             <ul className="mb-2 space-y-1 text-sm">
               {labResults.data?.map((r) => (
                 <li key={r.result_id} className="flex justify-between font-mono text-xs">
@@ -51,7 +52,7 @@ function SampleRow({ fieldId, planId, sample }: { fieldId: string; planId: strin
                   <span>{r.value} {r.unit}{r.lab_name ? ` (${r.lab_name})` : ""}</span>
                 </li>
               ))}
-              {labResults.data?.length === 0 && <li className="text-xs text-text-tertiary">No lab results recorded yet.</li>}
+              {labResults.data?.length === 0 && <li className="ui-meta">No lab results recorded yet.</li>}
             </ul>
             <form
               className="grid grid-cols-2 gap-2 sm:grid-cols-5"
@@ -83,7 +84,7 @@ function SampleRow({ fieldId, planId, sample }: { fieldId: string; planId: strin
             </form>
           </div>
           <div>
-            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-tertiary">Chain of custody</h4>
+            <h4 className="ui-meta mb-2 font-semibold uppercase tracking-wide">Chain of custody</h4>
             <ul className="mb-2 space-y-1 text-sm">
               {custodyEvents.data?.map((ev) => (
                 <li key={ev.event_id} className="flex justify-between font-mono text-xs">
@@ -91,7 +92,7 @@ function SampleRow({ fieldId, planId, sample }: { fieldId: string; planId: strin
                   <span>{ev.actor}{ev.location ? ` @ ${ev.location}` : ""}</span>
                 </li>
               ))}
-              {custodyEvents.data?.length === 0 && <li className="text-xs text-text-tertiary">No custody events recorded yet.</li>}
+              {custodyEvents.data?.length === 0 && <li className="ui-meta">No custody events recorded yet.</li>}
             </ul>
             <form
               className="grid grid-cols-2 gap-2 sm:grid-cols-4"
@@ -132,7 +133,7 @@ function SocEvidenceReviewPanel({ fieldId }: { fieldId: string }) {
 
   return (
     <Card>
-      <h3 className="mb-1 font-medium text-text-primary">Reviewed SOC evidence mapping</h3>
+      <h3 className="ui-subsection-title mb-1">Reviewed SOC evidence mapping</h3>
       <p className="mb-3 text-sm text-text-secondary">
         For each cell, adopt a specific set of sample rows as the calculation input, or view why the legacy
         aggregate is still governing. Adopting requires at least 3 sample rows with a recorded SOC value.
@@ -146,13 +147,13 @@ function SocEvidenceReviewPanel({ fieldId }: { fieldId: string }) {
             if (!cell) return null;
             const sourceTone = cell.source === "reviewed_evidence" ? "success" : cell.source === "legacy_aggregate" ? "warning" : "danger";
             return (
-              <div key={key} className="rounded-lg border border-border p-3">
-                <div className="mb-2 flex items-center justify-between">
+              <div key={key} className="rounded-lg border border-border-subtle p-3">
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                   <span className="text-sm font-medium">{siteType} / {timepoint}</span>
                   <Badge tone={sourceTone}>{cell.source.replace("_", " ")}{cell.review?.stale ? " (stale)" : ""}</Badge>
                 </div>
                 <p className="mb-2 font-mono text-xs text-text-tertiary">{cell.values.length} value(s): {cell.values.join(", ") || "none"}</p>
-                {cell.note && <p className="mb-2 text-xs text-text-tertiary">{cell.note}</p>}
+                {cell.note && <p className="ui-meta mb-2">{cell.note}</p>}
                 <p className="mb-2 text-xs text-text-secondary">{cell.eligible_sample_ids.length} eligible sample(s) recorded for this cell.</p>
                 <form
                   className="space-y-2"
@@ -167,7 +168,7 @@ function SocEvidenceReviewPanel({ fieldId }: { fieldId: string }) {
                   }}
                 >
                   <div className="max-h-28 space-y-1 overflow-y-auto rounded border border-border p-2">
-                    {cell.eligible_sample_ids.length === 0 && <p className="text-xs text-text-tertiary">No samples with a SOC value recorded yet.</p>}
+                    {cell.eligible_sample_ids.length === 0 && <p className="ui-meta">No samples with a SOC value recorded yet.</p>}
                     {cell.eligible_sample_ids.map((sid) => (
                       <label key={sid} className="flex items-center gap-2 font-mono text-xs">
                         <input type="checkbox" name="sample_id" value={sid} defaultChecked={cell.review?.sample_ids.includes(sid)} />
@@ -210,9 +211,9 @@ export default function SoilEvidencePage() {
   const createSample = useCreateSample(fieldId, planId);
 
   return (
-    <div className="space-y-5">
+    <div className="ui-container space-y-6">
       <div>
-        <h2 className="text-lg font-semibold">Soil evidence</h2>
+        <h2 className="ui-section-title">Soil evidence</h2>
         <p className="mt-1 text-sm text-text-secondary">
           Sampling plans, strata, geolocated samples, per-analyte lab results, and chain of custody. Adopting a
           reviewed sample set below is what actually feeds the SOC calculation — recording samples alone does not.
@@ -222,7 +223,7 @@ export default function SoilEvidencePage() {
 
       {writable && (
         <Card>
-          <h3 className="mb-3 font-medium">New sampling plan</h3>
+          <h3 className="ui-subsection-title mb-3">New sampling plan</h3>
           <form
             className="grid gap-3 sm:grid-cols-2"
             onSubmit={(e) => {
@@ -265,8 +266,8 @@ export default function SoilEvidencePage() {
       )}
 
       <Card>
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="font-medium">Sampling plans</h3>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="ui-subsection-title">Sampling plans</h3>
           {plans.data && plans.data.length > 0 && (
             <Select value={planId} onChange={(e) => setSelectedPlan(e.target.value)} className="w-64">
               {plans.data.map((p) => (
@@ -282,7 +283,7 @@ export default function SoilEvidencePage() {
         <>
           {writable && (
             <Card>
-              <h3 className="mb-3 font-medium">New stratum</h3>
+              <h3 className="ui-subsection-title mb-3">New stratum</h3>
               <form
                 className="flex flex-wrap gap-2"
                 onSubmit={(e) => {
@@ -306,7 +307,7 @@ export default function SoilEvidencePage() {
 
           {writable && (
             <Card>
-              <h3 className="mb-3 font-medium">New sample</h3>
+              <h3 className="ui-subsection-title mb-3">New sample</h3>
               <form
                 className="grid gap-2 sm:grid-cols-3"
                 onSubmit={(e) => {
@@ -353,7 +354,7 @@ export default function SoilEvidencePage() {
           )}
 
           <Card>
-            <h3 className="mb-3 font-medium">Samples</h3>
+            <h3 className="ui-subsection-title mb-3">Samples</h3>
             <div className="space-y-2">
               {samples.data?.map((s) => <SampleRow key={s.sample_id} fieldId={fieldId} planId={planId} sample={s} />)}
               {samples.data?.length === 0 && <p className="text-sm text-text-tertiary">No samples recorded yet for this plan.</p>}

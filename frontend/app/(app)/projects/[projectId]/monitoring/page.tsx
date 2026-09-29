@@ -44,7 +44,7 @@ export default function ProjectMonitoringPage() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="ui-container-wide space-y-6">
       {error && <p role="alert" className="rounded-lg bg-danger-50 p-3 text-danger-700">{error}</p>}
       {notice && <p role="status" className="text-sm text-success-700">{notice}</p>}
 
@@ -59,7 +59,7 @@ export default function ProjectMonitoringPage() {
 
       <Card>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h3 className="font-medium">Field-seasons</h3>
+          <h3 className="ui-subsection-title">Field-seasons</h3>
           <div className="flex gap-2">
             <TextInput placeholder="Filter by crop" value={cropFilter} onChange={(e) => setCropFilter(e.target.value)} className="max-w-[160px]" />
             <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="max-w-[180px]">
@@ -76,7 +76,7 @@ export default function ProjectMonitoringPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left text-xs text-text-tertiary">
+                <tr className="ui-meta text-left">
                   <th className="py-1"><input type="checkbox"
                     checked={selected.size > 0 && filtered.every((r) => selected.has(`${r.field_id}:${r.season_id}`))}
                     onChange={(e) => setSelected(e.target.checked ? new Set(filtered.map((r) => `${r.field_id}:${r.season_id}`)) : new Set())} /></th>
@@ -144,12 +144,12 @@ function BatchesCard({ batches, activeBatchId, onSelectBatch }: {
 
   return (
     <Card>
-      <h3 className="mb-3 font-medium">Batches</h3>
-      {!batches.length ? <p className="text-sm text-text-secondary">No monitoring batches yet.</p> : (
+      <h3 className="ui-subsection-title mb-3">Batches</h3>
+      {!batches.length ? <p className="ui-secondary">No monitoring batches yet.</p> : (
         <div className="space-y-1">
           {batches.map((b) => (
-            <button key={b.batch_id} onClick={() => onSelectBatch(b.batch_id)}
-                    className={`flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-left text-sm ${activeBatchId === b.batch_id ? "bg-brand-50/50" : ""}`}>
+            <button key={b.batch_id} type="button" onClick={() => onSelectBatch(b.batch_id)} aria-pressed={activeBatchId === b.batch_id}
+                    className={`flex min-h-11 w-full items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-colors ${activeBatchId === b.batch_id ? "border-brand-600 bg-brand-50" : "border-transparent hover:bg-surface-muted"}`}>
               <span><Badge tone={b.status === "completed" ? "success" : b.status === "partial_failure" ? "warning" : "neutral"}>{b.status}</Badge> {b.total_children} job(s) · {new Date(b.created_at).toLocaleString()}</span>
             </button>
           ))}
@@ -186,17 +186,17 @@ function IssuesCard({ projectId }: { projectId: string }) {
 
   return (
     <Card>
-      <div className="mb-3 flex items-center justify-between">
-        <h3 className="font-medium">Data-quality issues</h3>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <h3 className="ui-subsection-title">Data-quality issues</h3>
         <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="max-w-xs">
           <option value="open">Open</option><option value="acknowledged">Acknowledged</option>
           <option value="resolved">Resolved</option><option value="">All</option>
         </Select>
       </div>
-      <p className="mb-2 text-xs text-text-tertiary">
+      <p className="ui-meta mb-2">
         Provisional engineering screens, not validated accuracy or management-practice compliance claims.
       </p>
-      {!issues.data?.length ? <p className="text-sm text-text-secondary">No issues.</p> : (
+      {!issues.data?.length ? <p className="ui-secondary">No issues.</p> : (
         <div className="space-y-2">
           {issues.data.map((i) => (
             <div key={i.issue_id} className="border-t border-border py-2 text-sm first:border-t-0">
@@ -204,7 +204,7 @@ function IssuesCard({ projectId }: { projectId: string }) {
                 <Badge tone={i.severity === "blocking" ? "danger" : "warning"}>{i.issue_type.replace(/_/g, " ")}</Badge>
                 <Badge tone="neutral">{i.status}</Badge>
                 <span className="font-mono text-xs text-text-tertiary">{i.field_id}</span>
-                {i.occurrence_count > 1 && <span className="text-xs text-text-tertiary">×{i.occurrence_count}</span>}
+                {i.occurrence_count > 1 && <span className="ui-meta">×{i.occurrence_count}</span>}
               </div>
               <p className="mt-1">{i.description}</p>
               {i.status !== "resolved" && (

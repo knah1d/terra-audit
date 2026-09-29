@@ -20,7 +20,7 @@ function ParametersSheet({ entry, onClose }: { entry: CreditHistoryEntry | null;
         {entry &&
           Object.entries(entry.inputs).map(([key, value]) => (
             <div key={key}>
-              <dt className="text-xs uppercase tracking-wide text-text-tertiary">
+              <dt className="ui-meta uppercase tracking-wide">
                 {key.replace(/_/g, " ")}
               </dt>
               <dd className="font-mono text-text-primary">{String(value)}</dd>
@@ -44,13 +44,11 @@ export function CreditHistoryTable({ fieldId }: { fieldId: string }) {
 
   return (
     <>
-      {/* rounded-xl + surface-card (not a plain border+rounded-lg) so this
-       * reads as a floating list card — Apple Health's list-card treatment
-       * rather than a spreadsheet. */}
-      <div className="surface-card overflow-x-auto rounded-xl">
+      {/* Shared card surface so this reads as a list card, not a spreadsheet. */}
+      <div className="ui-card overflow-x-auto p-0">
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-left text-xs font-medium uppercase tracking-wide text-text-tertiary">
+            <tr className="ui-meta text-left font-medium uppercase tracking-wide">
               <th className="px-4 pb-2.5 pt-4">Calculated At</th>
               <th className="px-4 pb-2.5 pt-4 text-right">Final Issuance (tCO2e)</th>
               {showCumulative && <th className="px-4 pb-2.5 pt-4 text-right">Cumulative SOC Δ (tCO2e)</th>}

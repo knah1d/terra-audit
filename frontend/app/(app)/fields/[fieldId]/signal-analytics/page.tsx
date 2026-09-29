@@ -87,14 +87,14 @@ export default function SignalAnalyticsPage() {
   );
 
   return (
-    <div className="flex flex-col gap-6">
-      <h2 className="flex items-center gap-2.5 text-lg font-semibold text-text-primary">
+    <div className="ui-container-wide flex flex-col gap-6">
+      <h2 className="ui-section-title flex items-center gap-3">
         <IconTile icon={Satellite} size="sm" />
         Statistical Signal Analytics
       </h2>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[320px_1fr]">
-        <div className="surface-card flex flex-col gap-4 rounded-xl p-4">
+        <div className="ui-card flex flex-col gap-4">
           <div>
             <FieldLabel>Season</FieldLabel>
             <Select value={preset} onChange={(e) => setPreset(e.target.value)}>
@@ -128,7 +128,7 @@ export default function SignalAnalyticsPage() {
               ))}
             </Select>
             {detector !== "threshold" && (
-              <p className="mt-1 text-xs text-text-tertiary">
+              <p className="ui-meta mt-1">
                 Trained to reproduce the Threshold Gate&apos;s own labels — a proof-of-concept baseline,
                 not an independently validated detector.
               </p>
@@ -149,7 +149,7 @@ export default function SignalAnalyticsPage() {
           {jobError && <Alert tone="danger" title="Job failed">{jobError}</Alert>}
 
           {!effectiveResult && !isRunning && (
-            <div className="surface-card flex h-full min-h-[200px] items-center justify-center rounded-xl text-sm text-text-tertiary">
+            <div className="ui-card flex h-full min-h-[200px] items-center justify-center text-sm text-text-tertiary">
               Run the analytics engine to see results.
             </div>
           )}
@@ -175,7 +175,7 @@ export default function SignalAnalyticsPage() {
                 <StatCard label="Detector Used" value={effectiveResult.detector_used} />
               </div>
 
-              <div className="surface-card rounded-xl p-4">
+              <div className="ui-card">
                 <SignalTimeseriesChart
                   rows={effectiveResult.timeseries as never}
                   awdDates={effectiveResult.awd_dates}
