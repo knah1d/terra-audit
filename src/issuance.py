@@ -85,6 +85,10 @@ def result_is_issuable(result: dict, accounting_pathway: str | None = None) -> t
             result.get("soc_uncertainty_block_reason")
             or "VM0042 SOC uncertainty annualization is unresolved for a non-annual verification period"
         )
+    if accounting_pathway == "vm0042_alm" or "er_t" in result:
+        leakage = result.get("leakage") or {}
+        if not leakage.get("integrated") or not leakage.get("computable"):
+            return False, "An integrated, complete leakage assessment is required; use the evidence-linked Calculations workflow."
     if accounting_pathway is not None and result.get("final_issuance") is None:
         return False, "Calculation result has no final_issuance value — cannot confirm issuability."
     return True, None

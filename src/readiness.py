@@ -31,6 +31,7 @@ see _methodology_applicability_check and _alm_checks below.
 from src import crop_taxonomy
 from src import methodology_registry as registry
 from src import monitoring
+from src import soil_evidence
 from src.calculations import PATHWAYS, latest_determinations
 from src.database import get_alm_livestock_schedule, get_alm_practice_schedule, get_soc_measurements
 from src.field_types.alm_vm0042 import AlmPracticeValidator
@@ -44,8 +45,7 @@ EXPERT_REQUIREMENTS = {"common.additionality"}  # always needs_review unless a h
 # not just the subset this module has bespoke Python logic for.
 _STATIC_REQUIREMENT_IDS = {
     "vm0051_rice_awd": ["vm0051.leakage_assessment", "vm0051.n2o_baseline_fertilizer", "vm0051.biomass_burning"],
-    "vm0042_alm": ["vm0042.leakage_step2_mitigation", "vm0042.leakage_step3_land_impact",
-                   "vm0042.leakage_step4_new_land_carbon_stock", "vm0042.leakage_step5_emissions",
+    "vm0042_alm": [
                    "vm0042.liming_co2", "vm0042.quantification_approach", "vm0042.uncertainty_deduction",
                    "vm0042.soc_sampling_traceability"],
 }
@@ -65,6 +65,7 @@ def _check(requirement_id, status, explanation, evidence_references=(), bundle_i
         "decided_by": None, "reason": None,
         "source_reference": None, "required_evidence": None, "implementation_support": None,
         "reviewer_authority": None,
+        "blocking": True,
     }
     if meta is not None:
         source_doc = None
@@ -81,6 +82,7 @@ def _check(requirement_id, status, explanation, evidence_references=(), bundle_i
             required_evidence=meta["required_evidence"],
             implementation_support=meta["implementation_support"],
             reviewer_authority=meta["reviewer_authority"],
+            blocking=bool(meta.get("blocking", True)),
         )
         # A requirement this codebase does not implement is unsupported
         # REGARDLESS of what the dynamic evaluator below concluded —
@@ -108,8 +110,10 @@ def _apply_manual_overrides(checks: list[dict], org_id: str, field_id: str, path
         decision = determinations.get(check["requirement_id"])
         if decision is None:
             continue
-        if check["implementation_support"] == "unsupported":
+        if check["implementation_support"] == "unsupported" or check.get("reviewer_authority") == "automated_only":
             continue  # never overridable — enforced again here even though src.reviews already refuses to record one
+        if check["requirement_id"] == "vm0042.other_leakage_scope" and decision["status"] != "not_applicable":
+            continue
         check.update(status=decision["status"], decided_by=decision["decided_by"], reason=decision["reason"])
     return checks
 
@@ -181,7 +185,8 @@ def _season_checks(org_id, field_id, season_ids, monitoring_start, monitoring_en
     return checks
 
 
-def compute_evidence_fingerprint(org_id: str, field_id: str, accounting_pathway: str, season_ids: list[str]) -> str:
+def compute_evidence_fingerprint(org_id: str, field_id: str, accounting_pathway: str, season_ids: list[str],
+                                 project_id: str | None = None) -> str:
     """A hash of every record that could change what an automated
     readiness check concludes for this field/pathway — used to
     invalidate a manual determination when the underlying EVIDENCE
@@ -203,6 +208,7 @@ def compute_evidence_fingerprint(org_id: str, field_id: str, accounting_pathway:
     field/pathway) is the safe direction; under-invalidating a stale
     approval is not."""
     payload = {
+        "project_id": project_id,
         "season_versions": sorted(
             (s["id"], s["created_at"]) for s in monitoring.records("crop_seasons", org_id, field_id)
         ),
@@ -217,10 +223,32 @@ def compute_evidence_fingerprint(org_id: str, field_id: str, accounting_pathway:
         ),
     }
     if accounting_pathway == "vm0042_alm":
+        from src.production_records import list_production_records, list_leakage_assessments
+        payload["production_records"] = list_production_records(org_id, field_id)
+        payload["leakage_assessments"] = list_leakage_assessments(org_id, field_id)
+        from src.projects import list_project_fields
+        payload["leakage_project_memberships"] = {
+            pid: list_project_fields(org_id, pid)
+            for pid in sorted({a["project_id"] for a in payload["leakage_assessments"]})
+        }
         payload["practice_schedule"] = get_alm_practice_schedule(org_id, field_id)
         payload["soc_measurements"] = {f"{s}_{t}": v for (s, t), v in get_soc_measurements(org_id, field_id).items()}
         payload["livestock_schedule"] = get_alm_livestock_schedule(org_id, field_id)
-    return monitoring.digest(payload)
+        # Soil evidence (samples + reviewed evidence mapping) can change
+        # what vm0042.soc_measurements concludes without touching any of
+        # the payload above — must be hashed too, or a manual
+        # determination on that requirement would keep applying after new
+        # samples/reviews were recorded (docs/RESEARCH_IMPLEMENTATION_PLAN_
+        # 2026-09-23.md Phase 3 follow-up: "Invalidate affected approvals
+        # when evidence changes").
+        resolved = soil_evidence.resolved_soc_measurements(org_id, field_id)
+        payload["soc_evidence"] = {
+            f"{s}_{t}": {"source": cell["source"], "values": cell["values"],
+                         "review_id": (cell.get("review") or {}).get("id")}
+            for (s, t), cell in resolved.items()
+        }
+    import json
+    return monitoring.digest(json.loads(json.dumps(payload, default=str)))
 
 
 def _declared_crops(org_id, field_id, season_ids):
@@ -353,15 +381,27 @@ def _historical_lookback_check(org_id, field_id, season_ids, monitoring_period_s
 
     covered_days = set()
     documented_gaps = []
-    undocumented_gap = False
-    historical_crops = set()
+    # Real crop-sequence evidence within the look-back window, in
+    # chronological order — passed to _rotation_completeness_check
+    # below so it can look for an actual repeated crop (cycle closure)
+    # rather than merely counting distinct crop names. A season with an
+    # explicit crop_sequence (rotation/intercrop) contributes each of
+    # its own sub-entries; a plain single_crop/cover_crop season
+    # contributes itself as a one-entry "sequence" of its own crop(s).
+    sequence_entries = []
     for s in all_seasons:
         p = s["payload"]
         s_start, s_end = date.fromisoformat(p["start_date"]), date.fromisoformat(p["end_date"])
         clip_start, clip_end = max(s_start, lookback_start), min(s_end, start - timedelta(days=1))
         if clip_start > clip_end:
             continue
-        historical_crops.update(p.get("crops", []))
+        for entry in p.get("crop_sequence") or []:
+            sequence_entries.append({"crop": entry["crop"], "start_date": entry["start_date"],
+                                      "end_date": entry["end_date"], "season_id": s["id"]})
+        if not p.get("crop_sequence"):
+            for crop in p.get("crops", []):
+                sequence_entries.append({"crop": crop, "start_date": p["start_date"],
+                                          "end_date": p["end_date"], "season_id": s["id"]})
         if p.get("season_type") == "missing_period":
             # Documented as a KNOWN gap, but a missing_period explicitly
             # records that the activity during it is NOT known — it must
@@ -401,11 +441,12 @@ def _historical_lookback_check(org_id, field_id, season_ids, monitoring_period_s
             "undocumented gaps (no fallow/missing_period season recorded, or missing_period days not "
             "otherwise covered by another recorded season)."
         )
+    sequence_entries.sort(key=lambda e: e["start_date"])
     return _check("vm0042.historical_lookback", status, explanation, evidence_references=gap_refs,
-                   bundle_id=bundle_id), historical_crops
+                   bundle_id=bundle_id), sequence_entries
 
 
-def _rotation_completeness_check(org_id, field_id, historical_crops, practice_schedule, bundle_id):
+def _rotation_completeness_check(org_id, field_id, sequence_entries, practice_schedule, bundle_id):
     """VM0042 §6 ("Development of Schedule of Activities in the Baseline
     Scenario"): "must include at least one complete crop rotation, where
     applicable. Where a crop rotation is not implemented in the
@@ -418,15 +459,27 @@ def _rotation_completeness_check(org_id, field_id, historical_crops, practice_sc
     harvesting" changes) is a legitimate project design choice, not a
     baseline-documentation defect, so it is never penalized here.
 
-    Limitation (disclosed, not silently assumed away): this cannot
-    verify true agronomic rotation-cycle completeness (e.g., that a
-    declared N-crop rotation returns to its starting crop) without a
-    recorded rotation plan/cycle length, which this codebase does not
-    collect. It uses a weaker, honestly-labeled proxy: when the
-    baseline practice schedule declares crop_rotation=True, the
-    look-back window must show at least 2 distinct historical crops as
-    minimal evidence that *some* rotation actually occurred (not just a
-    single continuously-repeated crop under a mislabeled flag)."""
+    `sequence_entries` (from _historical_lookback_check, chronological)
+    is real crop_sequence evidence — this walks it looking for CYCLE
+    CLOSURE: the same crop recorded again after at least one different
+    crop appeared in between (e.g. wheat -> lentil -> wheat), which is
+    actual evidence a rotation completed a cycle back to its start, not
+    merely a proxy count of distinct crop names (a field that recorded
+    wheat then lentil just once, with no return to wheat, has NOT
+    evidenced a complete rotation — only that more than one crop was
+    grown, which is a strictly weaker signal this no longer accepts as
+    'satisfied' on its own).
+
+    Limitation (disclosed, not silently assumed away): this still
+    cannot verify a declared N-crop rotation plan's full intended cycle
+    (e.g. a 4-crop rotation where records only show 3 of the 4) without
+    a recorded rotation plan — that residual gap is why this remains
+    `reviewer_authority: reviewable` (docs/RESEARCH_IMPLEMENTATION_PLAN_
+    2026-09-23.md's "applicable review process"): a human confirms
+    against the project's actual rotation plan via
+    src.calculations.record_determination, scoped to this exact
+    evidence fingerprint so it invalidates the moment a new season is
+    recorded."""
     baseline = (practice_schedule or {}).get("baseline") or {}
     if not baseline.get("crop_rotation"):
         return _check(
@@ -436,22 +489,36 @@ def _rotation_completeness_check(org_id, field_id, historical_crops, practice_sc
             "vm0042.historical_lookback for that check.",
             bundle_id=bundle_id,
         )
-    if len(historical_crops) >= 2:
+    crops_seen = []  # chronological, de-duplicating only immediate repeats (same cycle re-entered)
+    for e in sequence_entries:
+        if not crops_seen or crops_seen[-1] != e["crop"]:
+            crops_seen.append(e["crop"])
+    cycle_closed = len(crops_seen) >= 3 and crops_seen[0] in crops_seen[1:]
+    refs = [{"type": "season", "id": e["season_id"]} for e in sequence_entries]
+    if cycle_closed:
         return _check(
-            "vm0042.rotation_completeness", "satisfied",
-            f"Baseline declares a crop rotation, and the historical look-back window records "
-            f"{len(historical_crops)} distinct crop(s) ({sorted(historical_crops)}) — minimal evidence a "
-            "rotation actually occurred. This does not verify the rotation returns to its starting crop "
-            "(no rotation-cycle length is recorded by this system) — a reviewer should confirm agronomic "
-            "completeness against the project's actual rotation plan.",
-            bundle_id=bundle_id,
+            "vm0042.rotation_completeness", "needs_review",
+            f"Baseline declares a crop rotation, and the recorded crop sequence ({' -> '.join(crops_seen)}) "
+            f"shows {crops_seen[0]!r} recurring after other crop(s) — real evidence a rotation cycle "
+            "may have completed. A reviewer must confirm this "
+            "matches the project's actual declared rotation plan.",
+            evidence_references=refs, bundle_id=bundle_id,
+        )
+    if len(crops_seen) >= 2:
+        return _check(
+            "vm0042.rotation_completeness", "needs_review",
+            f"Baseline declares a crop rotation, and the recorded crop sequence ({' -> '.join(crops_seen)}) "
+            "shows more than one crop, but no crop is recorded recurring after another — a full rotation "
+            "cycle back to its starting crop is not yet evidenced. A reviewer must confirm against the "
+            "project's actual rotation plan whether this is a complete rotation or only a partial record.",
+            evidence_references=refs, bundle_id=bundle_id,
         )
     return _check(
-        "vm0042.rotation_completeness", "needs_review",
-        "Baseline practice schedule declares a crop rotation, but the historical look-back window records "
-        f"{len(historical_crops)} distinct crop(s) — insufficient to evidence a rotation cycle occurred. "
-        "A reviewer must confirm the baseline schedule genuinely reflects a complete crop rotation.",
-        bundle_id=bundle_id,
+        "vm0042.rotation_completeness", "missing",
+        "Baseline practice schedule declares a crop rotation, but the historical look-back window's crop "
+        f"sequence records only {len(crops_seen)} crop(s) — no rotation is evidenced at all. Record each "
+        "crop cycle via the crop season's crop_sequence entries.",
+        evidence_references=refs, bundle_id=bundle_id,
     )
 
 
@@ -489,7 +556,8 @@ def _rice_checks(org_id, field_id, engine_inputs, preview_result, bundle_id):
 def _alm_checks(org_id, field_id, season_ids, monitoring_period_start, engine_inputs, preview_result, bundle_id):
     checks = []
     practice_schedule = get_alm_practice_schedule(org_id, field_id)
-    soc_measurements = get_soc_measurements(org_id, field_id)
+    resolved_soc = soil_evidence.resolved_soc_measurements(org_id, field_id)
+    soc_measurements = {key: cell["values"] for key, cell in resolved_soc.items()}
     problems = AlmPracticeValidator().check_completeness(practice_schedule, soc_measurements)
 
     if not practice_schedule.get("baseline"):
@@ -504,19 +572,51 @@ def _alm_checks(org_id, field_id, season_ids, monitoring_period_start, engine_in
     # Priority 5): date-coverage vs. rotation-completeness are evaluated
     # separately, since VM0042's own text treats them as distinct
     # conditions — see both functions' docstrings.
-    lookback_check, historical_crops = _historical_lookback_check(
+    lookback_check, sequence_entries = _historical_lookback_check(
         org_id, field_id, season_ids, monitoring_period_start, practice_schedule, bundle_id
     )
     checks.append(lookback_check)
-    checks.append(_rotation_completeness_check(org_id, field_id, historical_crops, practice_schedule, bundle_id))
+    checks.append(_rotation_completeness_check(org_id, field_id, sequence_entries, practice_schedule, bundle_id))
 
     soc_problems = [p for p in problems if p.startswith("SOC samples")]
     if soc_problems:
         checks.append(_check("vm0042.soc_measurements", "missing", " ".join(soc_problems), bundle_id=bundle_id))
     else:
-        checks.append(_check("vm0042.soc_measurements", "satisfied",
-                              "Paired project/control SOC samples are recorded at both timepoints.",
-                              bundle_id=bundle_id))
+        # Distinguish HOW each cell is satisfied — a reviewed, source-backed
+        # sample set vs. the legacy manually-entered aggregate — rather
+        # than reporting a bare "satisfied" that would present the legacy
+        # aggregate as if it were reviewed sampling evidence.
+        legacy_cells = sorted(f"{s}/{t}" for (s, t), cell in resolved_soc.items() if cell["source"] == "legacy_aggregate")
+        reviewed_cells = sorted(f"{s}/{t}" for (s, t), cell in resolved_soc.items() if cell["source"] == "reviewed_evidence")
+        stale_reviews = [
+            f"{s}/{t}" for s in sorted(soil_evidence.SITE_TYPES) for t in sorted(soil_evidence.TIMEPOINTS)
+            if (r := soil_evidence.latest_soc_evidence_review(org_id, field_id, s, t)) is not None and r["stale"]
+        ]
+        if stale_reviews:
+            checks.append(_check(
+                "vm0042.soc_measurements", "needs_review",
+                f"A previously adopted sample-evidence review exists for {stale_reviews} but new samples "
+                "have been recorded since — the review is stale and must be redone before it governs the "
+                "engine input again (it currently falls back to the legacy aggregate, if any, for that cell).",
+                bundle_id=bundle_id,
+            ))
+        elif legacy_cells:
+            checks.append(_check(
+                "vm0042.soc_measurements", "needs_review",
+                f"SOC samples are present for every required cell, but {legacy_cells} still rely on the "
+                "legacy manually-entered aggregate rather than a reviewed sample set — see "
+                "src.soil_evidence.record_soc_evidence_review. This is not blocking (the aggregate is "
+                "usable engine input), but a reviewer should confirm it before treating results as final."
+                + (f" Reviewed cells: {reviewed_cells}." if reviewed_cells else ""),
+                bundle_id=bundle_id,
+            ))
+        else:
+            checks.append(_check(
+                "vm0042.soc_measurements", "satisfied",
+                "Paired project/control SOC samples are recorded at both timepoints, all backed by a "
+                "current, reviewer-adopted sample-evidence mapping (no cell relies on the legacy aggregate).",
+                bundle_id=bundle_id,
+            ))
 
     # Dynamic — only relevant when a non-annual verification period is
     # actually requested (see src/carbon_calculator_alm.py's
@@ -555,20 +655,26 @@ def _alm_checks(org_id, field_id, season_ids, monitoring_period_start, engine_in
                               "Livestock schedule recorded for the integrated crop-livestock scope.",
                               bundle_id=bundle_id))
 
-    if preview_result is not None and preview_result.get("production_decline_leakage_blocked"):
-        checks.append(_check(
-            "vm0042.leakage_step1_production_change", "needs_review",
-            preview_result.get("leakage_block_reason") or "Genuine production-decline leakage detected.",
-            bundle_id=bundle_id,
-        ))
-    else:
-        checks.append(_check(
-            "vm0042.leakage_step1_production_change", "satisfied" if preview_result is not None else "needs_review",
-            "No production-decline leakage flagged (approximate Step 1 screen only — see this "
-            "requirement's required_evidence for what is and isn't implemented)."
-            if preview_result is not None
-            else "Run a calculation preview to evaluate production-decline leakage.", bundle_id=bundle_id,
-        ))
+    leakage = (preview_result or {}).get("leakage") or {}
+    valid = leakage.get("computable") and not (preview_result or {}).get("production_decline_leakage_blocked")
+    for requirement_id in ("vm0042.leakage_step1_production_change", "vm0042.leakage_step3_land_impact",
+                           "vm0042.leakage_step4_new_land_carbon_stock", "vm0042.leakage_step5_emissions"):
+        status = "satisfied" if valid else "missing" if preview_result is not None else "needs_review"
+        if valid and requirement_id == "vm0042.leakage_step4_new_land_carbon_stock" and leakage.get("step4_status") == "not_applicable":
+            status = "not_applicable"
+        checks.append(_check(requirement_id, status,
+            "Calculated from frozen production records and saved parameters; Step 4 is omitted only for zero net land impact."
+            if valid else (preview_result or {}).get("leakage_block_reason") or leakage.get("leakage_block_reason") or "Save leakage inputs and run a calculation preview.",
+            bundle_id=bundle_id))
+    checks.append(_check("vm0042.leakage_step2_mitigation",
+        "not_applicable" if leakage.get("step2", {}).get("choice") == "none" else "unsupported",
+        leakage.get("step2", {}).get("reason") or "Mitigation activities require a supported assessment; no omission is assumed.", bundle_id=bundle_id))
+    checks.append(_check("vm0042.leakage_evidence_review", "needs_review",
+        "Review production coverage, complete historical rotation, regional sources/land cover, prior verified cumulative leakage, "
+        "and project-wide consistency of accounting choices and field boundaries before accepting this assessment.", bundle_id=bundle_id))
+    checks.append(_check("vm0042.other_leakage_scope", "needs_review",
+        "Review organic-amendment import, residue/manure diversion and other applicable leakage. "
+        "These sources are not quantified by this displacement adapter. Only a supported non-applicability decision can clear this requirement.", bundle_id=bundle_id))
     for requirement_id in _STATIC_REQUIREMENT_IDS["vm0042_alm"]:
         meta = registry.get_requirement_meta(requirement_id, bundle_id)
         checks.append(_check(requirement_id, "unsupported" if meta and meta["implementation_support"] == "unsupported"
@@ -598,7 +704,7 @@ def build_readiness_checklist(org_id, field, accounting_pathway, season_ids, mon
             bundle_id=bundle_id, determination="expert",
         ))
 
-    evidence_fingerprint = compute_evidence_fingerprint(org_id, field_id, accounting_pathway, season_ids)
+    evidence_fingerprint = compute_evidence_fingerprint(org_id, field_id, accounting_pathway, season_ids, project_id)
     checks = _apply_manual_overrides(checks, org_id, field_id, accounting_pathway, bundle_id,
                                       monitoring_period_start, monitoring_period_end, evidence_fingerprint)
     return checks, bundle_id

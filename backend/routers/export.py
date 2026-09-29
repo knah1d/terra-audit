@@ -16,6 +16,32 @@ router = APIRouter(tags=["export"])
 _field = get_owned_field()
 
 
+@router.get("/calculations/{calculation_id}/evidence/pdf")
+def export_calculation_pdf(calculation_id: str, user: dict = Depends(get_current_user)):
+    """Render an ALM estimate using stored evidence only, never today's field data."""
+    from src.calculations import get_calculation
+    from backend.access import require_project_access
+    calculation = get_calculation(user["org_id"], calculation_id)
+    if calculation is None:
+        raise HTTPException(404, "Calculation not found")
+    if calculation["project_id"]:
+        require_project_access(user["org_id"], calculation["project_id"], user)
+    if calculation["accounting_pathway"] != "vm0042_alm":
+        raise HTTPException(422, "This snapshot PDF export currently supports ALM calculations only.")
+    snapshot = calculation["snapshot"]
+    inputs = snapshot["engine_inputs"]
+    meta = {"verification_years": inputs.get("verification_years", 1),
+            "non_permanence_risk_pct": inputs.get("non_permanence_risk_pct", 20),
+            "calculation_id": calculation_id, "status": calculation["status"],
+            "monitoring_period": snapshot["monitoring_period"],
+            "methodology_bundle": snapshot.get("methodology_bundle", {}),
+            "readiness": calculation["readiness"]}
+    pdf_bytes = generate_pdf_alm(snapshot["field"], meta, snapshot["alm_practice_schedule"],
+                                 calculation["result"], snapshot.get("alm_livestock_schedule"))
+    return Response(content=pdf_bytes, media_type="application/pdf",
+                    headers={"Content-Disposition": f'attachment; filename="calculation-{calculation_id}.pdf"'})
+
+
 def _owned_verification(field_id: str, verification_id: int, org_id: str) -> dict:
     """Org+field-scoped lookup of a committed verification by its stable
     id. 404s (not 403s) on missing/wrong-org/wrong-field ids, matching the

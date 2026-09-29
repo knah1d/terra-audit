@@ -446,6 +446,16 @@ def generate_pdf_alm(
     pdf.kv("Area",       f"{field_info['area_ha']:.4f} ha")
     pdf.kv("Verification Period", f"{meta['verification_years']:.0f} year(s)")
     pdf.kv("Non-Permanence Risk Rating", f"{meta['non_permanence_risk_pct']:.0f}%  (user-supplied, not computed by this app)")
+    if meta.get("calculation_id"):
+        pdf.kv("Calculation", meta["calculation_id"])
+        pdf.kv("Internal status", meta["status"])
+        period = meta["monitoring_period"]
+        pdf.kv("Monitoring dates", f"{period['start']} to {period['end']}")
+        pdf.kv("Methodology bundle", (meta.get("methodology_bundle") or {}).get("bundle_id", "unknown"))
+        pdf.banner("CALCULATION ESTIMATE - not external verification or registry issuance.", ok=False)
+        for check in meta.get("readiness", []):
+            if check.get("status") not in ("satisfied", "not_applicable"):
+                pdf.kv(check["requirement_id"], check["status"] + ": " + check["explanation"])
 
     pdf.section("2. Practice Schedule (Table 4 subset)")
     for scenario_label, key in [("Baseline", "baseline"), ("Project", "project")]:
@@ -491,15 +501,19 @@ def generate_pdf_alm(
     pdf.kv("SOC stock change (project, Approach 2)", f"{carbon['delta_co2_soil_wp']:.4f} tCO2e (Eqs. 46-47)")
     pdf.kv("SOC uncertainty deduction", f"{carbon['unc_co2_pct']:.1f}%  (Eqs. 70-71, 74)")
     pdf.ln(2)
-    if carbon.get("production_decline_leakage_data_available"):
-        pdf.kv("Production-decline leakage (VMD0054 Steps 1-2)",
-               f"Screened clean - foregone production {carbon['foregone_production_t']:.2f} t")
+    leakage = carbon.get("leakage") or {}
+    if leakage.get("integrated"):
+        pdf.kv("Leakage module", "VMD0054 v" + leakage.get("module_version", "unknown"))
+        pdf.kv("Cumulative displacement leakage", f"{leakage['cumulative_leakage_tco2e']:.4f} tCO2e")
+        pdf.kv("Prior verified cumulative leakage", f"{leakage['prior_cumulative_leakage_tco2e']:.4f} tCO2e")
+        pdf.kv("Annual displacement deduction (Eq.36)", f"{carbon['lk_disp_t']:.4f} tCO2e/year")
+        pdf.kv("Leakage allocation ER / CR (corrected Eqs.39/42)", f"{carbon['lk_er_t']:.4f} / {carbon['lk_cr_t']:.4f} tCO2e/year")
+        pdf.kv("Step 2", "No mitigation claimed: " + leakage.get("step2", {}).get("reason", ""))
+        pdf.kv("Step 4", leakage.get("step4_status", "unknown"))
+        pdf.kv("Assessment reference", leakage.get("assessment_id", ""))
+        pdf.kv("Source", leakage.get("source", ""))
     else:
-        pdf.banner(
-            "PRODUCTION-DECLINE LEAKAGE NOT SCREENED: enter crop yield for both "
-            "scenarios to screen this (VM0042 §8.4.3, VMD0054).",
-            ok=False,
-        )
+        pdf.banner("Historical scalar leakage screen only; no integrated leakage evidence attached.", ok=False)
     pdf.banner("OTHER LEAKAGE NOT SCREENED: " + carbon.get("other_leakage_gap_note", ""), ok=False)
     pdf.kv("Net Emission Reductions (ER_t)", f"{carbon['er_t']:.4f} tCO2e  (Eq. 37, other-leakage unscreened)")
     pdf.kv("Net Removals (CR_t)", f"{carbon['cr_t']:.4f} tCO2e  (Eq. 40, other-leakage unscreened)")
@@ -508,7 +522,7 @@ def generate_pdf_alm(
     pdf.kv("Buffer deduction (ER / CR)", f"{carbon['bu_er']:.4f} / {carbon['bu_cr']:.4f} tCO2e  (Eqs. 75-76)")
     pdf.kv("SOC remeasurement cadence", "Compliant (<=5 yr)" if carbon.get("cadence_compliant", True) else "NON-COMPLIANT (>5 yr)")
     pdf.ln(2)
-    pdf.kv("NET ISSUANCE (VCU_t)", f"{carbon['final_issuance']:.4f} tCO2e  (Eqs. 77-79)")
+    pdf.kv("ESTIMATED NET RESULT (VCU_t)", f"{carbon['final_issuance']:.4f} tCO2e  (Eqs. 77-79)")
 
     if carbon["final_issuance"] == 0.0:
         pdf.banner(
@@ -517,8 +531,7 @@ def generate_pdf_alm(
         )
     else:
         pdf.banner(
-            f"VERIFIED: {carbon['final_issuance']:.4f} tCO2e net verified credits"
-            " - ready for registry submission.",
+            f"ESTIMATE: {carbon['final_issuance']:.4f} tCO2e. Internal readiness and external verification are separate.",
             ok=True,
         )
 

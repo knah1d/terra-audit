@@ -1,35 +1,51 @@
 """Traceable soil evidence — Phase 3, Part B.7 of
-docs/RESEARCH_IMPLEMENTATION_PLAN_2026-09-23.md.
+docs/RESEARCH_IMPLEMENTATION_PLAN_2026-09-23.md, extended per the Phase 3
+follow-up ("Complete soil evidence integration").
 
-Adds sampling plans, strata, and individual geolocated soil samples
-(dates, depth intervals, bulk density, lab method/results, chain of
-custody) ON TOP of the existing `soc_measurements` table — that table
-is UNCHANGED and remains exactly what src/carbon_calculator_alm.py's
-calculate_credits() actually reads (an aggregate list of values per
-(site_type, timepoint)). This module does not replace it or feed it
-automatically: recomputing the engine's aggregate input FROM granular
-samples (e.g. per-stratum weighting) is a real quantification decision
-this phase does not make unreviewed. `aggregate_from_samples()` exists
-only as a cross-check/comparison view, explicitly labeled as such —
-never silently substituted for the manually-entered aggregate.
+Adds sampling plans, strata, individual geolocated soil samples (dates,
+depth intervals, bulk density), per-analyte laboratory results (method,
+unit, value — supporting multiple lab runs/replicates per sample),
+chain-of-custody events, and a REVIEWED EVIDENCE MAPPING
+(`soc_evidence_reviews`) that is the actual, source-backed path from
+specific sample rows to the calculation engine's `soc_measurements`
+input.
 
-This keeps existing aggregate `soc_measurements` rows usable as legacy
-data (nothing here requires migrating them) while making it possible to
-attach real traceability to a NEW calculation going forward. See
-src/snapshot.py, which embeds both the aggregate values the engine used
-AND (if present) this field's sampling plan/samples into the snapshot,
-clearly labeled apart.
+The legacy `soc_measurements` table (src.database.get_soc_measurements/
+save_soc_measurements) is UNCHANGED and still readable as a manually-
+entered aggregate. It is no longer, however, presented as complete
+sampling evidence: `resolved_soc_measurements()` below is now the
+function callers (src/snapshot.py) use to decide the engine's actual
+input, and it labels every (site_type, timepoint) cell with its real
+source — "reviewed_evidence" (a reviewer explicitly approved a specific
+set of sample rows to feed the engine, preserving each sample's raw
+value so the engine's own Eq. 70/71 variance-from-replicates
+calculation is not short-circuited by a pre-averaged number) or
+"legacy_aggregate" (the old manually-entered list, honestly labeled as
+not full sampling evidence) or "missing".
+
+`aggregate_from_samples()` remains a naive cross-check/comparison view
+ONLY (unchanged) — grouping every sample's value with no review, no
+outlier/QA exclusion, and no chain-of-custody check. It is never read
+by `resolved_soc_measurements()` or any calculation path; a reviewer
+must explicitly adopt specific sample_ids via `record_soc_evidence_review`
+for evidence to become an actual engine input.
 """
+import json
 import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy import text
 
 from src.database import get_db_connection
+from src.monitoring import digest
 
 SITE_TYPES = {"project", "control"}
 TIMEPOINTS = {"t_start", "t_final"}
 MEASUREMENT_METHODS = {"dry_combustion", "wet_oxidation", "loss_on_ignition", "other"}
+LAB_ANALYTES = {"soc_percent", "bulk_density_g_cm3", "soc_stock_tco2e_ha", "other"}
+CUSTODY_EVENT_TYPES = {"collected", "packaged", "shipped", "received_by_lab", "analyzed", "disposed", "other"}
+REVIEW_STATUSES = {"adopted", "rejected"}
+MIN_REVIEWED_SAMPLES = 3  # mirrors AlmPracticeValidator.MIN_SOC_SAMPLES — see record_soc_evidence_review
 
 
 def initialize_tables(conn):
@@ -91,6 +107,86 @@ def initialize_tables(conn):
     """))
     conn.execute(text("CREATE INDEX IF NOT EXISTS idx_soil_samples_plan ON soil_samples(org_id, plan_id)"))
     conn.execute(text("CREATE INDEX IF NOT EXISTS idx_soil_samples_field ON soil_samples(org_id, field_id)"))
+
+    # Per-analyte laboratory results — a sample's baked-in soc_percent/
+    # soc_value_tco2e_ha/lab_name/lab_method fields (above) stay exactly
+    # as they were (legacy-compatible, still the single "adopted" reading
+    # for that sample), but a real lab workflow often produces MULTIPLE
+    # dated results per sample (a redo, a QA replicate, a different
+    # analyte) each with its own method/unit — this table is additive,
+    # not a replacement.
+    conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS soil_lab_results (
+            org_id       TEXT NOT NULL,
+            result_id    TEXT NOT NULL,
+            sample_id    TEXT NOT NULL,
+            analyte      TEXT NOT NULL CHECK (analyte IN
+                         ('soc_percent', 'bulk_density_g_cm3', 'soc_stock_tco2e_ha', 'other')),
+            method       TEXT NOT NULL,
+            unit         TEXT NOT NULL,
+            value        REAL NOT NULL,
+            lab_name     TEXT NOT NULL DEFAULT '',
+            analyzed_at  TEXT,
+            notes        TEXT NOT NULL DEFAULT '',
+            entered_by   TEXT NOT NULL,
+            created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (org_id, result_id)
+        )
+    """))
+    conn.execute(text("CREATE INDEX IF NOT EXISTS idx_soil_lab_results_sample ON soil_lab_results(org_id, sample_id)"))
+
+    # Chain-of-custody EVENT LOG — replaces the single free-text
+    # chain_of_custody_ref field (kept, unchanged, as a legacy summary)
+    # with a real append-only sequence of handling events per sample.
+    conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS soil_custody_events (
+            org_id      TEXT NOT NULL,
+            event_id    TEXT NOT NULL,
+            sample_id   TEXT NOT NULL,
+            event_type  TEXT NOT NULL CHECK (event_type IN
+                        ('collected', 'packaged', 'shipped', 'received_by_lab', 'analyzed', 'disposed', 'other')),
+            event_at    TEXT NOT NULL,
+            actor       TEXT NOT NULL DEFAULT '',
+            location    TEXT NOT NULL DEFAULT '',
+            notes       TEXT NOT NULL DEFAULT '',
+            created_by  TEXT NOT NULL,
+            created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (org_id, event_id)
+        )
+    """))
+    conn.execute(text("CREATE INDEX IF NOT EXISTS idx_soil_custody_events_sample ON soil_custody_events(org_id, sample_id)"))
+
+    # The reviewed evidence mapping: a reviewer's explicit, dated decision
+    # that a specific SET of sample rows (by id, values preserved raw —
+    # never pre-averaged, so the engine's own Eq. 70/71 variance-from-
+    # replicates calculation stays intact) is the calculation input for
+    # one (field, site_type, timepoint) cell. Append-only, mirroring
+    # src.calculations.readiness_determinations' pattern exactly:
+    # `evidence_fingerprint` scopes each row to the exact evidence state
+    # it was decided against (see _samples_scope_fingerprint) so a
+    # decision silently stops applying — never is deleted — once that
+    # scope's evidence changes (a new sample is added, notably; existing
+    # rows are immutable/create-only, so edits are not yet a real path).
+    conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS soc_evidence_reviews (
+            id                    TEXT NOT NULL,
+            org_id                TEXT NOT NULL,
+            field_id              TEXT NOT NULL,
+            site_type             TEXT NOT NULL CHECK (site_type IN ('project', 'control')),
+            timepoint             TEXT NOT NULL CHECK (timepoint IN ('t_start', 't_final')),
+            sample_ids_json       TEXT NOT NULL,
+            evidence_fingerprint  TEXT NOT NULL,
+            status                TEXT NOT NULL CHECK (status IN ('adopted', 'rejected')),
+            reason                TEXT NOT NULL,
+            decided_by            TEXT NOT NULL,
+            decided_at            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (org_id, id)
+        )
+    """))
+    conn.execute(text(
+        "CREATE INDEX IF NOT EXISTS idx_soc_evidence_reviews_scope "
+        "ON soc_evidence_reviews(org_id, field_id, site_type, timepoint)"
+    ))
 
 
 def _uid():
@@ -240,4 +336,230 @@ def aggregate_from_samples(org_id: str, field_id: str) -> dict:
             continue
         key = (s["site_type"], s["timepoint"])
         result.setdefault(key, []).append(s["soc_value_tco2e_ha"])
+    return result
+
+
+def _get_sample(org_id: str, sample_id: str) -> dict | None:
+    with get_db_connection() as conn:
+        row = conn.execute(text(
+            "SELECT * FROM soil_samples WHERE org_id = :org_id AND sample_id = :sample_id"
+        ), {"org_id": org_id, "sample_id": sample_id}).mappings().fetchone()
+    return dict(row) if row else None
+
+
+# --------------------------------------------------------------------------
+# Laboratory results (per-analyte, method/unit explicit)
+# --------------------------------------------------------------------------
+
+def create_lab_result(org_id: str, sample_id: str, analyte: str, method: str, unit: str, value: float,
+                       lab_name: str, analyzed_at: str | None, notes: str, entered_by: str) -> str:
+    if analyte not in LAB_ANALYTES:
+        raise ValueError(f"analyte must be one of {sorted(LAB_ANALYTES)}")
+    if _get_sample(org_id, sample_id) is None:
+        raise ValueError(f"Sample {sample_id!r} not found")
+    result_id = _uid()
+    with get_db_connection() as conn:
+        conn.execute(text("""
+            INSERT INTO soil_lab_results (org_id, result_id, sample_id, analyte, method, unit, value,
+                                           lab_name, analyzed_at, notes, entered_by)
+            VALUES (:org_id, :result_id, :sample_id, :analyte, :method, :unit, :value,
+                    :lab_name, :analyzed_at, :notes, :entered_by)
+        """), {"org_id": org_id, "result_id": result_id, "sample_id": sample_id, "analyte": analyte,
+               "method": method, "unit": unit, "value": value, "lab_name": lab_name,
+               "analyzed_at": analyzed_at, "notes": notes, "entered_by": entered_by})
+        conn.commit()
+    return result_id
+
+
+def list_lab_results(org_id: str, sample_id: str) -> list[dict]:
+    with get_db_connection() as conn:
+        rows = conn.execute(text(
+            "SELECT * FROM soil_lab_results WHERE org_id = :org_id AND sample_id = :sample_id ORDER BY created_at"
+        ), {"org_id": org_id, "sample_id": sample_id}).mappings().fetchall()
+    return [dict(r) for r in rows]
+
+
+# --------------------------------------------------------------------------
+# Chain of custody
+# --------------------------------------------------------------------------
+
+def create_custody_event(org_id: str, sample_id: str, event_type: str, event_at: str, actor: str,
+                          location: str, notes: str, created_by: str) -> str:
+    if event_type not in CUSTODY_EVENT_TYPES:
+        raise ValueError(f"event_type must be one of {sorted(CUSTODY_EVENT_TYPES)}")
+    if _get_sample(org_id, sample_id) is None:
+        raise ValueError(f"Sample {sample_id!r} not found")
+    event_id = _uid()
+    with get_db_connection() as conn:
+        conn.execute(text("""
+            INSERT INTO soil_custody_events (org_id, event_id, sample_id, event_type, event_at,
+                                              actor, location, notes, created_by)
+            VALUES (:org_id, :event_id, :sample_id, :event_type, :event_at,
+                    :actor, :location, :notes, :created_by)
+        """), {"org_id": org_id, "event_id": event_id, "sample_id": sample_id, "event_type": event_type,
+               "event_at": event_at, "actor": actor, "location": location, "notes": notes,
+               "created_by": created_by})
+        conn.commit()
+    return event_id
+
+
+def list_custody_events(org_id: str, sample_id: str) -> list[dict]:
+    with get_db_connection() as conn:
+        rows = conn.execute(text(
+            "SELECT * FROM soil_custody_events WHERE org_id = :org_id AND sample_id = :sample_id ORDER BY event_at"
+        ), {"org_id": org_id, "sample_id": sample_id}).mappings().fetchall()
+    return [dict(r) for r in rows]
+
+
+# --------------------------------------------------------------------------
+# Reviewed evidence mapping (sample rows -> engine soc_measurements input)
+# --------------------------------------------------------------------------
+
+def _eligible_sample_ids(org_id: str, field_id: str, site_type: str, timepoint: str) -> list[str]:
+    """Every sample currently recorded for this exact (field, site_type,
+    timepoint) scope with a usable SOC value — the universe a reviewer
+    picks a subset (or all) of, and the set whose membership changing
+    (a new sample recorded after a review) drives staleness below."""
+    with get_db_connection() as conn:
+        rows = conn.execute(text("""
+            SELECT sample_id FROM soil_samples
+            WHERE org_id = :org_id AND field_id = :field_id AND site_type = :site_type
+              AND timepoint = :timepoint AND soc_value_tco2e_ha IS NOT NULL
+            ORDER BY sample_id
+        """), {"org_id": org_id, "field_id": field_id, "site_type": site_type, "timepoint": timepoint}).fetchall()
+    return [r[0] for r in rows]
+
+
+def _samples_scope_fingerprint(org_id: str, field_id: str, site_type: str, timepoint: str,
+                                sample_ids: list[str]) -> str:
+    """Hashes BOTH the exact selected sample rows' current values (they
+    are effectively immutable once created — no update/delete path
+    exists yet — so this half is stable) AND the full set of sample ids
+    currently eligible for this scope (this half changes the moment a
+    NEW sample is recorded for the same field/site_type/timepoint after
+    the review, forcing re-review — see record_soc_evidence_review's
+    docstring for why deliberately-excluded samples do not, by
+    themselves, invalidate a decision)."""
+    selected = []
+    for sid in sorted(sample_ids):
+        s = _get_sample(org_id, sid)
+        if s is not None:
+            selected.append((s["sample_id"], s["soc_value_tco2e_ha"], s["depth_top_cm"], s["depth_bottom_cm"]))
+    payload = {
+        "selected": selected,
+        "eligible_universe": sorted(_eligible_sample_ids(org_id, field_id, site_type, timepoint)),
+    }
+    return digest(payload)
+
+
+def record_soc_evidence_review(org_id: str, field_id: str, site_type: str, timepoint: str,
+                                sample_ids: list[str], status: str, reason: str, decided_by: str) -> dict:
+    """A reviewer's explicit decision that these specific sample_ids (raw
+    values preserved, not pre-averaged) are — or are explicitly NOT — the
+    evidence backing this (site_type, timepoint) cell of the engine's
+    soc_measurements input. Requires >= MIN_REVIEWED_SAMPLES ids for an
+    'adopted' decision (mirrors AlmPracticeValidator/AlmCarbonEngine's own
+    MIN_SOC_SAMPLES gate — approving fewer would create a reviewed cell
+    the engine itself would reject anyway); a 'rejected' decision may
+    reference any number (including zero) to explicitly record that this
+    scope's current sample evidence is NOT usable, with a reason."""
+    if site_type not in SITE_TYPES:
+        raise ValueError(f"site_type must be one of {sorted(SITE_TYPES)}")
+    if timepoint not in TIMEPOINTS:
+        raise ValueError(f"timepoint must be one of {sorted(TIMEPOINTS)}")
+    if status not in REVIEW_STATUSES:
+        raise ValueError(f"status must be one of {sorted(REVIEW_STATUSES)}")
+    if not reason.strip():
+        raise ValueError("reason is required")
+    sample_ids = sorted(set(sample_ids))
+    for sid in sample_ids:
+        s = _get_sample(org_id, sid)
+        if s is None:
+            raise ValueError(f"Sample {sid!r} not found")
+        if s["field_id"] != field_id or s["site_type"] != site_type or s["timepoint"] != timepoint:
+            raise ValueError(
+                f"Sample {sid!r} does not belong to field {field_id!r}/{site_type}/{timepoint}"
+            )
+        if s["soc_value_tco2e_ha"] is None:
+            raise ValueError(f"Sample {sid!r} has no soc_value_tco2e_ha recorded yet")
+    if status == "adopted" and len(sample_ids) < MIN_REVIEWED_SAMPLES:
+        raise ValueError(
+            f"An adopted review needs at least {MIN_REVIEWED_SAMPLES} sample_ids "
+            f"(got {len(sample_ids)}) — the engine itself requires this many replicates per cell."
+        )
+    fingerprint = _samples_scope_fingerprint(org_id, field_id, site_type, timepoint, sample_ids)
+    row_id = _uid()
+    with get_db_connection() as conn:
+        conn.execute(text("""
+            INSERT INTO soc_evidence_reviews (id, org_id, field_id, site_type, timepoint, sample_ids_json,
+                                               evidence_fingerprint, status, reason, decided_by)
+            VALUES (:id, :org_id, :field_id, :site_type, :timepoint, :sample_ids_json,
+                    :evidence_fingerprint, :status, :reason, :decided_by)
+        """), {"id": row_id, "org_id": org_id, "field_id": field_id, "site_type": site_type,
+               "timepoint": timepoint, "sample_ids_json": json.dumps(sample_ids),
+               "evidence_fingerprint": fingerprint, "status": status, "reason": reason, "decided_by": decided_by})
+        conn.commit()
+    return {"id": row_id, "field_id": field_id, "site_type": site_type, "timepoint": timepoint,
+            "sample_ids": sample_ids, "status": status, "reason": reason, "decided_by": decided_by}
+
+
+def latest_soc_evidence_review(org_id: str, field_id: str, site_type: str, timepoint: str) -> dict | None:
+    """The most recent review for this cell, annotated with `stale`
+    (True when the evidence has moved on since it was decided — see
+    _samples_scope_fingerprint) so a caller can tell an out-of-date
+    'adopted' row apart from a currently-valid one without silently
+    treating either as authoritative. Never deleted — append-only,
+    exactly like src.calculations.readiness_determinations."""
+    with get_db_connection() as conn:
+        row = conn.execute(text("""
+            SELECT * FROM soc_evidence_reviews
+            WHERE org_id = :org_id AND field_id = :field_id AND site_type = :site_type AND timepoint = :timepoint
+            ORDER BY decided_at DESC LIMIT 1
+        """), {"org_id": org_id, "field_id": field_id, "site_type": site_type, "timepoint": timepoint}).mappings().fetchone()
+    if row is None:
+        return None
+    review = dict(row)
+    sample_ids = json.loads(review.pop("sample_ids_json"))
+    review["sample_ids"] = sample_ids
+    current_fingerprint = _samples_scope_fingerprint(org_id, field_id, site_type, timepoint, sample_ids)
+    review["stale"] = current_fingerprint != review["evidence_fingerprint"]
+    return review
+
+
+def resolved_soc_measurements(org_id: str, field_id: str) -> dict:
+    """THE function callers (src.snapshot.build_snapshot) use to decide
+    the engine's actual soc_measurements input. For each of the 4
+    (site_type, timepoint) cells:
+      - a current (non-stale), 'adopted' review exists -> use its exact
+        sample_ids' raw soc_value_tco2e_ha values, source
+        'reviewed_evidence', with full provenance (review id, sample
+        ids, decided_by/at, reason).
+      - otherwise -> fall back to the legacy manually-entered aggregate
+        (src.database.get_soc_measurements), source 'legacy_aggregate',
+        explicitly NOT presented as complete sampling evidence.
+      - neither present -> source 'missing', values [].
+    """
+    from src.database import get_soc_measurements
+    legacy = get_soc_measurements(org_id, field_id)
+    result = {}
+    for site_type in sorted(SITE_TYPES):
+        for timepoint in sorted(TIMEPOINTS):
+            key = (site_type, timepoint)
+            review = latest_soc_evidence_review(org_id, field_id, site_type, timepoint)
+            if review is not None and review["status"] == "adopted" and not review["stale"]:
+                values = [_get_sample(org_id, sid)["soc_value_tco2e_ha"] for sid in review["sample_ids"]]
+                result[key] = {
+                    "values": values, "source": "reviewed_evidence",
+                    "review": {k: review[k] for k in
+                               ("id", "sample_ids", "reason", "decided_by", "decided_at", "evidence_fingerprint")},
+                }
+            elif legacy.get(key):
+                result[key] = {
+                    "values": legacy[key], "source": "legacy_aggregate",
+                    "note": "Manually-entered aggregate values — not full sampling-plan/chain-of-custody "
+                            "evidence. See soil_evidence.record_soc_evidence_review to formally review and "
+                            "adopt traceable sample evidence for this cell instead.",
+                }
+            else:
+                result[key] = {"values": [], "source": "missing"}
     return result

@@ -13,6 +13,7 @@ type RecordRow<T> = { id: string; season_id: string; created_at: string; payload
 type Season = {
   name: string; crops: string[]; start_date: string; end_date: string; notes: string;
   season_type?: string; is_historical?: boolean; fallow_reason?: string; missing_period_reason?: string;
+  crop_sequence?: { crop: string; start_date: string; end_date: string }[];
 };
 type Observation = { kind: string; value: string; numeric_value: number | null; unit: string | null; source: string; observed_at: string; evidence_reference: string; created_by: string };
 type Review = { observation_id: string; decision: string; reason: string; reviewed_by: string };
@@ -42,6 +43,7 @@ export default function CropSeasonsPage() {
   const [seasonType, setSeasonType] = useState("single_crop");
   const [isHistorical, setIsHistorical] = useState(false);
   const [split, setSplit] = useState("field");
+  const [cropSequence, setCropSequence] = useState<{ crop: string; start_date: string; end_date: string }[]>([]);
   const seasons = useQuery({ queryKey: ["crop-seasons", field.field_id], queryFn: () => apiFetch<RecordRow<Season>[]>(base) });
   const seasonId = selected || seasons.data?.[0]?.id || "";
   const path = `${base}/${seasonId}`;
@@ -89,8 +91,9 @@ export default function CropSeasonsPage() {
             season_type: seasonType, is_historical: isHistorical,
             fallow_reason: seasonType === "fallow" ? data.get("fallow_reason") : "",
             missing_period_reason: seasonType === "missing_period" ? data.get("missing_period_reason") : "",
+            crop_sequence: (seasonType === "rotation" || seasonType === "intercrop") ? cropSequence : [],
           } });
-          setSelected(row.id); form.reset(); setSeasonType("single_crop"); setIsHistorical(false);
+          setSelected(row.id); form.reset(); setSeasonType("single_crop"); setIsHistorical(false); setCropSequence([]);
           await queryClient.invalidateQueries({ queryKey: ["crop-seasons", field.field_id] });
           await queryClient.invalidateQueries({ queryKey: ["crop-corpus"] }); setNotice("Crop season saved.");
         });
@@ -122,9 +125,44 @@ export default function CropSeasonsPage() {
           This is historical/baseline evidence (predates the monitored project period), not a monitored project-period season.
         </label>
         <label className="text-sm sm:col-span-2">Notes<TextInput name="notes" maxLength={2000} /></label>
+        {(seasonType === "rotation" || seasonType === "intercrop") && (
+          <div className="sm:col-span-2 space-y-2 rounded-lg border border-border p-3">
+            <p className="text-sm font-medium">
+              {seasonType === "rotation" ? "Crop sequence (sequential cycles within this season)" : "Intercropped commodities"}
+            </p>
+            {cropSequence.map((entry, i) => (
+              <div key={i} className="grid grid-cols-4 gap-2">
+                <TextInput
+                  placeholder="Crop" value={entry.crop}
+                  onChange={e => setCropSequence(seq => seq.map((s, j) => j === i ? { ...s, crop: e.target.value } : s))}
+                />
+                <TextInput
+                  type="date" value={entry.start_date}
+                  onChange={e => setCropSequence(seq => seq.map((s, j) => j === i ? { ...s, start_date: e.target.value } : s))}
+                />
+                <TextInput
+                  type="date" value={entry.end_date}
+                  onChange={e => setCropSequence(seq => seq.map((s, j) => j === i ? { ...s, end_date: e.target.value } : s))}
+                />
+                <Button type="button" variant="ghost" onClick={() => setCropSequence(seq => seq.filter((_, j) => j !== i))}>Remove</Button>
+              </div>
+            ))}
+            <Button
+              type="button" variant="secondary"
+              onClick={() => setCropSequence(seq => [...seq, { crop: "", start_date: "", end_date: "" }])}
+            >
+              Add {seasonType === "rotation" ? "cycle" : "commodity"}
+            </Button>
+            <p className="text-xs text-text-tertiary">
+              For a rotation, list each sequential crop cycle with its own start/end dates — recording the
+              same crop again after other cycles is the evidence a reviewer uses to confirm a complete
+              rotation (see the Historical Look-Back / Rotation Completeness readiness check).
+            </p>
+          </div>
+        )}
         <p className="text-xs text-text-tertiary sm:col-span-2">
-          Rotation/intercrop crop-sequence sub-periods and grouped-project eligibility areas are not yet editable here — see the
-          field&apos;s Quantification Units tab and the API for the fuller data model.
+          Grouped-project eligibility areas are not yet editable here — see the field&apos;s Quantification
+          Units tab and the API for the fuller data model.
         </p>
         <div><Button loading={busy} type="submit">Save season</Button></div>
       </form>

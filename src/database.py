@@ -93,6 +93,8 @@ def initialize_database():
         initialize_quantification_tables(conn)
         from src.soil_evidence import initialize_tables as initialize_soil_evidence_tables
         initialize_soil_evidence_tables(conn)
+        from src.production_records import initialize_tables as initialize_production_records_tables
+        initialize_production_records_tables(conn)
         from src.ai.workspace import initialize_tables as initialize_ai_tables
         initialize_ai_tables(conn)
         from src.account_access import initialize_tables as initialize_account_tables
@@ -927,6 +929,8 @@ def save_credit_history(org_id: str, field_id: str, field_type: str, inputs: dic
     persists once the user navigates away. Stores the full inputs/result
     dicts as JSON, not just final_issuance, so a past run can be inspected
     in detail rather than just its headline figure."""
+    if field_type == "cropland_alm_vm0042":
+        raise NonIssuableResultError("ALM results must use the evidence-linked Calculations workflow.")
     with get_db_connection() as conn:
         conn.execute(
             text("""
@@ -1152,6 +1156,11 @@ def commit_carbon_credit_result(
     # Lazy import: src.calculations imports from this module at load time,
     # so importing it back at module level here would be circular.
     from src.calculations import PATHWAYS
+    if field_type == "cropland_alm_vm0042":
+        raise NonIssuableResultError(
+            "New ALM records require the evidence-linked Calculations workflow and full readiness checks. "
+            "Legacy credit history remains available for reading."
+        )
     issuable, block_reason = result_is_issuable(result, PATHWAYS.get(field_type))
     if not issuable:
         raise NonIssuableResultError(

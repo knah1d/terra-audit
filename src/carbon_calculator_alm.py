@@ -20,11 +20,10 @@ Covers (this implementation):
   - Net reductions/removals (§8.5, Eqs. 37, 40, 43) and buffer/VCU
     calculation (§8.7, Eqs. 75-79) against a user-supplied non-permanence
     risk rating
-  - Production-decline leakage screening, Steps 1-2 only, of VMD0054 v1.0
-    (§8.4.3 makes this mandatory via VMD0054's Eq. 39/42 LK_disp,t term) —
-    compares baseline vs. project crop yield (Table 4's "Crop yield (where
-    applicable)" field) to determine foregone production. See
-    _production_decline_leakage() docstring for the deliberate scope cut.
+  - Displacement leakage via frozen VMD0054 v1.1 evidence, annualized under
+    VM0042 Eq.36 and allocated using corrected Eqs.39/42. Unsupported
+    or incomplete scope blocks; the legacy scalar helper is not called.
+
   - Integrated crop-livestock systems (§8.2.6 enteric fermentation Eq. 11,
     §8.2.7 manure CH4 Eq. 12/13, Ch 11 Eq. 11.5 manure N2O deposited on
     pasture), scoped to Pasture/Range/Paddock grazing only, curated to
@@ -513,6 +512,7 @@ class AlmCarbonEngine:
         prior_cumulative_delta_co2_wp_t: float = 0.0,
         baseline_livestock: list = None,
         project_livestock: list = None,
+        leakage_result: dict | None = None,
     ) -> dict:
         """
         practice_schedule  : {'baseline': {...}, 'project': {...}} — see
@@ -547,23 +547,14 @@ class AlmCarbonEngine:
                               (treated as empty) — zero livestock is a no-op
                               delta, so existing calls are unaffected.
         """
-        prod_leakage = self._production_decline_leakage(practice_schedule, area_ha)
-        if prod_leakage["data_available"] and not prod_leakage["screened_clean"]:
-            return {
-                "production_decline_leakage_blocked": True,
-                "foregone_production_t": prod_leakage["foregone_production_t"],
-                "leakage_block_reason": (
-                    f"Project yield is {prod_leakage['foregone_production_t']:.2f} t below "
-                    "baseline (VMD0054 Step 1) — production-decline leakage is nonzero. "
-                    "Quantifying it (VMD0054 Steps 3-5) needs regional forest-biomass and "
-                    "IPCC Tier 1 SOC change-factor defaults this engine does not have "
-                    "sourced, so this engine blocks issuance rather than omit a mandatory "
-                    "leakage term (§8.4.3)."
-                ),
-                "final_issuance": None,
-                "p_uncertainty": None,
-                "confidence_pct": None,
-            }
+        # New calculations require the versioned, frozen leakage assessment.
+        # The legacy scalar screen is retained only as historical source code.
+        if not leakage_result or not leakage_result.get("computable"):
+            reason = (leakage_result or {}).get("leakage_block_reason") or "Use the evidence-linked Calculations workflow and save a scoped leakage assessment; no legacy scalar fallback is permitted."
+            return {"production_decline_leakage_blocked": True, "leakage_block_reason": reason,
+                    "leakage": leakage_result, "final_issuance": None,
+                    "p_uncertainty": None, "confidence_pct": None}
+        displacement_leakage = leakage_result["annual_displacement_leakage_tco2e"]
 
         bsl = practice_schedule.get("baseline") or {}
         wp  = practice_schedule.get("project") or {}
@@ -640,8 +631,18 @@ class AlmCarbonEngine:
         # Eq. 40 — carbon dioxide removals (only when cumulative project SOC change > 0)
         cr_t = i_wp * max_diff
 
-        er_net = er_t     # leakage terms out of scope → LK_ER,t = 0
-        cr_net = cr_t     # LK_CR,t = 0
+        # VM0042 June 2026 corrections, Eqs.39/42: allocate LKdisp by
+        # ER/(ER+CR) and CR/(ER+CR). Other leakage remains a separate gate.
+        if er_t + cr_t <= 0 and displacement_leakage > 0:
+            return {"production_decline_leakage_blocked": True,
+                    "leakage_block_reason": "Positive displacement leakage cannot be allocated to a nonpositive ER+CR total; no claim is available.",
+                    "leakage": leakage_result, "final_issuance": None,
+                    "p_uncertainty": None, "confidence_pct": None,
+                    "soc_uncertainty_annualization_unresolved": soc_uncertainty_annualization_unresolved}
+        lk_er = displacement_leakage * er_t / (er_t + cr_t) if displacement_leakage else 0.0
+        lk_cr = displacement_leakage * cr_t / (er_t + cr_t) if displacement_leakage else 0.0
+        er_net = er_t - lk_er
+        cr_net = cr_t - lk_cr
         err_net = er_net + cr_net  # Eq. 43
 
         # Eqs. 75-76 — buffer deduction on the SOC (CO2 stock) terms only
@@ -689,9 +690,14 @@ class AlmCarbonEngine:
             "cr_t":                cr_t,
             "err_net":             err_net,
             "cumulative_delta_co2_wp": cumulative_delta_co2_wp,
-            "production_decline_leakage_screened": prod_leakage["screened_clean"],
-            "production_decline_leakage_data_available": prod_leakage["data_available"],
-            "foregone_production_t": prod_leakage["foregone_production_t"],
+            "production_decline_leakage_screened": True,
+            "production_decline_leakage_data_available": True,
+            "leakage": leakage_result,
+            "lk_disp_t": displacement_leakage,
+            "lk_er_t": lk_er,
+            "lk_cr_t": lk_cr,
+            "er_net": er_net,
+            "cr_net": cr_net,
             "other_leakage_screened": False,
             "other_leakage_gap_note": self.OTHER_LEAKAGE_GAP_NOTE,
             "cadence_compliant":   verification_years <= self.MAX_VERIFICATION_YEARS,
