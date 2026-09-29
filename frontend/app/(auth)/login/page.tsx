@@ -76,7 +76,7 @@ export default function LoginPage() {
               Sign in
             </Button>
           </form>
-          <div className="mt-6 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-sm text-text-secondary">
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-sm text-text-secondary">
             <Link href="/account-access" className="font-medium text-brand-600 hover:text-brand-700">
               Forgot password?
             </Link>
