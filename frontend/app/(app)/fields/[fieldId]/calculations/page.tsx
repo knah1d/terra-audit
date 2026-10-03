@@ -186,7 +186,7 @@ export default function CalculationsPage() {
               disabled={!selectedSeasons.length || !periodStart || !periodEnd}
               onClick={() => void perform(async () => {
                 await readiness.mutateAsync({
-                  accounting_pathway: pathway, season_ids: selectedSeasons,
+                  project_id: projectId || null, accounting_pathway: pathway, season_ids: selectedSeasons,
                   monitoring_period_start: periodStart, monitoring_period_end: periodEnd,
                 });
               })}
