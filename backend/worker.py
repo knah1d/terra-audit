@@ -170,5 +170,10 @@ def run(job_types=None, max_iterations: int | None = None) -> None:
 
 
 if __name__ == "__main__":
-    run()
+    import argparse
+    parser = argparse.ArgumentParser(description="Run the durable Terra-Audit worker")
+    parser.add_argument("--job-types", nargs="+", choices=sorted(HANDLERS),
+                        help="Process only these job types; default processes all registered types")
+    args = parser.parse_args()
+    run(job_types=args.job_types)
     sys.exit(0)
