@@ -140,10 +140,47 @@ def _minimal(schema):
 
 
 def _fake(instructions, data, schema, org_id, media, vision):
+    if "summary_claims" in schema.get("properties", {}) and "packet" in data:
+        return _fake_explanation(data["packet"]), {
+            "provider": "fake", "model": "deterministic-fixture", "response_id": None,
+            "usage": None, "store": False,
+        }
     parsed = _minimal(schema)
     if isinstance(parsed, dict) and "limitations" in parsed:
         parsed["limitations"] = ["AI_PROVIDER=fake: no model was called; this is a pipeline placeholder."]
     return parsed, {"provider": "fake", "model": None, "response_id": None, "usage": None, "store": False}
+
+
+def _fake_explanation(packet):
+    """Exercise real citations/readiness links using supplied facts; no numeric invention."""
+    sources = {s["id"]: s for s in packet["sources"]}
+    result = {"summary_claims": [], "missing_evidence": [], "conflicts": [],
+              "limitations": ["AI_PROVIDER=fake: no model was called; this checks the explanation pipeline."]}
+    for fact in packet.get("facts", []):
+        if fact["kind"] != "readiness":
+            continue
+        row = fact["data"]
+        rid = row["requirement_id"]
+        source = sources.get(f"readiness:{rid}")
+        if not source or not source["sentences"]:
+            continue
+        ids = [s["id"] for s in source["sentences"][:10]]
+        status = row.get("status")
+        claim = (f"The supplied checklist marks {rid} as {status}." if status else
+                 f"The supplied requirement {rid} has implementation support {row.get('implementation_support', 'not supplied')}.")
+        if len(result["summary_claims"]) < 40:
+            result["summary_claims"].append({"text": claim, "sentence_ids": ids})
+        if status in {"missing", "needs_review", "unsupported"} and len(result["missing_evidence"]) < 40:
+            result["missing_evidence"].append({"requirement_id": rid,
+                "record_type": row["fix"]["record_type"], "explanation": claim, "sentence_ids": ids})
+    if not result["summary_claims"]:
+        chosen = next((s for s in sources.values() if s["kind"] == "leakage_assessment"), None)
+        chosen = chosen or next((s for s in sources.values() if s["id"].endswith(":diff")), None)
+        chosen = chosen or next((s for s in sources.values() if s["sentences"]), None)
+        if chosen and chosen["sentences"]:
+            result["summary_claims"].append({"text": "This draft explanation is based on the supplied records.",
+                "sentence_ids": [chosen["sentences"][0]["id"]]})
+    return result
 
 
 _PROVIDERS = {"openai": _openai, "self_hosted": _self_hosted, "fake": _fake}

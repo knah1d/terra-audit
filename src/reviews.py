@@ -524,16 +524,27 @@ def diff_submissions(org_id: str, submission_id: str, previous_submission_id: st
         raise ValueError("Submission not found")
     current_calc = get_calculation(org_id, current["calculation_id"])
     previous_calc = get_calculation(org_id, previous["calculation_id"])
+    if current_calc is None or previous_calc is None:
+        raise ValueError("Calculation not found")
+    return diff_calculations(current_calc, previous_calc)
+
+
+def diff_calculations(current_calc: dict, previous_calc: dict) -> dict:
+    """Pure comparison shared by submission reviews and AI context packets."""
+    if (current_calc.get("org_id"), current_calc.get("project_id"), current_calc.get("field_id")) != (
+        previous_calc.get("org_id"), previous_calc.get("project_id"), previous_calc.get("field_id")
+    ):
+        raise ValueError("Calculations must belong to the same organization, project and field")
 
     def _flat_diff(a: dict, b: dict) -> dict:
-        keys = set(a) | set(b)
+        keys = sorted(set(a) | set(b))
         return {k: {"previous": b.get(k), "current": a.get(k)} for k in keys if a.get(k) != b.get(k)}
 
     readiness_by_id_current = {c["requirement_id"]: c["status"] for c in current_calc["readiness"]}
     readiness_by_id_previous = {c["requirement_id"]: c["status"] for c in previous_calc["readiness"]}
     readiness_changes = {
         rid: {"previous": readiness_by_id_previous.get(rid), "current": readiness_by_id_current.get(rid)}
-        for rid in set(readiness_by_id_current) | set(readiness_by_id_previous)
+        for rid in sorted(set(readiness_by_id_current) | set(readiness_by_id_previous))
         if readiness_by_id_current.get(rid) != readiness_by_id_previous.get(rid)
     }
     return {
