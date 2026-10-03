@@ -13,7 +13,6 @@ __pycache__/
 data/
 docs/
 mid/
-methodologies/
 tests/
 frontend/
 app.py

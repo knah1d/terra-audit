@@ -13,6 +13,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY src/ src/
 COPY backend/ backend/
+COPY methodologies/ methodologies/
 
 # src/database.py resolves its default SQLite path relative to this file
 # (repo_root/data/project_store.db) and creates the directory itself —
