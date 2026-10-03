@@ -31,7 +31,7 @@ def access(user, project_id, field_id=None):
     except PermissionError as exc:
         raise HTTPException(403, str(exc)) from exc
     if field_id is not None and field_id not in ws.active_fields(user["org_id"], project_id):
-        raise HTTPException(404, "Active project field not found")
+        raise HTTPException(404, "Field is not an active member of this project. Assign it under Project fields and check membership dates before requesting an explanation.")
 
 
 @router.post("/explain")

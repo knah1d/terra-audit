@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { useProjectFields } from "@/hooks/use-projects";
 import { Button } from "@/components/ui/Button";
 import { useAiExplain } from "@/hooks/use-ai-explain";
 
@@ -7,6 +8,13 @@ export function ExplainButton({ projectId, request, children }: {
   projectId: string; request: Record<string, unknown>; children: React.ReactNode;
 }) {
   const ai = useAiExplain(projectId);
+  const membership = useProjectFields(projectId);
+  const today = new Date().toISOString().slice(0, 10);
+  const active = membership.data?.some(row => row.field_id === request.field_id && !row.removed_at
+    && row.effective_start_date <= today && (!row.effective_end_date || row.effective_end_date >= today));
+  const unavailable = membership.isError ? "Unable to check project membership." :
+    membership.isPending ? "Checking project membership…" :
+    !active ? "Assign this field to this project with an active membership before requesting an explanation." : null;
   const [open, setOpen] = useState(false);
   const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -14,7 +22,10 @@ export function ExplainButton({ projectId, request, children }: {
     else dialog.current?.close();
   }, [open]);
   return <>
-    <Button variant="secondary" size="sm" onClick={() => { setOpen(true); void ai.request(request); }}>{children}</Button>
+    <span className="inline-flex flex-col items-start gap-1">
+      <Button variant="secondary" size="sm" disabled={!active || membership.isError} title={unavailable || undefined} onClick={() => { setOpen(true); void ai.request(request); }}>{children}</Button>
+      {unavailable && <span className="text-xs text-text-secondary">{unavailable} {!membership.isPending && <a href={`/projects/${encodeURIComponent(projectId)}/fields`} className="underline">Project fields</a>}</span>}
+    </span>
     <dialog ref={dialog} onCancel={() => setOpen(false)} className="fixed m-auto max-h-[85vh] w-[min(720px,95vw)] overflow-y-auto rounded-xl border border-border bg-background p-6 text-text-primary backdrop:bg-black/60">
       <div className="flex items-start justify-between gap-4">
         <h2 className="ui-section-title">AI explanation — draft, not an official readiness decision</h2>
