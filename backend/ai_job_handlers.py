@@ -44,3 +44,39 @@ def handle_workspace(job, ctx):
         return {"record_id": job["job_id"]}
     except (ValueError, PermissionError, FileNotFoundError) as exc:
         raise InvalidJobRequest(str(exc)) from exc
+
+
+def handle_explanation(job, ctx):
+    from src.ai.explanations import packet_for
+    from src.ai.validate import generate_explanation
+    org, payload = job["org_id"], job["payload"]
+    project = payload["project_id"]
+
+    def checkpoint():
+        if ctx.cancel_requested():
+            raise JobCancelled("AI explanation cancelled before publication")
+        packet = packet_for(org, project, payload["requested_by"], payload["request"])
+        if (packet["context_sha256"] != payload["context_sha256"] or
+                packet["evidence_fingerprint"] != payload["evidence_fingerprint"]):
+            raise ValueError("Evidence changed; request a new explanation")
+        return packet
+
+    try:
+        packet = checkpoint()
+        try:
+            ws.get_entry(org, project, job["job_id"], "explanation")
+        except ValueError:
+            pass
+        else:
+            return {"record_id": job["job_id"]}
+        output = generate_explanation(packet, org)
+        checkpoint()
+        output.update(action=packet["action"], field_id=packet["field_id"],
+                      evidence_fingerprint=packet["evidence_fingerprint"],
+                      requested_by=payload["requested_by"],
+                      calculation_id=payload["request"].get("calculation_id"),
+                      assessment_id=payload["request"].get("assessment_id"))
+        ws.append(org, project, "explanation", output, job["job_id"])
+        return {"record_id": job["job_id"]}
+    except (ValueError, PermissionError, FileNotFoundError, TypeError) as exc:
+        raise InvalidJobRequest(str(exc)) from exc

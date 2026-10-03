@@ -88,6 +88,7 @@ def _self_hosted(instructions, data, schema, org_id, media, vision):
         raise ValueError("The self-hosted provider is text-only; scanned-document OCR needs AI_PROVIDER=openai "
                          "or a separate OCR path")
     base_url = os.environ["SELF_HOSTED_BASE_URL"].rstrip("/")
+    endpoint = base_url + ("/chat/completions" if base_url.endswith("/v1") else "/v1/chat/completions")
     model = os.environ["SELF_HOSTED_MODEL"]
     _throttle(org_id)
     headers = {}
@@ -95,18 +96,29 @@ def _self_hosted(instructions, data, schema, org_id, media, vision):
         headers["Authorization"] = f"Bearer {os.environ['SELF_HOSTED_API_KEY']}"
     try:
         with httpx.Client(timeout=float(os.environ.get("SELF_HOSTED_TIMEOUT_SECONDS", "600"))) as client:
-            response = client.post(f"{base_url}/v1/chat/completions", headers=headers, json={
+            request = {
                 "model": model, "temperature": 0, "max_tokens": int(os.environ.get("SELF_HOSTED_MAX_TOKENS", "2000")),
-                "messages": [
-                    {"role": "system", "content": instructions},
-                    {"role": "user", "content": json.dumps(data, default=str, allow_nan=False)},
-                ],
+                "messages": [{"role": "system", "content": instructions},
+                             {"role": "user", "content": json.dumps(data, default=str, allow_nan=False)}],
                 "response_format": {"type": "json_schema",
                                     "json_schema": {"name": "evidence_response", "strict": True, "schema": schema}},
-                # Qwen3-family chat templates emit reasoning text unless
-                # disabled; ignored by servers/templates that don't use it.
                 "chat_template_kwargs": {"enable_thinking": False},
-            })
+            }
+            mode = os.environ.get("SELF_HOSTED_SCHEMA_FORMAT", "openai")
+            if mode not in {"openai", "llama_cpp"}:
+                raise ValueError("SELF_HOSTED_SCHEMA_FORMAT must be openai or llama_cpp")
+            if mode == "llama_cpp":
+                request["response_format"] = {"type": "json_schema", "schema": schema}
+            response = client.post(endpoint, headers=headers, json=request)
+            # Only retry a recognized schema-envelope rejection. Never drop
+            # the schema or retry unrelated auth/model/network failures.
+            if mode == "openai" and response.status_code in {400, 422}:
+                detail = response.text.lower()
+                if ("response_format" in detail or "json_schema" in detail) and any(
+                        word in detail for word in ("unsupported", "unknown", "unexpected", "required", "invalid")):
+                    request["response_format"] = {"type": "json_schema", "schema": schema}
+                    response = client.post(endpoint, headers=headers, json=request)
+
         if response.status_code != 200:
             raise ValueError(f"Self-hosted model request failed (HTTP {response.status_code})")
         body = response.json()
@@ -190,6 +202,10 @@ def generate(instructions, data, schema, *, org_id, media=None, vision=False):
     name = provider_name()
     if name not in _PROVIDERS:
         raise ValueError(f"Unknown AI_PROVIDER {name!r}; use self_hosted, openai, or fake")
+    if name == "openai":
+        from src.ai.workspace import provider_allowed
+        if not provider_allowed(org_id, name):
+            raise ValueError("OpenAI is not allowed for this organization; an administrator must explicitly enable external-provider access")
     if not configured():
         raise ValueError({
             "self_hosted": "Configure SELF_HOSTED_BASE_URL and SELF_HOSTED_MODEL on the API and worker",

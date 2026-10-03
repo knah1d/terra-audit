@@ -23,3 +23,5 @@ __pycache__/
 CLAUDE.md
 data/
 .streamlit/
+# Local AI evaluation measurements (may include provider failure details)
+tests/ai_eval/results/

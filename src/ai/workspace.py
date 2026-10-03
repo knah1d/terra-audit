@@ -8,13 +8,17 @@ from src.database import get_db_connection
 from src.monitoring import digest
 from src.projects import get_project, get_project_member, list_project_fields
 
-KINDS = {"model", "prediction", "answer", "document", "document_review", "deployment"}
+KINDS = {"model", "prediction", "answer", "document", "document_review", "deployment", "explanation"}
 
 
 def initialize_tables(conn):
     conn.execute(text("""CREATE TABLE IF NOT EXISTS ai_records (
         id TEXT PRIMARY KEY, org_id TEXT NOT NULL, project_id TEXT NOT NULL,
         kind TEXT NOT NULL, created_at TEXT NOT NULL, payload TEXT NOT NULL)"""))
+    conn.execute(text("""CREATE TABLE IF NOT EXISTS ai_provider_permissions (
+        org_id TEXT NOT NULL, provider TEXT NOT NULL, allowed INTEGER NOT NULL DEFAULT 0,
+        updated_by TEXT NOT NULL, updated_at TEXT NOT NULL,
+        PRIMARY KEY(org_id, provider))"""))
     conn.execute(text("CREATE INDEX IF NOT EXISTS idx_ai_scope ON ai_records(org_id,project_id,kind)"))
     conn.execute(text("""CREATE TABLE IF NOT EXISTS ai_deployments (
         org_id TEXT NOT NULL, project_id TEXT NOT NULL, revision INTEGER NOT NULL,
@@ -113,3 +117,23 @@ def frozen_corpus(org_id, project_id):
     corpus.pop("sha256", None)
     corpus["project_id"] = project_id
     return {**corpus, "sha256": digest(corpus)}
+
+
+def provider_allowed(org_id, provider):
+    with get_db_connection() as conn:
+        value = conn.execute(text("SELECT allowed FROM ai_provider_permissions WHERE org_id=:o AND provider=:p"),
+                             {"o": org_id, "p": provider}).scalar()
+    return value == 1
+
+
+def set_provider_allowed(org_id, provider, allowed, actor):
+    if provider != "openai":
+        raise ValueError("Only OpenAI requires external-provider opt-in")
+    with get_db_connection() as conn:
+        conn.execute(text("""INSERT INTO ai_provider_permissions(org_id,provider,allowed,updated_by,updated_at)
+            VALUES (:o,:p,:a,:u,:t) ON CONFLICT(org_id,provider) DO UPDATE SET
+            allowed=excluded.allowed, updated_by=excluded.updated_by, updated_at=excluded.updated_at"""),
+            {"o": org_id, "p": provider, "a": int(allowed), "u": actor,
+             "t": datetime.now(timezone.utc).isoformat()})
+        conn.commit()
+    return {"provider": provider, "allowed": allowed}

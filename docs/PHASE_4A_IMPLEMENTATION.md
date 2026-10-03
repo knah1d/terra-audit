@@ -120,3 +120,52 @@ liming retrieval; VMD0054 page reference; all correction items; stable packet
 hashes and invalidation; validator negative/normalization cases; two-tenant
 isolation; no readiness/status writes; fake-provider UI; real-provider quality;
 and final backend/frontend checks. Record each result only after running it.
+
+
+## Explanation queue and UI implementation — 2026-10-04
+
+Added `ai_explain` durable jobs, read-access endpoints, immutable explanation
+records, packet-hash/evidence-fingerprint cache lookup, and authorization and
+packet rechecks before publication. Job polling uses the queue's actual
+`done`/`error` terminal statuses. Explicit retries can create a new job after
+terminal failure without changing the cache identity.
+
+Calculation history supports blocked explanations and version diffs;
+missing/needs-review/unsupported readiness rows support scoped explanations
+when project and monitoring dates are selected. Saved leakage assessments have
+an explanation action. The shared dialog labels drafts, resolves server
+citations, links missing evidence, and shows provider/model/context identity.
+
+Added organization-scoped external-provider permission storage. OpenAI is
+blocked centrally by default (including older assistant and OCR callers).
+Admins can opt in using `PUT /projects/{project_id}/ai/provider-permission`
+with `{"allowed": true}`; this is an organization-wide decision, not only for
+that project. Revocation is checked on each provider call. Cached explanations
+can still be viewed without another external-provider request.
+
+No tests, builds, type checks, migrations, provider calls, or deployment were
+run for this change, at the user's request. These are implementation changes,
+not verified acceptance results. Legacy free-form `answer()` still uses its
+exact-quote validation path; migration to the shared sentence validator,
+self-hosted runtime compatibility, fixture generation/evaluation, and real
+hosted benchmarks remain outstanding. The evaluation thresholds remain
+requirements, not reported achievements.
+
+
+## Assistant migration and self-hosted tooling — 2026-10-04
+
+The older `answer()` now builds sentence sources, uses the shared validator and
+one-retry policy, and preserves the existing claims/citations UI contract with
+server-resolved quotes. It checks authorization directly and rejects changed
+source evidence after generation. It still uses project evidence retrieval;
+action-specific methodology retrieval remains in the action packet builders.
+
+Self-hosted calls accept base URLs with or without `/v1` and support the
+upstream llama.cpp schema envelope, with no unconstrained fallback.
+`docs/AI_SELF_HOSTED.md` records deployed-service configuration and the OCR
+scope decision. Installed-runtime compatibility remains unverified.
+
+Added `scripts/ai_export_packet.py` and `scripts/ai_eval.py`, plus the required
+20-case coverage inventory. Exporting frozen fixture packets, adversarial
+fixtures, and provider evaluation remain outstanding. No tests, builds, syntax
+checks, model calls, benchmarks, or deployment were run during this work.
