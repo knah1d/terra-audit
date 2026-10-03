@@ -1,27 +1,8 @@
 """
-Authentication primitives — pure bcrypt + SQL, no UI framework.
-
-This module is imported by BOTH clients (the Streamlit app and the
-FastAPI backend), so it must stay free of Streamlit. The
-Streamlit-specific session/form helpers that used to live here
-(current_user/login_form/logout and the SESSION_KEY they share) are in
-src/auth_streamlit.py — they were the only four things in this file that
-touched `st.*`, and their presence meant `import streamlit` sat at module
-scope, so `uvicorn backend.main:app` pulled the entire Streamlit runtime
-(~2,800 modules) into an API process that never renders a widget.
-tests/backend/test_no_streamlit_in_api.py locks that boundary in.
-
-Deliberately a custom bcrypt-hashed `users` table, not
-`streamlit-authenticator` or an external IdP:
-
-- `streamlit-authenticator`'s flat YAML/dict credential model fights the
-  relational org/role schema this app already needs (see
-  src/database.py's `users` table, org_id + role columns) — it would mean
-  maintaining a second, parallel identity store.
-- An external IdP (Auth0/Clerk/Cognito via OIDC) is the correct long-term
-  answer once an enterprise customer contractually requires SSO, but real
-  integration cost for zero real users today, and duplicate identity
-  storage until that day comes. Revisit then, not now.
+Authentication primitives: bcrypt and SQL, independent of UI frameworks.
+Used by FastAPI and operational scripts. Identity and organization roles
+are stored in the shared database; the retired Streamlit UI is not required.
+Import boundaries are checked in tests/backend/test_import_hygiene.py.
 """
 
 import uuid

@@ -1,9 +1,7 @@
 # Build context is the repo root (see docker-compose.yml) — this image
 # needs both src/ (calculation/pipeline core) and backend/ (the FastAPI
-# app that wraps it directly, per CLAUDE.md). Deliberately excludes
-# requirements-ui.txt/app.py/Streamlit — this image only ever runs
-# `uvicorn backend.main:app`, matching requirements.txt's own doc comment
-# and tests/backend/test_no_streamlit_in_api.py's guarantee.
+# app that wraps it directly). This image runs FastAPI or the durable
+# worker and installs only the shared Python requirements.
 FROM python:3.12-slim
 
 WORKDIR /app

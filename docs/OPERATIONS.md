@@ -108,18 +108,12 @@ before Phase 4 (jobs submitted via the old `BackgroundTasks` path):
   missing payload key rather than crashing unhelpfully; in practice,
   submit a fresh request instead of waiting on one of these).
 
-## Streamlit / FastAPI coexistence
+## Supported application
 
-`app.py` (the original Streamlit UI) is untouched by Phase 4 and does
-**not** use the durable queue — its long-running operations (GEE calls,
-AI training) remain synchronous/in-process, exactly as before. This is a
-deliberate, bounded scope decision: retrofitting Streamlit's own
-execution model onto the new worker architecture is out of scope for
-this phase. Both UIs continue to share the same database and the same
-`src/*` calculation core; a job queued via the FastAPI+Next.js stack
-runs on the worker, while the same operation triggered from the
-Streamlit app still blocks that Streamlit session until it completes,
-same as it always has.
+Next.js is the supported UI. FastAPI serves requests and a separate durable
+worker processes queued operations. Both Python processes reuse `src/` and
+must share the configured database and attachment storage. The legacy
+Streamlit entrypoint and UI dependencies have been removed.
 
 ## Admin visibility
 

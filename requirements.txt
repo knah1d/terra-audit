@@ -1,8 +1,8 @@
 # Core library (src/) + FastAPI backend.
 #
-# Deliberately excludes the Streamlit UI stack — see requirements-ui.txt.
+# Deliberately excludes the Streamlit UI stack — the legacy UI has been retired.
 # Installing this alone is enough to run `uvicorn backend.main:app`, which
-# is asserted by tests/backend/test_no_streamlit_in_api.py. For local
+# is asserted by tests/backend/test_import_hygiene.py. For local
 # development of both clients, install both files.
 
 # --- data / numerics (shared by src/ and both clients) ---
