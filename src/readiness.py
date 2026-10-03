@@ -710,7 +710,7 @@ def build_readiness_checklist(org_id, field, accounting_pathway, season_ids, mon
     return checks, bundle_id
 
 
-def guided_enrollment(org_id: str, field: dict) -> dict:
+def guided_enrollment(org_id: str, field: dict, project_id: str | None = None) -> dict:
     """A lighter-weight view than the full calculation-context readiness
     checklist — usable BEFORE a user has chosen a monitoring period or
     entered engine inputs (docs/RESEARCH_IMPLEMENTATION_PLAN_2026-09-23.md
@@ -724,7 +724,7 @@ def guided_enrollment(org_id: str, field: dict) -> dict:
     calculation evaluation."""
     field_id = field["field_id"]
     accounting_pathway = PATHWAYS.get(field["field_type"])
-    bundle = registry.resolve_bundle_for_project(org_id, None, accounting_pathway) if accounting_pathway else None
+    bundle = registry.resolve_bundle_for_project(org_id, project_id, accounting_pathway) if accounting_pathway else None
     bundle_id = bundle["bundle_id"] if bundle else None
 
     all_seasons = monitoring.records("crop_seasons", org_id, field_id)

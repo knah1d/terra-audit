@@ -19,6 +19,16 @@ export function Providers({
   session: SessionClaims | null;
   children: React.ReactNode;
 }) {
+  // Remount the entire account-data boundary before rendering a new identity.
+  // An effect would run after children had already read the previous cache.
+  const identity = session ? `${session.org_id}:${session.user_id}` : "anonymous";
+  return <AccountProviders key={identity} session={session}>{children}</AccountProviders>;
+}
+
+function AccountProviders({ session, children }: {
+  session: SessionClaims | null;
+  children: React.ReactNode;
+}) {
   const [queryClient] = useState(
     () =>
       new QueryClient({

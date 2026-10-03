@@ -311,7 +311,7 @@ REQUIREMENTS = [
     {"requirement_id": "vm0042.historical_lookback", "bundle_id": "vm0042-2026-06",
      "title": "Historical look-back period date coverage",
      "source_document_id": "vm0042-v2.2",
-     "source_section": "'Historical look-back period' definition; 'Development of Schedule of Activities "
+     "source_section": "'Historical look-back period' definition; §6 'Development of Schedule of Activities "
                         "in the Baseline Scenario' (minimum 3 years)",
      "required_evidence": "Crop-season/practice records covering at minimum the 3 years immediately "
                            "preceding the monitoring period start. A 'fallow' season counts as documented "
@@ -323,7 +323,7 @@ REQUIREMENTS = [
     {"requirement_id": "vm0042.rotation_completeness", "bundle_id": "vm0042-2026-06",
      "title": "Complete crop rotation in the baseline schedule",
      "source_document_id": "vm0042-v2.2",
-     "source_section": "'Development of Schedule of Activities in the Baseline Scenario': 'must include at "
+     "source_section": "§6 'Development of Schedule of Activities in the Baseline Scenario': 'must include at "
                         "least one complete crop rotation, where applicable. Where a crop rotation is not "
                         "implemented in the baseline, x >= 3 years.'",
      "required_evidence": "Only applies when the baseline practice schedule declares crop_rotation=True — "
@@ -553,7 +553,9 @@ def current_bundle_for_pathway(accounting_pathway: str) -> dict | None:
             "SELECT * FROM methodology_bundles WHERE accounting_pathway = :pathway AND is_current = 1 "
             "ORDER BY effective_from DESC LIMIT 1"
         ), {"pathway": accounting_pathway}).mappings().fetchone()
-    return dict(row) if row else None
+    # Both explicit and default resolution must return the complete bundle,
+    # including document hashes for snapshots and scoped methodology retrieval.
+    return get_bundle(row["bundle_id"]) if row else None
 
 
 def get_bundle(bundle_id: str) -> dict | None:
@@ -568,7 +570,7 @@ def get_bundle(bundle_id: str) -> dict | None:
         docs = conn.execute(text("""
             SELECT d.*, bd.role FROM methodology_bundle_documents bd
             JOIN methodology_documents d ON d.document_id = bd.document_id
-            WHERE bd.bundle_id = :bundle_id
+            WHERE bd.bundle_id = :bundle_id ORDER BY d.document_id
         """), {"bundle_id": bundle_id}).mappings().fetchall()
     bundle["documents"] = [dict(d) for d in docs]
     return bundle

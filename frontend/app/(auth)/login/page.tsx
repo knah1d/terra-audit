@@ -3,7 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Leaf } from "lucide-react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -19,7 +19,6 @@ const loginSchema = z.object({
 type LoginForm = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const [serverError, setServerError] = useState<string | null>(null);
   const {
@@ -40,8 +39,8 @@ export default function LoginPage() {
       setServerError(body.detail ?? "Login failed");
       return;
     }
-    router.push(searchParams.get("next") ?? "/fields");
-    router.refresh();
+    const next = searchParams.get("next");
+    window.location.replace(next?.startsWith("/") && !next.startsWith("//") ? next : "/fields");
   }
 
   return (
