@@ -202,6 +202,7 @@ HANDLERS = {
     "multicrop_monitoring": handle_multicrop_monitoring,
 }
 
-from backend.ai_job_handlers import handle_workspace
+from backend.ai_job_handlers import handle_workspace, handle_explanation
+HANDLERS["ai_explain"] = handle_explanation
 HANDLERS.update({"workspace_" + kind: handle_workspace
                  for kind in ("train", "prediction", "answer", "document")})

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ExplainButton } from "@/components/ai/ExplainDrawer";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSession } from "@/app/providers";
 import { useFieldContext } from "@/components/fields/FieldContext";
@@ -39,12 +40,13 @@ function download(value: unknown, name: string) {
   const a = document.createElement("a"); a.href = url; a.download = name; a.click(); URL.revokeObjectURL(url);
 }
 
-function ReadinessList({ checklist }: { checklist: ReadinessCheck[] }) {
+function ReadinessList({ checklist, explain }: { checklist: ReadinessCheck[]; explain?: (id: string) => React.ReactNode }) {
   return (
     <div className="space-y-2">
       {checklist.map((c) => (
         <div key={c.requirement_id} className="flex flex-wrap items-start gap-2 border-t border-border py-2 text-sm first:border-t-0 first:pt-0">
           <Badge tone={READINESS_TONE[c.status]}>{c.status.replace("_", " ")}</Badge>
+          {explain && ["missing", "needs_review", "unsupported"].includes(c.status) && explain(c.requirement_id)}
           <div className="min-w-0 flex-1">
             <p className="font-mono text-xs text-text-tertiary">{c.requirement_id} {c.determination === "expert" && <span className="italic">· expert determination</span>}</p>
             <p>{c.explanation}</p>
@@ -91,6 +93,12 @@ export default function CalculationsPage() {
 
   const openCalculations = (history.data ?? []).filter((r) => !r.legacy && r.status !== "superseded");
   const legacyCount = (history.data ?? []).filter((r) => r.legacy).length;
+
+  const explainRequirement = projectId && periodStart && periodEnd ? (id: string) => (
+    <ExplainButton projectId={projectId} request={{ action: "missing_evidence", field_id: field.field_id,
+      requirement_id: id, monitoring_period_start: periodStart, monitoring_period_end: periodEnd,
+      season_ids: selectedSeasons }}>Explain</ExplainButton>
+  ) : undefined;
 
   function toggleSeason(id: string) {
     setSelectedSeasons((prev) => (prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]));
@@ -196,7 +204,7 @@ export default function CalculationsPage() {
             This reflects what this implementation can check automatically, plus any recorded expert
             determinations — it is not a certification of full methodology compliance.
           </p>
-          <ReadinessList checklist={readiness.data.checklist} />
+          <ReadinessList checklist={readiness.data.checklist} explain={explainRequirement} />
         </Card>
       )}
 
@@ -273,7 +281,7 @@ export default function CalculationsPage() {
             <Link className="underline" href={`/fields/${field.field_id}/production-records`}>Manage production and leakage evidence</Link>
             <details><summary>Leakage steps and sources</summary><pre className="overflow-auto whitespace-pre-wrap text-xs">{JSON.stringify(preview.data.result.leakage, null, 2)}</pre></details>
           </div>}
-          <div className="mt-3"><ReadinessList checklist={preview.data.readiness} /></div>
+          <div className="mt-3"><ReadinessList checklist={preview.data.readiness} explain={explainRequirement} /></div>
         </Card>
       )}
 
@@ -327,7 +335,11 @@ export default function CalculationsPage() {
                   <span className="ml-2">{new Date(row.created_at).toLocaleString()}</span>
                   <span className="ml-2 font-mono">{row.final_issuance ?? "—"} tCO2e</span>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
+                  {!row.legacy && row.project_id && row.calculation_id && <>
+                    {row.status === "draft" && <ExplainButton projectId={row.project_id} request={{ action: "explain_block", field_id: field.field_id, calculation_id: row.calculation_id }}>Explain why blocked</ExplainButton>}
+                    <ExplainButton projectId={row.project_id} request={{ action: "diff_since_previous", field_id: field.field_id, calculation_id: row.calculation_id }}>What changed?</ExplainButton>
+                  </>}
                   {!row.legacy && row.status === "ready_for_review" && row.project_id && writable && (
                     <Button
                       variant="secondary" size="sm" loading={createSubmission.isPending}

@@ -1,5 +1,7 @@
 "use client";
 
+import { ExplainButton } from "@/components/ai/ExplainDrawer";
+
 import { useState } from "react";
 import { useSession } from "@/app/providers";
 import { useFieldContext } from "@/components/fields/FieldContext";
@@ -60,6 +62,7 @@ function LeakageCalculator({ fieldId, commodities, writable }: { fieldId: string
       <option value="">New assessment</option>
       {saved.data?.map((a) => <option key={a.assessment_id} value={a.assessment_id}>{a.period_start} – {a.period_end} · {a.project_id} · {a.created_at}</option>)}
     </Select>
+    {initial && <ExplainButton projectId={initial.project_id} request={{ action: "explain_leakage", field_id: fieldId, assessment_id: initial.assessment_id }}>Explain this leakage result</ExplainButton>}
     {initial && <details className="my-2 text-sm"><summary>Stored evidence and parameters</summary><pre className="overflow-auto whitespace-pre-wrap text-xs">{JSON.stringify(initial.payload, null, 2)}</pre></details>}
     {writable && <LeakageAssessmentForm key={selected || "new"} fieldId={fieldId} commodities={commodities} initial={initial} />}
   </Card>;
