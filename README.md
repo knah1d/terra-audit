@@ -19,30 +19,33 @@ observation snapshots, and a field-isolated RF/XGBoost crop benchmark to both
 accounting pathways. It is a research pilot, not a validated classifier for
 every crop. See [multi-crop scope and workflow](docs/MULTICROP.md).
 
-## Two UIs, one calculation core
+## Architecture
 
-This repo currently ships **two** frontends against the **same** `src/`
-calculation/pipeline logic and the same database — a Streamlit app
-(the original, still fully featured) and a newer FastAPI + Next.js
-stack (`backend/` + `frontend/`). Nothing under `backend/` forks or
-duplicates `src/*` logic; every router calls it directly.
+The supported application is Next.js + FastAPI. Next.js calls the API
+through its server-side proxy; FastAPI and the durable job worker reuse
+`src/` for calculations, evidence, methodology rules, and persistence.
+The legacy Streamlit UI has been retired.
 
+```text
+frontend/               Next.js pages, components, hooks, API proxy
+backend/                FastAPI routes, schemas, authorization, worker
+src/                    Shared Python application and calculation core
+methodologies/          Source methodology documents
+scripts/                Operational tools
+tests/                  Backend, core, and frontend verification fixtures
+docs/                   Product, methodology, and operations documentation
 ```
-src/                    ← calculation engines, SAR pipeline, AI models, DB (shared by both UIs)
-app.py                  ← Streamlit UI (original)
-backend/                ← FastAPI REST API
-frontend/               ← Next.js UI (talks to backend/, not to src/ directly)
-```
+
+Production uses Vercel for the frontend and Render for the backend.
+See [architecture and cleanup roadmap](docs/ARCHITECTURE.md).
 
 ## Setup
 
 ```bash
-# Python side (Streamlit app + FastAPI backend)
+# Python API and worker
 python -m venv venv
 source venv/bin/activate
-pip install -r requirements.txt        # full stack, incl. Streamlit
-# or, for an API-only deployment that never renders Streamlit:
-pip install -r requirements-ui.txt
+pip install -r requirements.txt
 
 # One-time Earth Engine auth (needed for the SAR pipeline / signal-analytics)
 earthengine authenticate
@@ -57,6 +60,7 @@ Create a `.env` in the project root:
 ```
 EE_PROJECT=your-gcp-project-id
 JWT_SECRET=some-long-random-string        # required for the FastAPI backend
+FRONTEND_PUBLIC_URL=https://your-app.vercel.app  # Render backend: account links
 ```
 
 Optional: `DATABASE_URL` (e.g. `postgresql+psycopg2://user:pass@host:5432/dbname`)
@@ -66,16 +70,6 @@ registration-email settings.
 
 ## Running it
 
-**Streamlit app** (original UI):
-
-```bash
-source venv/bin/activate
-streamlit run app.py
-# http://localhost:8501
-```
-
-**FastAPI + Next.js** (newer stack):
-
 ```bash
 source venv/bin/activate
 uvicorn backend.main:app --reload      # http://127.0.0.1:8000, Swagger at /docs
@@ -84,7 +78,7 @@ cd frontend
 npm run dev                            # http://localhost:3000
 ```
 
-Both UIs can run against the same database at the same time.
+Run the durable worker separately with `python -m backend.worker` for queued jobs.
 
 ## Tests
 

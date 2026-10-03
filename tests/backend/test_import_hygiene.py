@@ -41,21 +41,12 @@ def test_importing_the_api_does_not_import_streamlit():
 
 
 def test_importing_auth_primitives_does_not_import_streamlit():
-    """src/auth.py is shared by both clients, so it is the file that must
-    stay clean — the split is only load-bearing if this holds."""
+    """Authentication primitives must remain independent of UI frameworks."""
     assert _probe("""
         import sys
         import src.auth  # noqa: F401
         print("streamlit" in sys.modules)
     """) == "False"
-
-
-def test_the_streamlit_helpers_are_still_importable():
-    """The split must not have broken app.py's side of it."""
-    assert _probe("""
-        from src.auth_streamlit import SESSION_KEY, current_user, login_form, logout  # noqa: F401
-        print(SESSION_KEY)
-    """) == "auth_user"
 
 
 # --- import-time side effects -------------------------------------------

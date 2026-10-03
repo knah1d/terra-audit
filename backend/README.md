@@ -1,8 +1,8 @@
 # Terra Audit API
 
 FastAPI backend wrapping the existing `src/` calculation/pipeline logic
-behind REST endpoints — Part A of `.claude/plans/misty-growing-yao.md`.
-Coexists with the Streamlit app (`app.py`) against the same database.
+behind REST endpoints for the Next.js frontend. The durable worker uses
+the same core and database; the legacy Streamlit UI has been retired.
 
 ## Run
 

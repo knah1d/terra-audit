@@ -4,10 +4,7 @@ FastAPI application entrypoint — .claude/plans/misty-growing-yao.md Part A1.
 Run with: uvicorn backend.main:app --reload
 Swagger UI at /docs.
 
-Coexists with the Streamlit app (app.py) against the same database
-throughout the transition — see the plan's "migration/coexistence
-strategy" section. Nothing here forks src/ logic; every router imports
-and calls src.* directly.
+FastAPI and the durable worker reuse src/ application logic.
 """
 
 from contextlib import asynccontextmanager
