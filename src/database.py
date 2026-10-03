@@ -95,6 +95,8 @@ def initialize_database():
         initialize_soil_evidence_tables(conn)
         from src.production_records import initialize_tables as initialize_production_records_tables
         initialize_production_records_tables(conn)
+        from src.methodology_library import initialize_tables as initialize_methodology_library_tables
+        initialize_methodology_library_tables(conn)
         from src.ai.workspace import initialize_tables as initialize_ai_tables
         initialize_ai_tables(conn)
         from src.account_access import initialize_tables as initialize_account_tables

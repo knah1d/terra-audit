@@ -2,12 +2,10 @@
 import hashlib
 import io
 import json
-import os
 import re
 import zipfile
 import xml.etree.ElementTree as ET
 
-import httpx
 from src.ai import workspace as ws
 from src.database import get_field
 from src.monitoring import records, digest
@@ -15,49 +13,9 @@ from src.projects import get_attachment, get_project
 from src.storage import get_storage
 
 
-def configured():
-    return bool(os.environ.get("OPENAI_API_KEY") and os.environ.get("OPENAI_MODEL"))
-
-
-def generate(instructions, data, schema, *, org_id, media=None, vision=False):
-    if not configured():
-        raise ValueError("Configure OPENAI_API_KEY and OPENAI_MODEL on the API and worker to enable the assistant")
-    model = os.environ.get("OPENAI_VISION_MODEL") if vision else os.environ["OPENAI_MODEL"]
-    if not model:
-        raise ValueError("Configure OPENAI_VISION_MODEL to extract scanned PDFs or images")
-    # Charge the quota for each actual attempt, including OCR pages. A queued
-    # request may make several calls, so counting only jobs undercounts usage.
-    from src.account_access import throttle
-    if not throttle("ai-provider:" + org_id, int(os.environ.get("AI_PROVIDER_REQUESTS_PER_DAY", "100")), 86400):
-        raise ValueError("Organization AI daily provider-request limit reached")
-    provider_input = json.dumps(data, default=str, allow_nan=False)
-    if media:
-        provider_input = [{"role": "user", "content": [
-            {"type": "input_text", "text": provider_input}, *media]}]
-    try:
-        with httpx.Client(timeout=90) as client:
-            response = client.post("https://api.openai.com/v1/responses", headers={
-                "Authorization": f"Bearer {os.environ['OPENAI_API_KEY']}"}, json={
-                "model": model, "store": False, "max_output_tokens": 8000 if vision else 4000,
-                "instructions": instructions,
-                "input": provider_input,
-                "text": {"format": {"type": "json_schema", "name": "evidence_response", "strict": True, "schema": schema}}})
-        if response.status_code != 200:
-            raise ValueError(f"AI provider request failed (HTTP {response.status_code}); check model configuration and account limits")
-        body = response.json()
-        if body.get("status") != "completed":
-            raise ValueError("AI response was incomplete; shorten the request and try again")
-        content = [c["text"] for item in body.get("output", []) if item.get("type") == "message"
-                   for c in item.get("content", []) if c.get("type") == "output_text"]
-        if len(content) != 1:
-            raise ValueError("AI provider declined or returned no structured answer")
-        parsed = json.loads(content[0])
-        if not isinstance(parsed, dict):
-            raise ValueError("AI provider returned an invalid structured response")
-    except (httpx.HTTPError, json.JSONDecodeError) as exc:
-        raise ValueError("AI provider is unavailable or returned an invalid response") from exc
-    return parsed, {"provider": "openai", "model": body.get("model", model),
-                    "response_id": body.get("id"), "usage": body.get("usage"), "store": False}
+# Provider selection (self-hosted / OpenAI / fake) lives in src/ai/providers.py;
+# re-exported here so existing imports keep working.
+from src.ai.providers import configured, generate  # noqa: F401
 
 
 def obj(properties):
