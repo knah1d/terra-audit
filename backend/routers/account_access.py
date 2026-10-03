@@ -1,12 +1,10 @@
 import json
-import os
-from urllib.parse import urlsplit
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
 
-from backend.config import BREVO_API_KEY, EMAIL_FROM
+from backend.config import BREVO_API_KEY, EMAIL_FROM, FRONTEND_PUBLIC_URL
 from backend.deps import require_admin
 from src import account_access as accounts
 from src.auth import get_user_by_email
@@ -37,11 +35,7 @@ class Consume(BaseModel):
 
 
 def link_url(token):
-    base = os.environ.get("FRONTEND_PUBLIC_URL", "http://localhost:3000").rstrip("/")
-    parts = urlsplit(base)
-    if parts.scheme not in {"http", "https"} or not parts.netloc or parts.query or parts.fragment or parts.username:
-        raise ValueError("FRONTEND_PUBLIC_URL must be an absolute frontend URL")
-    return f"{base}/account-access#token={token}"
+    return f"{FRONTEND_PUBLIC_URL}/account-access#token={token}"
 
 
 @router.post("/team/invitations", status_code=201)

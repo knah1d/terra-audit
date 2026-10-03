@@ -5,7 +5,7 @@
  * auth-flow rationale: httpOnly cookie, forwarded as a Bearer header here).
  */
 
-const BACKEND_URL = process.env.BACKEND_URL ?? "http://127.0.0.1:8000";
+import { getBackendUrl } from "@/lib/server-config";
 
 export class BackendError extends Error {
   status: number;
@@ -34,7 +34,7 @@ export async function backendFetch<T>(
 ): Promise<T> {
   const { method = "GET", token, json, headers = {}, cache } = options;
 
-  const res = await fetch(`${BACKEND_URL}${path}`, {
+  const res = await fetch(`${getBackendUrl()}${path}`, {
     method,
     headers: {
       ...(json !== undefined ? { "Content-Type": "application/json" } : {}),

@@ -14,8 +14,9 @@ uvicorn backend.main:app --reload
 Swagger UI: http://127.0.0.1:8000/docs
 
 Set `JWT_SECRET` in `.env` before running this anywhere but a local
-laptop — without it, a loud `UserWarning` fires and an insecure
-development-only default is used so `uvicorn` still boots.
+laptop. Render (or `APP_ENV=production`) rejects missing or short secrets
+and requires an HTTPS `FRONTEND_PUBLIC_URL` with a non-local host. Local
+development retains a warned signing-key fallback.
 
 ### Self-serve signup (OTP email)
 

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionToken } from "@/lib/session";
 
-const BACKEND_URL = process.env.BACKEND_URL ?? "http://127.0.0.1:8000";
+import { getBackendUrl } from "@/lib/server-config";
 
 /**
  * Generic authenticated proxy: every client-side TanStack Query call goes
@@ -23,7 +23,7 @@ async function proxy(request: NextRequest, path: string[]) {
   }
 
   const search = request.nextUrl.search;
-  const targetUrl = `${BACKEND_URL}/${path.join("/")}${search}`;
+  const targetUrl = `${getBackendUrl()}/${path.join("/")}${search}`;
 
   const forwardHeaders: Record<string, string> = { Authorization: `Bearer ${token}` };
   const contentType = request.headers.get("content-type");
