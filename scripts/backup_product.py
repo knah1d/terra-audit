@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Offline backup of the database and referenced files; never overwrites output.
 
-Stop ALL API/worker/Streamlit writers before invoking with --writers-stopped.
+Stop ALL API/worker writers before invoking with --writers-stopped.
 The flag is an operator assertion, not automatic service control. This command
 makes no changes to the application database or object store.
 """
@@ -102,7 +102,7 @@ if __name__ == "__main__":
     parser.add_argument("--writers-stopped", action="store_true", help="Confirm all application writers have been stopped")
     args = parser.parse_args()
     if not args.writers_stopped:
-        parser.error("Stop API, worker and Streamlit writers, then pass --writers-stopped")
+        parser.error("Stop API and worker writers, then pass --writers-stopped")
     load_dotenv(ROOT / ".env")
     target = args.output.expanduser().resolve()
     live_data = (ROOT / "data").resolve()

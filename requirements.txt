@@ -2,10 +2,9 @@
 #
 # Deliberately excludes the Streamlit UI stack — the legacy UI has been retired.
 # Installing this alone is enough to run `uvicorn backend.main:app`, which
-# is asserted by tests/backend/test_import_hygiene.py. For local
-# development of both clients, install both files.
+# is asserted by tests/backend/test_import_hygiene.py.
 
-# --- data / numerics (shared by src/ and both clients) ---
+# --- data / numerics (shared by the API and worker) ---
 pandas>=2.2.0
 numpy>=1.26.0
 scipy>=1.12.0
