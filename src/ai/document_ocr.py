@@ -19,7 +19,10 @@ OCR_SCHEMA = obj({"text": STRING, "warnings": {"type": "array", "items": STRING}
 
 
 def vision_configured():
-    return bool(os.environ.get("OPENAI_API_KEY") and os.environ.get("OPENAI_VISION_MODEL"))
+    # OCR is only implemented on the OpenAI provider (the self-hosted
+    # provider is text-only — see src/ai/providers.py).
+    from src.ai.providers import provider_name
+    return provider_name() == "openai" and bool(os.environ.get("OPENAI_API_KEY") and os.environ.get("OPENAI_VISION_MODEL"))
 
 
 def _transcribe(org_id, data, mime, page_number, checkpoint):

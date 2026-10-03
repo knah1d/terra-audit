@@ -189,7 +189,13 @@ def _notify_issue(org_id: str, field_id: str, issue: dict) -> None:
                 )
 
 
+def handle_methodology_ingest(job: dict, ctx) -> dict:
+    from src.methodology_library import ingest_all
+    return {"documents": ingest_all()}
+
+
 HANDLERS = {
+    "methodology_ingest": handle_methodology_ingest,
     "signal_run": handle_signal_run,
     "ai_train": handle_ai_train,
     "crop_benchmark": handle_crop_benchmark,

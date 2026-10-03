@@ -5,7 +5,7 @@ and guided enrollment — Phase 1/2 of docs/RESEARCH_IMPLEMENTATION_PLAN_
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from backend.access import require_project_lead
-from backend.deps import get_current_user, get_owned_field, require_writer
+from backend.deps import get_current_user, get_owned_field, require_admin, require_writer
 from backend.schemas.methodology import ProjectApplicabilityRequest, QuantificationUnitCreate
 from src import methodology_registry as registry
 from src import projects as projects_db
@@ -95,3 +95,67 @@ def get_project_eligible_area(project_id: str, user=Depends(get_current_user)):
 @router.get("/fields/{field_id}/guided-enrollment")
 def get_guided_enrollment(field_id: str, user=Depends(get_current_user), field=Depends(_field)):
     return readiness_engine.guided_enrollment(user["org_id"], field)
+
+
+# --------------------------------------------------------------------------
+# Methodology knowledge library (Phase 4A) — see src/methodology_library.py
+# --------------------------------------------------------------------------
+
+@router.post("/methodology/library/ingest", status_code=status.HTTP_202_ACCEPTED)
+def ingest_library(user=Depends(require_admin)):
+    """Queues (re)indexing of every registered local methodology PDF.
+    Idempotent per document sha256 — unchanged PDFs are skipped."""
+    from src.jobs import create_job
+    return {"job_id": create_job(user["org_id"], "methodology_ingest", {"requested_by": user["user_id"]})}
+
+
+@router.get("/methodology/library/status")
+def library_status(user=Depends(get_current_user)):
+    from src import methodology_library
+    return methodology_library.index_status()
+
+
+@router.get("/methodology/library/search")
+def search_library(q: str, bundle_id: str, limit: int = 8, user=Depends(get_current_user)):
+    """Full-text search limited to one bundle's documents."""
+    from src import methodology_library
+    bundle = registry.get_bundle(bundle_id)
+    if bundle is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Methodology bundle not found")
+    return methodology_library.search(q, [d["document_id"] for d in bundle["documents"]],
+                                      min(max(limit, 1), 25), org_id=user["org_id"])
+
+
+@router.get("/methodology/corrections")
+def get_corrections(document_id: str | None = None, user=Depends(get_current_user)):
+    """Public reference mappings with this organization's confirmation status."""
+    from src import methodology_library
+    if document_id and not any(d["document_id"] == document_id for d in registry.list_documents()):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Methodology document not found")
+    return methodology_library.list_corrections(document_id, org_id=user["org_id"])
+
+
+@router.post("/methodology/corrections/{correction_id}/confirm")
+def confirm_correction(correction_id: str, user=Depends(require_admin)):
+    """Confirm the reference mapping for this org; never a readiness decision."""
+    from src import methodology_library
+    try:
+        return methodology_library.confirm_correction(correction_id, user["org_id"], user["user_id"])
+    except LookupError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+
+
+@router.get("/methodology/documents/{document_id}/file")
+def get_document_file(document_id: str, user=Depends(get_current_user)):
+    """Serves a registered methodology PDF so a citation can open it
+    (the client appends #page=N)."""
+    from fastapi.responses import FileResponse
+    doc = next((d for d in registry.list_documents() if d["document_id"] == document_id), None)
+    path = registry.METHODOLOGIES_DIR / doc["file_path"] if doc and doc.get("file_path") else None
+    if path is None or not path.resolve().is_relative_to(registry.METHODOLOGIES_DIR.resolve()) or not path.exists():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Methodology document file not available")
+    return FileResponse(path, media_type="application/pdf", filename=path.name)
