@@ -1,16 +1,7 @@
-"""
-Backend settings — .claude/plans/misty-growing-yao.md Part A1/A2.
-
-Plain os.environ reads, not pydantic-settings: this app already has a
-single .env-loading convention (python-dotenv, used by src/data_engine.py
-for EE_PROJECT and src/database.py for DATABASE_URL) — adding a second
-settings framework for 3 values isn't justified. JWT_SECRET has no safe
-default in a real deployment; it falls back to a fixed dev-only string
-ONLY so `uvicorn backend.main:app` works out of the box for local
-development, with a loud warning so nobody ships that fallback by accident.
-"""
+"""Central backend configuration; production rejects unsafe development defaults."""
 
 import os
+import re
 import warnings
 from pathlib import Path
 
@@ -18,9 +9,48 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).parent.parent / ".env")
 
+# Render's managed runtime is production even if APP_ENV was omitted.
+APP_ENV = os.environ.get("APP_ENV", "development").strip().lower()
+if APP_ENV not in {"development", "test", "production"}:
+    raise RuntimeError("APP_ENV must be development, test, or production")
+IS_PRODUCTION = APP_ENV == "production" or os.environ.get("RENDER", "").lower() == "true"
+
+
+def _frontend_url():
+    from urllib.parse import urlsplit
+    from ipaddress import ip_address
+    value = os.environ.get("FRONTEND_PUBLIC_URL", "").strip().rstrip("/")
+    if not value:
+        if IS_PRODUCTION:
+            raise RuntimeError("FRONTEND_PUBLIC_URL is required in production; set the public HTTPS frontend origin")
+        value = "http://localhost:3000"
+    try:
+        parts = urlsplit(value)
+        _ = parts.port  # Validate malformed ports.
+        host = parts.hostname or ""
+        invalid = (parts.scheme not in {"http", "https"} or not host or
+                   parts.username is not None or parts.password is not None or
+                   parts.query or parts.fragment or parts.path not in {"", "/"})
+        local = host.lower() == "localhost" or host.lower().endswith(".localhost") or host.lower().endswith(".local")
+        try:
+            address = ip_address(host)
+            local = local or address.is_loopback or address.is_unspecified
+        except ValueError:
+            pass
+        if invalid or (IS_PRODUCTION and (parts.scheme != "https" or local)):
+            raise ValueError()
+    except ValueError:
+        raise RuntimeError("FRONTEND_PUBLIC_URL must be a frontend origin without a path, credentials, query, or fragment; production requires HTTPS and a non-local host") from None
+    return value
+
+
+FRONTEND_PUBLIC_URL = _frontend_url()
+
 _DEV_ONLY_JWT_SECRET = "dev-only-insecure-secret-change-me"
 
-JWT_SECRET = os.environ.get("JWT_SECRET")
+JWT_SECRET = os.environ.get("JWT_SECRET", "").strip()
+if IS_PRODUCTION and (len(JWT_SECRET) < 32 or JWT_SECRET == _DEV_ONLY_JWT_SECRET):
+    raise RuntimeError("JWT_SECRET must be a private secret of at least 32 characters in production")
 if not JWT_SECRET:
     JWT_SECRET = _DEV_ONLY_JWT_SECRET
     warnings.warn(
@@ -37,7 +67,11 @@ JWT_EXPIRE_MINUTES = int(os.environ.get("JWT_EXPIRE_MINUTES", "720"))  # 12h def
 # advance (e.g. https://terra-audit-git-foo-<team>.vercel.app). Defaults to
 # local dev only; set this in the deployment env to your real frontend
 # domain(s), e.g. "https://terra-audit\.vercel\.app|https://.*-<team>\.vercel\.app".
-ALLOWED_ORIGIN_REGEX = os.environ.get("ALLOWED_ORIGIN_REGEX", r"http://localhost:3000")
+ALLOWED_ORIGIN_REGEX = os.environ.get("ALLOWED_ORIGIN_REGEX", r"http://localhost:3000" if not IS_PRODUCTION else re.escape(FRONTEND_PUBLIC_URL))
+try:
+    re.compile(ALLOWED_ORIGIN_REGEX)
+except re.error:
+    raise RuntimeError("ALLOWED_ORIGIN_REGEX must be a valid regular expression") from None
 
 # Self-serve org signup (OTP email verification) — see
 # .claude/plans/misty-growing-yao.md. Sent via Brevo's HTTPS API, not

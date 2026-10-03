@@ -42,12 +42,18 @@ Completed: remove the legacy Streamlit runtime files and correct the primary
 setup and operations documentation. Existing calculation modules and import
 paths remain stable.
 
-Next, centralize deployment configuration validation and introduce versioned
-migrations. Inventory every existing initializer and establish a baseline for
+Configuration validation is now centralized in `backend/config.py` and
+`frontend/lib/server-config.ts`. Render or `APP_ENV=production` requires a
+private JWT secret of at least 32 characters and an explicit public HTTPS
+frontend origin. CORS defaults to that origin in production. Vercel requests
+require an explicit HTTPS backend origin. API and worker must both receive
+the backend settings. Invalid configuration stops startup or the frontend
+request rather than silently using localhost. No tests have been run.
+
+Next, introduce versioned migrations. Inventory every existing initializer and establish a baseline for
 existing SQLite and Postgres databases before replacing startup DDL. Do not
 create a parallel migration system that leaves startup migrations competing
-with it. Production URL validation needs an explicit environment policy;
-never infer the public frontend origin from untrusted request headers.
+with it. Never infer the public frontend origin from untrusted request headers.
 
 Then group Python modules incrementally into `src/methodology/`,
 `src/evidence/`, `src/calculations/`, and `src/persistence/`. `src/ai/` and
