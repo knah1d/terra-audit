@@ -820,6 +820,47 @@ a, button, input, select, textarea { -webkit-tap-highlight-color: transparent; }
     font-size: 12px; font-weight: 600; color: var(--menu-muted);
   }
 
+  /* Dates use the exact same frosted popup surface as the shared select. */
+  .ui-date { position: relative; display: block; width: 100%; min-width: 0; }
+  .ui-date-native {
+    position: absolute; top: 0; left: 0; width: 1px; height: 1px;
+    opacity: 0; pointer-events: none;
+  }
+  .ui-date-editor { padding-right: 44px; }
+  .ui-date-toggle {
+    position: absolute; right: 0; top: 0; display: flex;
+    width: 44px; height: var(--control-h); align-items: center; justify-content: center;
+    border-radius: var(--control-r); color: var(--text-tertiary);
+  }
+  .ui-date-toggle:hover:not(:disabled) { color: var(--menu-check); }
+  .ui-date-toggle:disabled { opacity: 0.45; cursor: not-allowed; }
+  .ui-date-hint { display: block; margin-top: var(--space-1); font-size: 12px; color: var(--danger-600); }
+  .ui-date-menu { padding: var(--space-3); }
+  .ui-date-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+  .ui-date-month-title { font-weight: 600; text-align: center; }
+  .ui-date-nav {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-height: 44px; min-width: 44px; padding: 0 var(--space-2); border-radius: 6px;
+  }
+  .ui-date-nav:hover:not(:disabled) { background: var(--menu-hover); }
+  .ui-date-nav:disabled { opacity: 0.4; cursor: not-allowed; }
+  .ui-date-jump { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); margin-block: var(--space-2); }
+  .ui-date-jump label, .ui-date-time-note { font-size: 12px; color: var(--menu-muted); }
+  .ui-date-jump input, .ui-date-time-note input { margin-top: var(--space-1); color: var(--menu-text); }
+  .ui-date-week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); text-align: center; }
+  .ui-date-week [role="columnheader"] { padding-block: var(--space-2); font-size: 12px; color: var(--menu-muted); }
+  .ui-date-day {
+    width: 100%; min-height: 40px; border-radius: 6px;
+    font-size: 13px; font-variant-numeric: tabular-nums;
+  }
+  .ui-date-day:hover:not([aria-disabled="true"]) { background: var(--menu-hover); }
+  .ui-date-day[data-muted] { color: var(--menu-muted); }
+  .ui-date-day[aria-current="date"] { box-shadow: inset 0 0 0 1px var(--menu-check); }
+  .ui-date-day[data-selected] { background: var(--menu-selected); color: var(--menu-check); font-weight: 600; }
+  .ui-date-day[aria-disabled="true"] { opacity: 0.35; cursor: not-allowed; }
+  .ui-date-footer { display: flex; justify-content: space-between; gap: var(--space-1); border-top: 1px solid var(--menu-border); margin-top: var(--space-2); padding-top: var(--space-1); }
+  .ui-date-time-note { display: block; margin-top: var(--space-2); }
+
   /* --- Cards --- */
   .ui-card {
     border: 1px solid var(--card-border);

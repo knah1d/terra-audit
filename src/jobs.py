@@ -549,10 +549,21 @@ def deregister_worker(worker_id: str) -> None:
         conn.commit()
 
 
+def _utc_timestamp(value):
+    """Queue timestamps use UTC; legacy SQL TIMESTAMP values lack offsets."""
+    if value is None:
+        return None
+    parsed = value if isinstance(value, datetime) else datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc).isoformat()
+
+
 def list_workers() -> list[dict]:
     with get_db_connection() as conn:
         rows = conn.execute(text("SELECT * FROM workers ORDER BY started_at DESC LIMIT 50")).mappings().fetchall()
-    return [dict(r) for r in rows]
+    return [{**r, **{key: _utc_timestamp(r[key]) for key in
+                    ("started_at", "last_heartbeat_at", "stopped_at")}} for r in rows]
 
 
 def queue_status() -> dict:
@@ -572,6 +583,6 @@ def queue_status() -> dict:
     return {
         "by_status": {r["status"]: r["n"] for r in by_status},
         "by_type": [dict(r) for r in by_type],
-        "oldest_pending_since": oldest_pending,
+        "oldest_pending_since": _utc_timestamp(oldest_pending),
         "workers": list_workers(),
     }

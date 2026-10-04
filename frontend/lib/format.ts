@@ -15,6 +15,18 @@ const DECIMALS: Record<string, number> = {
   "": 2,
 };
 
+/** SQL queue timestamps without an offset are legacy UTC values. */
+export function formatQueueTimestamp(value: string | null | undefined): string {
+  if (!value) return "—";
+  const normalized = value.trim().replace(" ", "T");
+  const date = new Date(/(?:Z|[+-]\d{2}:?\d{2})$/i.test(normalized) ? normalized : `${normalized}Z`);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleString(undefined, {
+    year: "numeric", month: "numeric", day: "numeric",
+    hour: "numeric", minute: "2-digit", second: "2-digit", timeZoneName: "short",
+  });
+}
+
 export function formatNumber(value: number | null | undefined, unit: string = ""): string {
   if (value === null || value === undefined || Number.isNaN(value)) return "—";
   const decimals = DECIMALS[unit.toLowerCase()] ?? 2;

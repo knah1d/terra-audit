@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { RoleGate } from "@/components/ui/RoleGate";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useQueueStatus } from "@/hooks/use-monitoring-ops";
+import { formatQueueTimestamp } from "@/lib/format";
 
 export default function QueueStatusPage() {
   const queue = useQueueStatus();
@@ -24,17 +25,18 @@ export default function QueueStatusPage() {
                 ))}
               </div>
               {queue.data.oldest_pending_since && (
-                <p className="ui-meta mt-2">Oldest pending job since {new Date(queue.data.oldest_pending_since).toLocaleString()}</p>
+                <p className="ui-meta mt-2">Oldest pending job since {formatQueueTimestamp(queue.data.oldest_pending_since)}</p>
               )}
             </Card>
             <Card>
               <h3 className="ui-subsection-title mb-2">Workers</h3>
+              <p className="ui-meta mb-2">Times are shown in your browser&apos;s local timezone.</p>
               {!queue.data.workers.length ? <p className="ui-secondary">No workers have registered yet — start one with `python -m backend.worker`.</p> : (
                 <div className="space-y-1 text-sm">
                   {queue.data.workers.map((w) => (
                     <p key={w.worker_id}>
                       <Badge tone={w.stopped_at ? "neutral" : "success"}>{w.stopped_at ? "stopped" : "alive"}</Badge>{" "}
-                      {w.hostname} · last heartbeat {new Date(w.last_heartbeat_at).toLocaleString()}
+                      {w.hostname} · last heartbeat {formatQueueTimestamp(w.last_heartbeat_at)}
                     </p>
                   ))}
                 </div>

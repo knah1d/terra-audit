@@ -1,7 +1,8 @@
 "use client";
 
 import { Eye, EyeOff } from "lucide-react";
-import { InputHTMLAttributes, TextareaHTMLAttributes, useState } from "react";
+import { forwardRef, InputHTMLAttributes, TextareaHTMLAttributes, useState } from "react";
+import { DatePicker } from "./DatePicker";
 
 export { Select } from "./Select";
 
@@ -20,9 +21,10 @@ export function FieldLabel({
 // Select render identically.
 const FIELD_BASE = "ui-control";
 
-export function TextInput(props: InputHTMLAttributes<HTMLInputElement>) {
-  return <input {...props} className={`${FIELD_BASE} ${props.className ?? ""}`} />;
-}
+export const TextInput = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(function TextInput(props, ref) {
+  if (props.type === "date" || props.type === "datetime-local") return <DatePicker {...props} ref={ref} />;
+  return <input {...props} ref={ref} className={`${FIELD_BASE} ${props.className ?? ""}`} />;
+});
 
 // Same control styling as TextInput, plus a show/hide toggle — for
 // every password field (login, register, team invite) instead of a bare
