@@ -138,8 +138,6 @@ def initialize_database():
         initialize_ai_tables(conn)
         from src.account_access import initialize_tables as initialize_account_tables
         initialize_account_tables(conn)
-        from src.user_preferences import initialize_tables as initialize_preferences
-        initialize_preferences(conn)
         conn.execute(text("""CREATE TABLE IF NOT EXISTS timeseries_cache_versions (
             org_id TEXT NOT NULL, field_id TEXT NOT NULL, window_start TEXT NOT NULL,
             window_end TEXT NOT NULL, processing_version TEXT NOT NULL,

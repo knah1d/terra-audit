@@ -1,9 +1,4 @@
 from pydantic import BaseModel
-from typing import Literal
-
-
-class UserPreferences(BaseModel):
-    theme_preference: Literal["system", "light", "dark"]
 
 
 class LoginRequest(BaseModel):

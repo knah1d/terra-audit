@@ -19,12 +19,11 @@ export class ApiError extends Error {
 
 export async function apiFetch<T>(
   path: string,
-  options: { method?: string; json?: unknown; headers?: Record<string, string>; signal?: AbortSignal } = {},
+  options: { method?: string; json?: unknown; headers?: Record<string, string> } = {},
 ): Promise<T> {
   const { method = "GET", json, headers = {} } = options;
   const res = await fetch(`/api/proxy${path}`, {
     method,
-    signal: options.signal,
     headers: {
       ...(json !== undefined ? { "Content-Type": "application/json" } : {}),
       ...headers,
