@@ -3,6 +3,14 @@ import { getSessionToken } from "@/lib/session";
 
 import { getBackendUrl } from "@/lib/server-config";
 
+// Authenticated project data must not be stored by browsers or shared CDNs.
+const PRIVATE_HEADERS = {
+  "Cache-Control": "private, no-store, max-age=0",
+  "CDN-Cache-Control": "no-store",
+  "Vercel-CDN-Cache-Control": "no-store",
+  Vary: "Cookie",
+};
+
 /**
  * Generic authenticated proxy: every client-side TanStack Query call goes
  * through /api/proxy/* rather than the FastAPI backend directly, so the
@@ -19,7 +27,7 @@ import { getBackendUrl } from "@/lib/server-config";
 async function proxy(request: NextRequest, path: string[]) {
   const token = await getSessionToken();
   if (!token) {
-    return NextResponse.json({ detail: "Not authenticated" }, { status: 401 });
+    return NextResponse.json({ detail: "Not authenticated" }, { status: 401, headers: PRIVATE_HEADERS });
   }
 
   const search = request.nextUrl.search;
@@ -45,14 +53,14 @@ async function proxy(request: NextRequest, path: string[]) {
     const text = await res.text();
     return new NextResponse(text, {
       status: res.status,
-      headers: { "content-type": resContentType || "application/json" },
+      headers: { ...PRIVATE_HEADERS, "content-type": resContentType || "application/json" },
     });
   }
   // Binary (PDF export) — stream through as-is.
   const buffer = await res.arrayBuffer();
   return new NextResponse(buffer, {
     status: res.status,
-    headers: { "content-type": resContentType },
+    headers: { ...PRIVATE_HEADERS, "content-type": resContentType },
   });
 }
 
