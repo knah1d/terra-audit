@@ -610,5 +610,9 @@ def recent_org_jobs(org_id: str) -> list[dict]:
         jobs.append({"job_id": row["job_id"], "job_type": row["job_type"], "status": row["status"],
                      "error": row["error"], "created_at": _utc_timestamp(row["created_at"]),
                      "finished_at": _utc_timestamp(row["finished_at"]),
-                     "field_id": request.get("field_id"), "project_id": payload.get("project_id")})
+                     "field_id": request.get("field_id"), "project_id": payload.get("project_id") or request.get("project_id"),
+                     "action": request.get("action"), "requirement_id": request.get("requirement_id"),
+                     "season_ids": request.get("season_ids") or [],
+                     "monitoring_period_start": request.get("monitoring_period_start"),
+                     "monitoring_period_end": request.get("monitoring_period_end")})
     return jobs

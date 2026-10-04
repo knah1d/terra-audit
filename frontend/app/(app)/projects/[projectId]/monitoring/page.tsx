@@ -1,6 +1,6 @@
 "use client";
 
-import { formatDate, formatQueueTimestamp } from "@/lib/format";
+import { formatQueueTimestamp } from "@/lib/format";
 
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -79,14 +79,15 @@ export default function ProjectMonitoringPage() {
         {dashboard.isLoading ? <Skeleton className="h-24" /> : !filtered.length ? (
           <EmptyState icon={MapPinned} title="No field-seasons match" description="Assign fields to this project and add crop seasons to see them here." />
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Field season monitoring table; scroll horizontally for all columns">
             <table className="w-full min-w-[760px] text-sm [&_td]:px-2 [&_th]:px-2">
+              <caption className="sr-only">Current crop seasons, monitoring runs and outstanding issues</caption>
               <thead>
                 <tr className="ui-meta text-left">
-                  <th className="py-1"><input type="checkbox" aria-label="Select all field seasons"
+                  <th scope="col" className="py-1"><input type="checkbox" aria-label="Select all field seasons"
                     checked={selected.size > 0 && filtered.every((r) => selected.has(`${r.field_id}:${r.season_id}`))}
                     onChange={(e) => setSelected(e.target.checked ? new Set(filtered.map((r) => `${r.field_id}:${r.season_id}`)) : new Set())} /></th>
-                  <th className="py-1">Field</th><th>Season</th><th>Crops</th><th>Latest status</th><th>Source</th><th>Last run</th><th>Issues</th>
+                  <th scope="col" className="py-1">Field</th><th scope="col">Season</th><th scope="col">Crops</th><th scope="col">Latest status</th><th scope="col">Source</th><th scope="col">Last run</th><th scope="col">Issues</th>
                 </tr>
               </thead>
               <tbody>
@@ -104,7 +105,7 @@ export default function ProjectMonitoringPage() {
                         </Badge>
                       ) : <Badge tone="neutral">no run yet</Badge>}</td>
                       <td>{r.latest_run_source ?? "—"}</td>
-                      <td>{r.latest_run_at ? formatDate(r.latest_run_at) : "—"}</td>
+                      <td>{formatQueueTimestamp(r.latest_run_at)}</td>
                       <td>{r.open_issue_count ? <Badge tone="danger">{r.open_issue_count}</Badge> : "—"}</td>
                     </tr>
                   );

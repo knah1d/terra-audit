@@ -32,6 +32,7 @@ class CalculationContext(BaseModel):
     monitoring_period_start: date
     monitoring_period_end: date
     engine_inputs: dict
+    signal_run_id: str | None = Field(default=None, max_length=100)
 
     @model_validator(mode="after")
     def dates(self):

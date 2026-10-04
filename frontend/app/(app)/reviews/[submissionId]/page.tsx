@@ -1,9 +1,10 @@
 "use client";
 
-import { formatQueueTimestamp } from "@/lib/format";
+import { formatDate, formatNumber, formatQueueTimestamp } from "@/lib/format";
 
 import { useParams } from "next/navigation";
 import { useState } from "react";
+import { InputProvenance } from "@/components/calculations/InputProvenance";
 import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -177,8 +178,9 @@ export default function SubmissionDetailPage() {
       <Card>
         <h3 className="ui-subsection-title mb-2">Calculation</h3>
         <p className="text-sm">Field <span className="font-mono">{calculation.field_id}</span> · {calculation.accounting_pathway} · v{calculation.version}</p>
-        <p className="text-sm">Monitoring period {calculation.monitoring_period_start} to {calculation.monitoring_period_end}</p>
-        <p className="text-sm font-mono">Final issuance: {calculation.final_issuance ?? "—"} tCO2e</p>
+        <p className="text-sm">Monitoring period {formatDate(calculation.monitoring_period_start)} to {formatDate(calculation.monitoring_period_end)}</p>
+        <p className="text-sm font-mono">Calculated estimate (not issued credits): {formatNumber(calculation.final_issuance, "tco2e")} tCO2e</p>
+        {calculation.accounting_pathway === "vm0051_rice_awd" && <InputProvenance value={calculation.snapshot.signal_input_provenance} fieldId={calculation.field_id} />}
         <p className="ui-meta">{calculation.methodology_version} · engine {calculation.engine_version}</p>
         {submission.previous_submission_id && (
           <Button variant="ghost" size="sm" className="mt-2" onClick={() => setShowDiff((v) => !v)}>

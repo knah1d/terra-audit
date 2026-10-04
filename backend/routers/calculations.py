@@ -17,6 +17,7 @@ from src.methodology import readiness as readiness_engine
 from src.carbon.calculations import PATHWAYS
 from src.persistence.database import get_credit_history
 from src.carbon.issuance import result_is_issuable
+from src.carbon.signal_evidence import provenance
 from src.carbon.snapshot import build_snapshot, calculate_from_snapshot
 
 router = APIRouter(tags=["calculations"])
@@ -77,6 +78,7 @@ def preview_calculation(field_id: str, body: CalculationContext, user=Depends(ge
             body.monitoring_period_start.isoformat(), body.monitoring_period_end.isoformat(),
             engine_inputs, monitoring_run_ids=[], attachment_ids=[],
         )
+        snapshot["signal_input_provenance"] = provenance(org_id, field, body, engine_inputs)
         result = calculate_from_snapshot(snapshot)
     except ValueError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
@@ -114,6 +116,7 @@ def commit_calculation(
             body.monitoring_period_start.isoformat(), body.monitoring_period_end.isoformat(),
             engine_inputs, body.monitoring_run_ids, body.attachment_ids,
         )
+        snapshot["signal_input_provenance"] = provenance(org_id, field, body, engine_inputs)
         result = calculate_from_snapshot(snapshot)
     except ValueError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc

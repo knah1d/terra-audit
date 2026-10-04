@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { resetLiquidPointer, trackLiquidPointer } from "@/components/ui/liquid-pointer";
+import { revealNavigationItem } from "@/lib/reveal-navigation";
 import { Toolbar } from "@/components/ui/Toolbar";
 
 /** Floating tab bar for the field-detail sub-nav — each option is a real
@@ -55,7 +56,7 @@ export function FieldTabs({ fieldId, fieldType }: { fieldId: string; fieldType: 
       const elRect = activeEl.getBoundingClientRect();
       setPillStyle({ left: elRect.left - containerRect.left, width: elRect.width });
     }
-    containerRef.current?.querySelector<HTMLElement>('[data-active="true"]')?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    revealNavigationItem(containerRef.current?.parentElement ?? null, containerRef.current?.querySelector<HTMLElement>('[data-active="true"]') ?? null);
     measure();
     window.addEventListener("resize", measure);
     return () => window.removeEventListener("resize", measure);
@@ -63,7 +64,7 @@ export function FieldTabs({ fieldId, fieldType }: { fieldId: string; fieldType: 
 
   return (
     <Toolbar className="relative mb-0 inline-flex max-w-full w-fit overflow-x-auto gap-1 px-1.5 py-1.5">
-      <div ref={containerRef} className="relative flex shrink-0 gap-1">
+      <div ref={containerRef} role="navigation" aria-label="Field sections" className="relative flex shrink-0 gap-1">
         {pillStyle && (
           // The sliding lens itself is glass, not a flat solid fill — a
           // brand-tinted .liquid-active-bg with the same specular rim the
@@ -97,7 +98,7 @@ export function FieldTabs({ fieldId, fieldType }: { fieldId: string; fieldType: 
                 active ? "text-brand-700" : "text-text-secondary hover:text-text-primary"
               }`}
             >
-              <Icon className="size-3.5" />
+              <Icon className="size-3.5" aria-hidden />
               <span>{label}</span>
             </Link>
           );

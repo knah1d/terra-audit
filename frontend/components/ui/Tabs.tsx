@@ -29,7 +29,15 @@ export function Tabs<T extends string>({ options, value, onChange }: {
   }, [value]);
 
   return (
-    <div ref={ref} className="glass-chrome relative inline-flex max-w-full flex-wrap gap-1 rounded-xl p-1 text-sm">
+    <div ref={ref} role="group" aria-label="View options" onKeyDown={event => {
+      if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key) || !(event.target instanceof HTMLButtonElement)) return;
+      const buttons = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>("button:not(:disabled)"));
+      const current = buttons.indexOf(event.target);
+      if (current < 0 || !buttons.length) return;
+      event.preventDefault();
+      const next = event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1 : (current + (event.key === "ArrowRight" ? 1 : -1) + buttons.length) % buttons.length;
+      buttons[next].focus();
+    }} className="glass-chrome relative inline-flex max-w-full flex-wrap gap-1 rounded-xl p-1 text-sm">
       {indicator && <span aria-hidden className="pointer-events-none absolute rounded-lg bg-[var(--liquid-active-bg)] shadow-[inset_0_1px_0_var(--glass-specular)] transition-[left,top,width,height] duration-200" style={indicator} />}
       {options.map((opt) => {
         const Icon = opt.icon;
@@ -39,7 +47,7 @@ export function Tabs<T extends string>({ options, value, onChange }: {
             onPointerEnter={trackLiquidPointer} onPointerMove={trackLiquidPointer} onPointerLeave={resetLiquidPointer}
             aria-pressed={active}
             className={`liquid-hover press flex min-h-10 items-center gap-2 rounded-lg px-3 font-medium ${active ? "text-brand-700" : "text-text-secondary hover:text-text-primary"}`}>
-            {Icon && <Icon className="size-3.5" />}<span>{opt.label}</span>
+            {Icon && <Icon className="size-3.5" aria-hidden />}<span>{opt.label}</span>
           </button>
         );
       })}

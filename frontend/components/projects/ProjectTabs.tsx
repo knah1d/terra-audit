@@ -1,6 +1,7 @@
 "use client";
 
 import { Users, Activity, MapPinned, LayoutList, BrainCircuit, ScrollText } from "lucide-react";
+import { revealNavigationItem } from "@/lib/reveal-navigation";
 import Link from "next/link";
 import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
@@ -8,7 +9,7 @@ import { usePathname } from "next/navigation";
 export function ProjectTabs({ projectId }: { projectId: string }) {
   const pathname = usePathname();
   const nav = useRef<HTMLElement>(null);
-  useEffect(() => { nav.current?.querySelector<HTMLElement>('[aria-current="page"]')?.scrollIntoView({ block: "nearest", inline: "nearest" }); }, [pathname]);
+  useEffect(() => { revealNavigationItem(nav.current, nav.current?.querySelector<HTMLElement>('[aria-current="page"]') ?? null); }, [pathname]);
   const options = [
     { href: `/projects/${projectId}/monitoring`, label: "Monitoring", icon: Activity },
     { href: `/projects/${projectId}/fields`, label: "Fields", icon: MapPinned },
@@ -30,7 +31,7 @@ export function ProjectTabs({ projectId }: { projectId: string }) {
               active ? "border-brand-600 text-brand-700" : "border-transparent text-text-secondary hover:text-text-primary"
             }`}
           >
-            <Icon className="size-3.5" />
+            <Icon className="size-3.5" aria-hidden />
             {label}
           </Link>
         );

@@ -4,6 +4,7 @@ import { useSearchParams } from "next/navigation";
 import { AMENDMENT_TYPE_OPTIONS } from "@/lib/schemas/ledger";
 import { formatDate, formatNumber, formatQueueTimestamp } from "@/lib/format";
 import { useState } from "react";
+import { SignalEvidenceInputs } from "@/components/calculations/SignalEvidenceInputs";
 import { ExplainButton } from "@/components/ai/ExplainDrawer";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSession } from "@/app/providers";
@@ -104,6 +105,7 @@ function CalculationsView() {
   const canReview = session?.role === "admin" || (session?.role === "analyst" &&
     members.data?.some((member) => member.user_id === session.user_id && member.project_role === "lead"));
   const [readinessContext, setReadinessContext] = useState<string | null>(null);
+  const [signalSource, setSignalSource] = useState<{ context: string; id: string } | null>(null);
   const [inputRevision, setInputRevision] = useState(0);
   const [previewContext, setPreviewContext] = useState<string | null>(null);
   const contextKey = JSON.stringify([field.field_id, pathway, projectId, periodStart, periodEnd,
@@ -159,6 +161,7 @@ function CalculationsView() {
       monitoring_period_start: periodStart,
       monitoring_period_end: periodEnd,
       engine_inputs: engineInputs,
+      signal_run_id: signalSource?.context === contextKey ? signalSource.id || null : null,
     };
   }
 
@@ -261,7 +264,11 @@ function CalculationsView() {
       {writable && !contextIssue && (
         <Card>
           <h3 id="engine-inputs" className="ui-subsection-title mb-3 scroll-mt-28">Engine inputs</h3>
-          <form key={contextKey} className="grid gap-3 sm:grid-cols-2" onChange={() => { setInputRevision((revision) => revision + 1); setPreviewContext(null); }} onSubmit={(e) => {
+          <form key={contextKey} className="grid gap-3 sm:grid-cols-2" onChange={event => {
+            setInputRevision((revision) => revision + 1); setPreviewContext(null);
+            const confirmation = event.currentTarget.elements.namedItem("evidence_confirmed") as HTMLInputElement | null;
+            if (confirmation && event.target !== confirmation) confirmation.checked = false;
+          }} onSubmit={(e) => {
             e.preventDefault();
             const submitter = (e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
             const action = submitter?.value === "commit" ? "commit" : "preview";
@@ -284,6 +291,7 @@ function CalculationsView() {
             <p className="ui-secondary sm:col-span-2">Manual evidence entry for this monitoring period. No measurements are assumed. Use zero only when the evidence records zero; amendment rates may be zero when no material was applied.</p>
             {pathway === "vm0051_rice_awd" ? (
               <>
+                <SignalEvidenceInputs fieldId={field.field_id} area={field.area_ha ?? null} start={periodStart} end={periodEnd} disabled={busy} onSelect={id => { setSignalSource({ context: contextKey, id }); setInputRevision(revision => revision + 1); setPreviewContext(null); }} />
                 <label className="text-sm">AWD events (evidence-backed)<TextInput name="awd_events" type="number" required min={0} /></label>
                 <label className="text-sm">Season length (days)<TextInput name="season_length_days" type="number" required min={1} /></label>
                 <label className="text-sm">N input (kg N/ha)<TextInput name="q_n_kg_per_ha" type="number" step="any" required min={0} /></label>
@@ -314,7 +322,7 @@ function CalculationsView() {
                 </Select>
               </label>
             )}
-            <label className="ui-label sm:col-span-2"><input type="checkbox" required className="mr-2" />I have checked these values against evidence for the selected period.</label>
+            <label className="ui-label sm:col-span-2"><input name="evidence_confirmed" type="checkbox" required className="mr-2" />I have checked these values against evidence for the selected period.</label>
             <div className="sm:col-span-2 flex gap-2">
               <Button type="submit" name="action" value="preview" variant="secondary" disabled={busy} loading={preview.isPending}>Preview calculation</Button>
               <Button type="submit" name="action" value="commit" disabled={busy} loading={commit.isPending}>Commit (freeze evidence)</Button>
@@ -388,7 +396,7 @@ function CalculationsView() {
                     </>
                   )}
                   <span className="ml-2">{formatQueueTimestamp(row.created_at)}</span>
-                  <span className="ml-2 font-mono">{row.final_issuance == null ? "—" : formatNumber(row.final_issuance, "tco2e")} tCO2e</span>
+                  <span className="ml-2 font-mono" title="Calculated estimate; not registry-issued credits">Estimate: {row.final_issuance == null ? "—" : formatNumber(row.final_issuance, "tco2e")} tCO2e</span>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {!row.legacy && row.project_id && row.calculation_id && <>

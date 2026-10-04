@@ -98,3 +98,9 @@ def get_signal_run(job_id: str, user: dict = Depends(get_current_user)):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Job not found")
     return JobStatusOut(**{**job, "created_at": str(job["created_at"]),
                            "finished_at": str(job["finished_at"]) if job["finished_at"] else None})
+
+
+@router.get("/fields/{field_id}/signal-runs/evidence")
+def signal_evidence(field_id: str, user=Depends(get_current_user), field=Depends(get_owned_field(require_sar=True))):
+    from src.carbon.signal_evidence import candidates
+    return candidates(user["org_id"], field_id)

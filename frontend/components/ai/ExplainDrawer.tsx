@@ -18,22 +18,29 @@ export function ExplainButton({ projectId, request, children }: {
   const [open, setOpen] = useState(false);
   const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => {
-    if (open) dialog.current?.showModal();
-    else dialog.current?.close();
+    if (!open) { dialog.current?.close(); return; }
+    dialog.current?.showModal();
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { dialog.current?.close(); document.body.style.overflow = overflow; };
   }, [open]);
   return <>
     <span className="inline-flex flex-col items-start gap-1">
       <Button variant="secondary" size="sm" disabled={!active || membership.isError} title={unavailable || undefined} onClick={() => { setOpen(true); void ai.request(request); }}>{children}</Button>
       {unavailable && <span className="text-xs text-text-secondary">{unavailable} {!membership.isPending && <a href={`/projects/${encodeURIComponent(projectId)}/fields`} className="underline">Project fields</a>}</span>}
     </span>
-    <dialog ref={dialog} onCancel={() => setOpen(false)} className="fixed m-auto max-h-[85vh] w-[min(720px,95vw)] overflow-y-auto rounded-xl border border-border bg-background p-6 text-text-primary backdrop:bg-black/60">
+    <dialog ref={dialog} aria-label="AI draft explanation" onCancel={() => setOpen(false)} className="fixed m-auto max-h-[85vh] w-[min(720px,95vw)] overflow-y-auto rounded-xl border border-border bg-background p-6 text-text-primary backdrop:bg-black/60">
       <div className="flex items-start justify-between gap-4">
         <h2 className="ui-section-title">AI explanation — draft, not an official readiness decision</h2>
         <Button variant="secondary" size="sm" onClick={() => setOpen(false)}>Close</Button>
       </div>
       {ai.loading && <p role="status" className="my-4">Preparing evidence, generating a draft, and checking citations… This may take a few minutes.</p>}
-      {ai.error && <p role="alert" className="my-4 text-danger-700">{ai.error}</p>}
+      {ai.error && <div role="alert" className="my-4 space-y-2"><p className="text-danger-700">{ai.error}</p><p className="ui-secondary">Check the source evidence and provider configuration before submitting a new request. Repeating an unchanged request may reuse the same job.</p><Button size="sm" variant="secondary" disabled={ai.loading} onClick={() => void ai.request(request)}>Request explanation again</Button></div>}
       {ai.explanation && <div className="space-y-4 py-4">
+        <section className="rounded-lg border border-border p-3 text-sm" aria-label="Explanation citation coverage">
+          <p>{ai.explanation.citations_resolved.some(c => c.document_id) ? "This draft includes document citations. Open the cited pages and check any correction labels before relying on the text." : "This draft cites project records only. It does not verify the requirement against methodology text."}</p>
+          <a className="mt-2 inline-block underline text-brand-700" href={`/projects/${encodeURIComponent(projectId)}/methodology`}>View bundle documents, indexing and correction status</a>
+        </section>
         {ai.explanation.deterministic_message && <p>{ai.explanation.deterministic_message}</p>}
         {ai.explanation.summary_claims.map((claim, i) => <div key={i}>
           <p>{claim.text}</p>

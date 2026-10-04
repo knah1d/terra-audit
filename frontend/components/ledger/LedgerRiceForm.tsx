@@ -74,7 +74,7 @@ function buildSteps(cr: CarbonResult): DerivationStep[] {
     },
     {
       id: "final",
-      title: "Final issuance (Eq. 29)",
+      title: "Calculated estimate after deductions (Eq. 29)",
       formula: "\\text{Issuance} = \\max(0,\\ \\text{CH}_4\\text{ after unc.} - PE_{N_2O})",
       result: { label: "Final Issuance", value: cr.final_issuance, unit: "tCO2e" },
       tone: "success",

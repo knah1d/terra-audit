@@ -117,7 +117,7 @@ export function useRetryFailed() {
 }
 
 export interface QueueStatus {
-  recent_jobs?: { job_id: string; job_type: string; status: string; error: string | null; created_at: string; field_id: string | null; project_id: string | null }[];
+  recent_jobs?: { job_id: string; job_type: string; status: string; error: string | null; created_at: string; finished_at?: string | null; field_id: string | null; project_id: string | null; action?: string | null; requirement_id?: string | null; season_ids?: string[]; monitoring_period_start?: string | null; monitoring_period_end?: string | null }[];
   by_status: Record<string, number>;
   by_type: Array<{ job_type: string; status: string; n: number }>;
   oldest_pending_since: string | null;

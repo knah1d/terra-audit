@@ -39,7 +39,7 @@ export function PortfolioBarChart({ entries }: { entries: PortfolioEntry[] }) {
       </div>
       {calculated.length === 0 && <p role="status" className="py-8 text-center text-sm text-text-secondary">No calculated fields in the selected methodologies. Enable a methodology above.</p>}
       <div style={{ height: Math.max(280, 60 * calculated.length) }} className="w-full overflow-x-auto">
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="100%" minWidth={480}>
           <BarChart data={calculated} layout="vertical" margin={{ left: 24, right: 16 }}>
             <CartesianGrid stroke="var(--chart-grid)" strokeDasharray="2 4" horizontal={false} />
             <XAxis type="number" tick={{ fontSize: 11, fill: "var(--chart-muted)" }} stroke="var(--chart-axis)" />
@@ -53,7 +53,7 @@ export function PortfolioBarChart({ entries }: { entries: PortfolioEntry[] }) {
             <Tooltip
               contentStyle={{ background: "var(--surface)", border: "1px solid var(--border-c)", borderRadius: 8, fontSize: 12 }}
               formatter={(value, _name, item) => [
-                `${Number(value).toFixed(4)} tCO2e`,
+                `${Number(value).toFixed(4)} tCO2e (legacy estimate)`,
                 FIELD_TYPE_LABELS[(item.payload as { fieldType: string }).fieldType] ?? "",
               ]}
             />
