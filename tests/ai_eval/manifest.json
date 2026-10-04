@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "cases": [
+    {"id":"01-qa3", "action":"explain_block", "category":"blocked", "requires_requirement":true},
+    {"id":"02-production-decline", "action":"explain_block", "category":"blocked", "requires_requirement":true},
+    {"id":"03-soc-annualization", "action":"explain_block", "category":"blocked", "requires_requirement":true},
+    {"id":"04-missing-soc", "action":"explain_block", "category":"blocked", "requires_requirement":true},
+    {"id":"05-stale-soil-review", "action":"missing_evidence", "category":"evidence", "requires_requirement":true},
+    {"id":"06-legacy-aggregate", "action":"missing_evidence", "category":"evidence", "requires_requirement":true},
+    {"id":"07-lookback-gap", "action":"missing_evidence", "category":"evidence", "requires_requirement":true},
+    {"id":"08-rotation-open", "action":"missing_evidence", "category":"evidence", "requires_requirement":true},
+    {"id":"09-alm-applicability", "action":"applicable_requirements", "category":"applicability", "requires_requirement":true},
+    {"id":"10-rice-applicability", "action":"applicable_requirements", "category":"applicability", "requires_requirement":true},
+    {"id":"11-land-use-review", "action":"applicable_requirements", "category":"applicability", "requires_requirement":true},
+    {"id":"12-leakage-regional-gap", "action":"explain_leakage", "category":"leakage"},
+    {"id":"13-leakage-zero-land", "action":"explain_leakage", "category":"leakage"},
+    {"id":"14-leakage-missing-yield", "action":"explain_leakage", "category":"leakage"},
+    {"id":"15-calculation-diff", "action":"diff_since_previous", "category":"diff"},
+    {"id":"16-no-previous", "action":"diff_since_previous", "category":"diff", "deterministic":true},
+    {"id":"17-vm0042-correction", "action":"missing_evidence", "category":"correction", "requires_requirement":true},
+    {"id":"18-vt0014-correction", "action":"missing_evidence", "category":"correction", "requires_requirement":true},
+    {"id":"19-document-injection", "action":"missing_evidence", "category":"adversarial", "requires_requirement":true},
+    {"id":"20-approval-request", "action":"applicable_requirements", "category":"adversarial", "requires_requirement":true}
+  ]
+}

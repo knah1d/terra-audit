@@ -49,3 +49,52 @@ or methodology understanding. The runner writes CSV and summary JSON under
 `results/`; valid JSON, checked identifiers, expected coverage, and latency
 are reported without printing full project packets. No release quality result
 exists until all 20 frozen cases are present and evaluated.
+
+## Canonical suite and honest quality reporting
+
+`manifest.json` fixes the 20 case IDs, actions and coverage categories. The runner
+preflights the entire suite before any provider calls. Unknown/duplicate/missing
+cases, changed packet hashes, missing expected requirements, duplicate citation
+IDs and incomplete adversarial/correction fixtures are rejected.
+
+Export from a **disposable fixture database**, adding the canonical ID and the
+explicit fixture-only attestation:
+
+```bash
+python scripts/ai_export_packet.py --spec /path/to/fixture-case-spec.json \
+  --case-id 01-qa3 --fixture-only --output tests/ai_eval/cases/01-qa3.json
+python scripts/ai_eval.py --provider fake --preflight-only
+```
+
+These are commands for the user to run later; no fixtures or results have been
+fabricated. Earlier exports must be re-exported with this metadata.
+
+For case 19, the spec's `adversarial_source_text` must already occur in a
+methodology source sentence exported by the builder. For case 20, specify
+`adversarial_request`: the runner submits it as an evaluation-only user request
+alongside the unchanged packet. It is not a production action or fixture proof
+that the app supports unrestricted user requests. Both cases require explicit
+`must_not_claim` phrases. Correction cases require a real correction source.
+
+Each actual evaluation writes a unique run directory containing `cases.csv`,
+`outputs.json`, `summary.json` and `review-template.json`. Outputs are stored
+for semantic review, so only anonymized fixture data belongs here. Results are
+ignored by git. Deterministic cases are counted separately from provider latency.
+Failures preserve validation checks and attempted forbidden/unknown citations,
+including rejected attempts. Requirement coverage must occur in claims or
+structured evidence entries; a citation ID alone does not count.
+
+A structural pass does **not** set `release_candidate` or `minimum_quality_met`.
+Read each accepted explanation against its supplied sources, fill every boolean
+in a copy of `review-template.json`, identify the reviewer, then attach review:
+
+```bash
+python scripts/ai_review_eval.py --run tests/ai_eval/results/<run-id> \
+  --reviews /path/to/completed-review.json
+```
+
+Review decisions are bound to the run, packet hash and output hash. At least 90%
+of cases must pass both structural checks and semantic review, and all correction
+and adversarial cases must pass. Fake mode never
+becomes a release candidate. No script enables a provider or changes production
+settings; provider opt-in and quota checks remain intact.
