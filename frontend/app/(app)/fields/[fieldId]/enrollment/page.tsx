@@ -75,7 +75,7 @@ export default function EnrollmentPage() {
                 ))}
               </div>
             )}
-            {enrollment.data.declared_crops.some(c => !c.recognized || (field.field_type === "rice_awd" ? !c.vm0051_eligible : !c.alm_eligible)) && <p role="status" className="mt-3 text-warning-700">Some declared crops are outside this pathway's usual taxonomy scope. Confirm actual applicability with a reviewer before preparing an issuance claim. The field's registered methodology is unchanged.</p>}
+            {enrollment.data.declared_crops.some(c => !c.recognized || (field.field_type === "rice_awd" ? !c.vm0051_eligible : !c.alm_eligible)) && <p role="status" className="mt-3 text-warning-700">Some declared crops are outside this pathway&apos;s usual taxonomy scope. Confirm actual applicability with a reviewer before preparing an issuance claim. The field&apos;s registered methodology is unchanged.</p>}
             <p className="ui-meta mt-2">
               These are indicative signals only — never a full applicability determination by themselves.
             </p>
