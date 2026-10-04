@@ -40,6 +40,7 @@ const STAGES: Record<string, string> = {
   saving_observations: "Saving satellite observations",
   analyzing_observations: "Analyzing observations",
   saving_result: "Saving analysis result",
+  progress_checkpoints: "Cancellation, lease and progress checks",
 };
 
 function SignalAnalyticsView() {

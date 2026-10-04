@@ -88,9 +88,12 @@ def handle_signal_run(job: dict, ctx) -> dict:
 
     @contextmanager
     def stage(name):
-        if ctx.cancel_requested():
-            raise JobCancelled("Analysis cancelled before " + name)
+        # progress's conditional UPDATE atomically checks cancellation AND
+        # worker ownership; a separate SELECT repeats that database trip.
+        checkpoint_started = time.perf_counter()
         ctx.progress(name, timings)
+        timings["progress_checkpoints"] = round(timings.get("progress_checkpoints", 0) +
+                                               time.perf_counter() - checkpoint_started, 4)
         tick = time.perf_counter()
         outcome = "ok"
         try:
@@ -119,14 +122,16 @@ def handle_signal_run(job: dict, ctx) -> dict:
             if df_raw.empty:
                 raise InvalidJobRequest("No valid Sentinel-1 observations found for this field and window.")
         with stage("saving_observations"):
-            save_cache(org_id, field_id, df_raw, payload["window_start"], payload["window_end"])
-            df_processed = check_cache(org_id, field_id, payload["window_start"], payload["window_end"])
+            df_processed = save_cache(org_id, field_id, df_raw, payload["window_start"], payload["window_end"])
         cache_source = "Live Google Earth Engine Core API"
     with stage("analyzing_observations"):
         result = _run_signal_pipeline(org_id, field_id, field["district"], field["area_ha"] or 1.0,
                                       df_processed, payload, cache_source=cache_source)
-    timings["total"] = round(time.perf_counter() - started, 4)
+    checkpoint_started = time.perf_counter()
     ctx.progress("saving_result", timings)
+    timings["progress_checkpoints"] = round(timings.get("progress_checkpoints", 0) +
+                                           time.perf_counter() - checkpoint_started, 4)
+    timings["total"] = round(time.perf_counter() - started, 4)
     result["timings_seconds"] = timings
     return result
 

@@ -683,24 +683,22 @@ def check_cache(org_id: str, field_id: str, window_start: str, window_end: str) 
     """
     from src.processing import PROCESSING_VERSION
     with get_db_connection() as conn:
-        version = conn.execute(text("SELECT processing_version FROM timeseries_cache_versions "
-            "WHERE org_id=:org_id AND field_id=:field_id AND window_start=:window_start AND window_end=:window_end"),
-            dict(org_id=org_id, field_id=field_id, window_start=window_start, window_end=window_end)).scalar()
-        if version != PROCESSING_VERSION:
-            return pd.DataFrame()
         df = pd.read_sql_query(
             text("""
-                SELECT observation_date AS date, vv, vh, cross_ratio, rvi
-                FROM   timeseries_cache
-                WHERE  org_id       = :org_id
-                  AND  field_id     = :field_id
-                  AND  window_start = :window_start
-                  AND  window_end   = :window_end
-                ORDER  BY date ASC
+                SELECT c.observation_date AS date, c.vv, c.vh, c.cross_ratio, c.rvi
+                FROM timeseries_cache c
+                JOIN timeseries_cache_versions v
+                  ON v.org_id=c.org_id AND v.field_id=c.field_id
+                 AND v.window_start=c.window_start AND v.window_end=c.window_end
+                WHERE c.org_id=:org_id AND c.field_id=:field_id
+                  AND c.window_start=:window_start AND c.window_end=:window_end
+                  AND v.processing_version=:processing_version
+                ORDER BY c.observation_date ASC
             """),
             conn,
             params={"org_id": org_id, "field_id": field_id,
-                    "window_start": window_start, "window_end": window_end},
+                    "window_start": window_start, "window_end": window_end,
+                    "processing_version": PROCESSING_VERSION},
         )
     return df
 
@@ -708,20 +706,32 @@ def check_cache(org_id: str, field_id: str, window_start: str, window_end: str) 
 def save_cache(
     org_id: str, field_id: str, df: pd.DataFrame, window_start: str, window_end: str
 ):
-    """Commits a batch of EE-fetched observations into the local cache."""
+    """Atomically replace a window and return the raw values committed.
+
+    Returning the same ordered, raw columns as check_cache avoids a read-back
+    round trip. Derived/smoothed columns are deliberately not returned.
+    """
     if df.empty:
-        return
+        return pd.DataFrame(columns=["date", "vv", "vh", "cross_ratio", "rvi"])
     from src.processing import PROCESSING_VERSION
+    stored = df[["date", "vv", "vh", "cross_ratio", "rvi"]].copy()
+    stored["date"] = stored["date"].astype(str)
+    for column in ("vv", "vh", "cross_ratio", "rvi"):
+        stored[column] = stored[column].astype(float)
+    stored = stored.drop_duplicates(subset=["date"], keep="last").sort_values("date").reset_index(drop=True)
     with get_db_connection() as conn:
         params = dict(org_id=org_id, field_id=field_id, window_start=window_start, window_end=window_end,
                       processing_version=PROCESSING_VERSION)
-        # Replace the entire window: refreshed queries may return fewer scenes.
-        conn.execute(text("DELETE FROM timeseries_cache WHERE org_id=:org_id AND field_id=:field_id "
-                          "AND window_start=:window_start AND window_end=:window_end"), params)
-        conn.execute(text("INSERT INTO timeseries_cache_versions VALUES "
+        # Lock/upsert the window version before replacing its rows so two
+        # writers of the same window cannot interleave their replacements.
+        conn.execute(text("INSERT INTO timeseries_cache_versions "
+                          "(org_id,field_id,window_start,window_end,processing_version) VALUES "
                           "(:org_id,:field_id,:window_start,:window_end,:processing_version) "
                           "ON CONFLICT (org_id,field_id,window_start,window_end) DO UPDATE SET "
                           "processing_version=excluded.processing_version"), params)
+        # Replace the entire window: refreshed queries may return fewer scenes.
+        conn.execute(text("DELETE FROM timeseries_cache WHERE org_id=:org_id AND field_id=:field_id "
+                          "AND window_start=:window_start AND window_end=:window_end"), params)
         rows = [
             {
                 "org_id": org_id,
@@ -734,7 +744,7 @@ def save_cache(
                 "cross_ratio": row["cross_ratio"],
                 "rvi": row["rvi"],
             }
-            for _, row in df.iterrows()
+            for row in stored.to_dict(orient="records")
         ]
         insert_stmt = (
             "INSERT OR REPLACE INTO timeseries_cache" if is_sqlite()
@@ -745,18 +755,19 @@ def save_cache(
             "DO UPDATE SET vv=excluded.vv, vh=excluded.vh, "
             "cross_ratio=excluded.cross_ratio, rvi=excluded.rvi"
         )
-        conn.execute(
-            text(f"""
-                {insert_stmt}
-                    (org_id, field_id, observation_date, window_start, window_end,
-                     vv, vh, cross_ratio, rvi)
-                VALUES (:org_id, :field_id, :observation_date, :window_start, :window_end,
-                        :vv, :vh, :cross_ratio, :rvi)
-                {conflict_clause}
-            """),
-            rows,
-        )
+        columns = ("org_id", "field_id", "observation_date", "window_start", "window_end",
+                   "vv", "vh", "cross_ratio", "rvi")
+        # SQLAlchemy text executemany may send one INSERT per observation on
+        # Postgres. Explicit multi-row VALUES takes one round trip per batch.
+        # 100 * 9 binds also fits SQLite's older 999-variable limit.
+        for offset in range(0, len(rows), 100):
+            batch = rows[offset:offset + 100]
+            values = ", ".join("(" + ", ".join(f":{column}_{i}" for column in columns) + ")"
+                               for i in range(len(batch)))
+            bindings = {f"{column}_{i}": row[column] for i, row in enumerate(batch) for column in columns}
+            conn.execute(text(f"{insert_stmt} ({', '.join(columns)}) VALUES {values}{conflict_clause}"), bindings)
         conn.commit()
+    return stored
 
 
 ALM_PRACTICE_COLUMNS = [
