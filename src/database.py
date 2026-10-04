@@ -2,6 +2,7 @@ import json
 import os
 import uuid
 from contextlib import contextmanager
+from contextvars import ContextVar
 from pathlib import Path
 
 import pandas as pd
@@ -12,6 +13,7 @@ from src.issuance import NonIssuableResultError, result_is_issuable
 DB_PATH = Path(__file__).parent.parent / "data" / "project_store.db"
 _DB_INITIALIZED = False
 _ENGINE = None
+_READ_CONNECTION = ContextVar("terra_read_connection", default=None)
 
 
 def _get_engine():
@@ -44,6 +46,10 @@ def get_db_connection():
     conn.commit() exactly as before — SQLAlchemy's Connection supports both
     natively. Read paths that need dict-style row["col"] access should call
     .mappings() on the result (see every function below for the pattern)."""
+    shared = _READ_CONNECTION.get()
+    if shared is not None:
+        yield shared
+        return
     conn = _get_engine().connect()
     if is_sqlite():
         # WAL lets readers proceed while a writer holds the file, and the
@@ -57,6 +63,37 @@ def get_db_connection():
         yield conn
     finally:
         conn.close()
+
+
+@contextmanager
+def read_connection_scope():
+    """Reuse one connection for a synchronous, read-only operation.
+
+    No result cache: repeated SELECTs still read current committed data, so
+    end-of-packet fingerprint checks can detect changes. ContextVars isolate
+    requests; heartbeat threads keep their independent write connections.
+    """
+    if _READ_CONNECTION.get() is not None:
+        yield
+        return
+    with get_db_connection() as conn:
+        sqlite = is_sqlite()
+        if sqlite:
+            prior = conn.execute(text("PRAGMA query_only")).scalar()
+            conn.execute(text("PRAGMA query_only=ON"))
+        else:
+            # Apply before the first query. READ COMMITTED keeps each SELECT
+            # fresh instead of hiding concurrent evidence changes in a snapshot.
+            conn.execute(text("SET TRANSACTION ISOLATION LEVEL READ COMMITTED, READ ONLY"))
+        token = _READ_CONNECTION.set(conn)
+        try:
+            yield
+        finally:
+            _READ_CONNECTION.reset(token)
+            conn.rollback()
+            if sqlite:
+                conn.execute(text(f"PRAGMA query_only={int(prior)}"))
+                conn.rollback()
 
 
 def initialize_database():

@@ -12,14 +12,14 @@ import re
 from datetime import date, datetime
 from urllib.parse import quote
 
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 
 from src import calculations, methodology_library as library, methodology_registry as registry
 from src import monitoring, production_records, projects, readiness, soil_evidence
 from src.ai import workspace as ws
 from src.database import (
     get_db_connection, get_field, get_alm_practice_schedule, get_alm_livestock_schedule,
-    get_soc_measurements,
+    get_soc_measurements, read_connection_scope,
 )
 from src.issuance import result_is_issuable
 from src.methodology_corrections import CORRECTION_USAGE_INSTRUCTIONS
@@ -117,9 +117,22 @@ def _read_evidence(org_id, project_id, field_id):
              "project_fields": _ordered(projects.list_project_fields(org_id, project_id)),
              "requirements": _ordered(registry.list_requirements(bundle["bundle_id"])) if bundle else [],
              "methodology_corrections": library.list_corrections(org_id=org_id)}
-    for table in sorted(monitoring.TABLES):
-        state[table] = monitoring.records(table, org_id, field_id)
     with get_db_connection() as conn:
+        # These five append-only tables share a schema. One scoped round trip
+        # replaces one SELECT per table, preserving their original row order.
+        tables = sorted(monitoring.TABLES)
+        for table in tables:
+            state[table] = []
+        query = " UNION ALL ".join(
+            f"SELECT '{table}' AS evidence_table, id,org_id,field_id,season_id,created_at,payload "
+            f"FROM {table} WHERE org_id=:o AND field_id=:f" for table in tables)
+        rows = conn.execute(text(query + " ORDER BY evidence_table,created_at,id"),
+                            {"o": org_id, "f": field_id}).mappings().all()
+        for row in rows:
+            record = dict(row)
+            table = record.pop("evidence_table")
+            record["payload"] = json.loads(record["payload"])
+            state[table].append(record)
         state["determinations"] = [dict(r) for r in conn.execute(text(
             "SELECT * FROM readiness_determinations WHERE org_id=:o AND field_id=:f ORDER BY id"
         ), {"o": org_id, "f": field_id}).mappings().all()]
@@ -130,24 +143,26 @@ def _read_evidence(org_id, project_id, field_id):
         state["calculation_state_sha256"] = _hash(calculation_rows)
         doc_ids = [d["document_id"] for d in (bundle or {}).get("documents", [])]
         indexed_rows = []
-        for doc_id in sorted(doc_ids):
-            indexed_rows.extend(dict(r) for r in conn.execute(text(
+        if doc_ids:
+            indexed_rows = [dict(r) for r in conn.execute(text(
                 "SELECT chunk_id, document_sha256, index_version, content, section, equations "
-                "FROM methodology_chunks WHERE document_id=:d ORDER BY page, segment"
-            ), {"d": doc_id}).mappings().all())
+                "FROM methodology_chunks WHERE document_id IN :documents ORDER BY document_id,page,segment"
+            ).bindparams(bindparam("documents", expanding=True)), {"documents": sorted(doc_ids)}).mappings().all()]
         state["methodology_index_sha256"] = _hash(indexed_rows)
     if field["field_type"] == "cropland_alm_vm0042":
         state["practice_schedule"] = get_alm_practice_schedule(org_id, field_id)
         state["livestock_schedule"] = get_alm_livestock_schedule(org_id, field_id)
         state["soc_measurements"] = {f"{s}_{t}": v for (s, t), v in get_soc_measurements(org_id, field_id).items()}
-        plans = _ordered(soil_evidence.list_plans(org_id, field_id))
+        plans = soil_evidence.sampling_evidence_for_field(org_id, field_id)
         for plan in plans:
-            plan["strata"] = _ordered(soil_evidence.list_strata(org_id, plan["plan_id"]))
-            plan["samples"] = _ordered(s for s in soil_evidence.list_samples(org_id, plan["plan_id"])
-                                        if s["field_id"] == field_id)
+            plan["strata"] = _ordered(plan["strata"])
+            plan["samples"].sort(key=lambda s: canonical_json({k: v for k, v in s.items()
+                                                              if k not in {"lab_results", "custody_events"}}))
             for sample in plan["samples"]:
-                sample["lab_results"] = _ordered(soil_evidence.list_lab_results(org_id, sample["sample_id"]))
-                sample["custody_events"] = _ordered(soil_evidence.list_custody_events(org_id, sample["sample_id"]))
+                sample["lab_results"] = _ordered(sample["lab_results"])
+                sample["custody_events"] = _ordered(sample["custody_events"])
+        # Match the original ordering: plans were sorted before children were attached.
+        plans.sort(key=lambda p: canonical_json({k: v for k, v in p.items() if k not in {"strata", "samples"}}))
         state["soil_evidence"] = {"plans": plans, "reviews": {
             f"{site}_{tp}": soil_evidence.latest_soc_evidence_review(org_id, field_id, site, tp)
             for site in sorted(soil_evidence.SITE_TYPES) for tp in sorted(soil_evidence.TIMEPOINTS)}}
@@ -159,10 +174,11 @@ def _read_evidence(org_id, project_id, field_id):
 
 def evidence_fingerprint(org_id, project_id, user_id, field_id):
     """Public checkpoint for the future worker; rechecks read authorization."""
-    ws.authorize(org_id, project_id, user_id)
-    if field_id not in ws.active_fields(org_id, project_id):
-        raise PermissionError("Field is not active in this project")
-    return _hash(_read_evidence(org_id, project_id, field_id))
+    with read_connection_scope():
+        ws.authorize(org_id, project_id, user_id)
+        if field_id not in ws.active_fields(org_id, project_id):
+            raise PermissionError("Field is not active in this project")
+        return _hash(_read_evidence(org_id, project_id, field_id))
 
 
 def fix_for_requirement(requirement_id, field_id, project_id):
@@ -317,7 +333,10 @@ class _Builder:
             if check.get("explanation") and check.get("required_evidence"):
                 description += "\nRequired evidence: " + check["required_evidence"]
             self.source(f"readiness:{rid}", title, "readiness", description, requirement_id=rid, **fix)
-            meta = registry.get_requirement_meta(rid, self.packet["bundle_id"])
+            # Metadata is already part of the fingerprinted evidence read.
+            candidates = [r for r in self.state["requirements"] if r["requirement_id"] == rid]
+            meta = next((r for r in candidates if r.get("bundle_id") == self.packet["bundle_id"]),
+                        next((r for r in candidates if r.get("bundle_id") == ""), None))
             if retrieve and meta and meta.get("source_document_id"):
                 self.methodology(meta["source_document_id"], meta.get("source_section") or "", stored_bundle)
 
@@ -552,4 +571,5 @@ def build_packet(org_id, project_id, user_id, action, field_id, **parameters):
                 "diff_since_previous": diff_since_previous}
     if action not in builders:
         raise ValueError("Unknown explanation action")
-    return builders[action](org_id, project_id, user_id, field_id, **parameters)
+    with read_connection_scope():
+        return builders[action](org_id, project_id, user_id, field_id, **parameters)

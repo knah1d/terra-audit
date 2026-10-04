@@ -236,6 +236,52 @@ def list_plans(org_id: str, field_id: str) -> list[dict]:
     return [dict(r) for r in rows]
 
 
+def sampling_evidence_for_field(org_id: str, field_id: str) -> list[dict]:
+    """Full provenance in at most five SELECTs, independent of sample count.
+
+    Used by explanation fingerprints only. No aggregate, adopted mapping or
+    calculation input is substituted. Every join retains organization scope.
+    """
+    params = {"o": org_id, "f": field_id}
+    with get_db_connection() as conn:
+        plans = [dict(r) for r in conn.execute(text(
+            "SELECT * FROM soil_sampling_plans WHERE org_id=:o AND field_id=:f"
+        ), params).mappings().all()]
+        if not plans:
+            return []
+        by_plan = {p["plan_id"]: p for p in plans}
+        for plan in plans:
+            plan.update(strata=[], samples=[])
+        strata = conn.execute(text("""
+            SELECT s.* FROM soil_strata s JOIN soil_sampling_plans p
+              ON p.org_id=s.org_id AND p.plan_id=s.plan_id
+            WHERE s.org_id=:o AND p.field_id=:f
+        """), params).mappings().all()
+        for row in strata:
+            by_plan[row["plan_id"]]["strata"].append(dict(row))
+        samples = conn.execute(text("""
+            SELECT s.* FROM soil_samples s JOIN soil_sampling_plans p
+              ON p.org_id=s.org_id AND p.plan_id=s.plan_id
+            WHERE s.org_id=:o AND s.field_id=:f AND p.field_id=:f
+        """), params).mappings().all()
+        by_sample = {}
+        for row in samples:
+            sample = {**dict(row), "lab_results": [], "custody_events": []}
+            by_sample[sample["sample_id"]] = sample
+            by_plan[sample["plan_id"]]["samples"].append(sample)
+        if by_sample:
+            for table, key in (("soil_lab_results", "lab_results"), ("soil_custody_events", "custody_events")):
+                rows = conn.execute(text(f"""
+                    SELECT e.* FROM {table} e JOIN soil_samples s
+                      ON s.org_id=e.org_id AND s.sample_id=e.sample_id
+                    JOIN soil_sampling_plans p ON p.org_id=s.org_id AND p.plan_id=s.plan_id
+                    WHERE e.org_id=:o AND s.field_id=:f AND p.field_id=:f
+                """), params).mappings().all()
+                for row in rows:
+                    by_sample[row["sample_id"]][key].append(dict(row))
+    return plans
+
+
 # --------------------------------------------------------------------------
 # Strata
 # --------------------------------------------------------------------------

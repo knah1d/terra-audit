@@ -50,6 +50,8 @@ def handle_explanation(job, ctx):
     from src.ai.explanations import packet_for
     from src.ai.validate import generate_explanation
     from src.ai.timing import StageTimings
+    from src.ai.packets import evidence_fingerprint
+    from src.ai.providers import explanation_signature
     timings = StageTimings("worker", job["job_id"])
     org, payload = job["org_id"], job["payload"]
     project = payload["project_id"]
@@ -65,6 +67,16 @@ def handle_explanation(job, ctx):
             raise ValueError("Evidence changed; request a new explanation")
         return packet
 
+    def final_checkpoint():
+        if ctx.cancel_requested():
+            raise JobCancelled("AI explanation cancelled before publication")
+        if explanation_signature() != payload.get("generation_signature"):
+            raise ValueError("AI provider configuration changed; request a new explanation")
+        # Re-read every fingerprinted value and live access, without repeating
+        # readiness calculation, citation retrieval and sentence construction.
+        if evidence_fingerprint(org, project, payload["requested_by"], payload["request"]["field_id"]) != payload["evidence_fingerprint"]:
+            raise ValueError("Evidence changed; request a new explanation")
+
     try:
         with timings.measure("initial_packet_and_checkpoint"):
             packet = checkpoint()
@@ -79,8 +91,8 @@ def handle_explanation(job, ctx):
             return {"record_id": job["job_id"]}
         with timings.measure("generation_and_validation"):
             output = generate_explanation(packet, org)
-        with timings.measure("final_packet_and_checkpoint"):
-            checkpoint()
+        with timings.measure("final_evidence_and_authorization_check"):
+            final_checkpoint()
         output.update(action=packet["action"], field_id=packet["field_id"],
                       generation_signature=packet["generation_signature"],
                       evidence_fingerprint=packet["evidence_fingerprint"],

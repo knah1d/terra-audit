@@ -18,7 +18,7 @@ from the worker's subsequent processing time.
 
 Terminal logs have `ai_explain scope=worker job=<id> stage=<name>` and duration
 in seconds. Stages are initial_packet_and_checkpoint, existing_record_lookup,
-generation_and_validation, final_packet_and_checkpoint, and save.
+generation_and_validation, final_evidence_and_authorization_check, and save.
 
 The saved explanation includes `generation_timings_seconds`, with separate
 provider and validation durations for each attempt. Provider time includes
@@ -39,3 +39,27 @@ queries while retaining authorization, active membership, bundle scoping and
 fingerprint checks. If provider time dominates, inspect rate limits, context size,
 reasoning/output token usage and retries. No latency improvement is claimed from
 adding instrumentation alone.
+
+## Packet optimization
+
+Explanation packet reads now share one database connection in an explicitly
+read-only scope, avoiding a separate transaction/rollback for every small helper.
+The scope stores no query results. PostgreSQL uses READ COMMITTED so the packet's
+last fingerprint pass can still observe concurrent commits; SQLite query-only
+mode is restored before the connection returns to the pool. Context-local state
+keeps different requests and the worker heartbeat thread isolated.
+
+Monitoring tables are read with one organization/field-scoped UNION ALL.
+Methodology index rows for bundle documents use one expanding IN query. Soil
+plan/sample/lab/custody provenance uses at most five scoped queries instead of
+queries per sample. Canonical row ordering retains the previous fingerprint
+representation. Requirement metadata already in the fingerprinted state is
+reused during citation construction.
+
+The initial worker checkpoint still rebuilds and compares the complete packet.
+The final checkpoint rechecks cancellation, provider identity, live authorization,
+active field membership and all evidence/index/correction fingerprint values,
+without rebuilding readiness, sentence IDs and citation retrieval. Database
+connections are closed before provider calls or writes. No checks have been
+replaced with a time-based cache. Measure a newly generated explanation after
+deploying/restarting; the actual speed improvement is not yet verified.
