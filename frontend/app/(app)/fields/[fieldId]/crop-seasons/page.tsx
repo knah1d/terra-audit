@@ -11,6 +11,7 @@ import { useFieldContext } from "@/components/fields/FieldContext";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Select, TextInput } from "@/components/ui/Field";
+import { useCropSeasons } from "@/hooks/use-crop-seasons";
 import { apiFetch } from "@/lib/api";
 
 type RecordRow<T> = { id: string; season_id: string; created_at: string; payload: T };
@@ -34,6 +35,12 @@ function download(value: unknown, name: string) {
 
 export default function CropSeasonsPage() {
   const field = useFieldContext();
+  const params = useSearchParams();
+  return <CropSeasonsView key={`${field.field_id}:${params.toString()}`} />;
+}
+
+function CropSeasonsView() {
+  const field = useFieldContext();
   const session = useSession();
   const writable = session?.role === "admin" || session?.role === "analyst";
   const queryClient = useQueryClient();
@@ -49,7 +56,7 @@ export default function CropSeasonsPage() {
   const [isHistorical, setIsHistorical] = useState(false);
   const [split, setSplit] = useState("field");
   const [cropSequence, setCropSequence] = useState<{ crop: string; start_date: string; end_date: string }[]>([]);
-  const seasons = useQuery({ queryKey: ["crop-seasons", field.field_id], queryFn: () => apiFetch<RecordRow<Season>[]>(base), select: rows => Array.from(new Map(rows.map(row => [row.season_id || row.id, { ...row, id: row.season_id || row.id }])).values()) });
+  const seasons = useCropSeasons(field.field_id);
   const seasonId = seasons.data?.some(s => s.id === selected) ? selected : seasons.data?.[0]?.id || "";
   const path = `${base}/${seasonId}`;
   const evidence = useQuery({ queryKey: ["crop-evidence", field.field_id, seasonId], queryFn: () => apiFetch<Evidence>(`${path}/evidence`), enabled: !!seasonId });

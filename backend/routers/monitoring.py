@@ -24,7 +24,9 @@ def owned_season(org_id, field_id, season_id):
 
 
 @router.get("/fields/{field_id}/crop-seasons")
-def list_seasons(field_id: str, user=Depends(get_current_user), field=Depends(_field)):
+def list_seasons(field_id: str, current_only: bool = False, user=Depends(get_current_user), field=Depends(_field)):
+    if current_only:
+        return monitoring.current_seasons(user["org_id"], field_id)
     return monitoring.records("crop_seasons", user["org_id"], field_id)
 
 
@@ -127,7 +129,7 @@ def _monitoring_payload(field: dict, season: dict, force_refresh: bool, requeste
     already-queued job computes (Phase 4's "freeze each child job's
     geometry, season dates, processing version" requirement)."""
     return {
-        "field_id": field["field_id"], "season_id": season["id"],
+        "field_id": field["field_id"], "season_id": season["season_id"],
         "geometry": field["geojson_geometry"], "season_start": season["payload"]["start_date"],
         "season_end": season["payload"]["end_date"], "processing_version": MULTICROP_VERSION,
         "force_refresh": force_refresh, "requested_by": requested_by,

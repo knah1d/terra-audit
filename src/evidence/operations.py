@@ -283,7 +283,7 @@ def project_monitoring_dashboard(org_id: str, project_id: str) -> dict:
         field = get_field(org_id, m["field_id"])
         if field is None:
             continue
-        seasons = monitoring.records("crop_seasons", org_id, m["field_id"])
+        seasons = monitoring.current_seasons(org_id, m["field_id"])
         for season in seasons:
             season_id = season["id"]
             runs = monitoring.records("monitoring_runs", org_id, m["field_id"], season_id)

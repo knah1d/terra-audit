@@ -1,7 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { apiFetch } from "@/lib/api";
+import { useCropSeasons } from "@/hooks/use-crop-seasons";
 import { formatDate } from "@/lib/format";
 import { Play, Satellite } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -48,8 +47,8 @@ const STAGES: Record<string, string> = {
 
 function SignalAnalyticsView() {
   const field = useFieldContext();
-  const seasons = useQuery({ queryKey: ["crop-seasons", field.field_id], queryFn: () => apiFetch<{ id: string; season_id: string; payload: { name: string; start_date: string; end_date: string } }[]>(`/fields/${field.field_id}/crop-seasons`) });
-  const currentSeasons = Array.from(new Map((seasons.data ?? []).map(s => [s.season_id || s.id, s])).values());
+  const seasons = useCropSeasons(field.field_id);
+  const currentSeasons = seasons.data ?? [];
   const [preset, setPreset] = useState<string>("Custom Range");
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");

@@ -59,6 +59,19 @@ def records(table, org_id, field_id=None, season_id=None):
     return [{**row, "payload": json.loads(row["payload"])} for row in rows]
 
 
+def current_seasons(org_id, field_id=None):
+    """Latest season payloads with stable IDs; raw records retain every version."""
+    latest = {}
+    for row in records("crop_seasons", org_id, field_id):
+        key = (row["field_id"], row["season_id"])
+        previous = latest.get(key)
+        rank = (int(row["payload"].get("version", 1)), row["created_at"], row["id"])
+        if previous is None or rank > previous[0]:
+            latest[key] = (rank, row)
+    return [{**row, "id": row["season_id"], "version_record_id": row["id"]}
+            for _, row in sorted(latest.values(), key=lambda entry: (entry[1]["created_at"], entry[1]["id"]))]
+
+
 def append_record_once_per_job(table, org_id, field_id, season_id, job_id, payload):
     """Idempotent wrapper around append_record() for a worker job whose
     execution might be retried after a crash (Phase 4's durable queue can

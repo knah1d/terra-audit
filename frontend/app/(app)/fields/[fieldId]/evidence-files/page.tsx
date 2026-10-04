@@ -8,12 +8,18 @@ import { useFieldContext } from "@/components/fields/FieldContext";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Field";
+import { useCropSeasons } from "@/hooks/use-crop-seasons";
 import { apiFetch, apiFetchBlob } from "@/lib/api";
 import { formatQueueTimestamp } from "@/lib/format";
 
 type Attachment = { attachment_id: string; filename: string; size_bytes: number; uploaded_at: string | null };
-type Season = { id: string; payload: { name: string } };
 export default function EvidenceFilesPage() {
+  const field = useFieldContext();
+  const params = useSearchParams();
+  return <EvidenceFilesView key={`${field.field_id}:${params.toString()}`} />;
+}
+
+function EvidenceFilesView() {
   const field = useFieldContext();
   const session = useSession();
   const queryClient = useQueryClient();
@@ -22,7 +28,7 @@ export default function EvidenceFilesPage() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
-  const seasons = useQuery({ queryKey: ["crop-seasons", field.field_id], queryFn: () => apiFetch<Season[]>(`/fields/${field.field_id}/crop-seasons`) });
+  const seasons = useCropSeasons(field.field_id);
   const validTarget = !season || !!seasons.data?.some(s => s.id === season);
   const targetType = season ? "season" : "field";
   const targetId = season || field.field_id;

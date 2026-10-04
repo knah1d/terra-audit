@@ -520,7 +520,7 @@ def project_dashboard(org_id: str, project_id: str) -> dict:
         if field is None:
             continue  # field was deleted; membership row is kept for history but has nothing to show
         farms = [f for f in list_farms_for_field(org_id, m["field_id"]) if f["removed_at"] is None]
-        seasons = _monitoring.records("crop_seasons", org_id, m["field_id"])
+        seasons = _monitoring.current_seasons(org_id, m["field_id"])
         latest_season = seasons[-1] if seasons else None
         runs = _monitoring.records("monitoring_runs", org_id, m["field_id"],
                                     latest_season["id"] if latest_season else None) if latest_season else []

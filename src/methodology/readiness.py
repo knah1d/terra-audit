@@ -377,7 +377,7 @@ def _historical_lookback_check(org_id, field_id, season_ids, monitoring_period_s
 
     start = date.fromisoformat(monitoring_period_start)
     lookback_start = date.fromordinal(start.toordinal() - 365 * _HISTORICAL_LOOKBACK_MIN_YEARS)
-    all_seasons = monitoring.records("crop_seasons", org_id, field_id)
+    all_seasons = monitoring.current_seasons(org_id, field_id)
 
     covered_days = set()
     documented_gaps = []
@@ -727,7 +727,7 @@ def guided_enrollment(org_id: str, field: dict, project_id: str | None = None) -
     bundle = registry.resolve_bundle_for_project(org_id, project_id, accounting_pathway) if accounting_pathway else None
     bundle_id = bundle["bundle_id"] if bundle else None
 
-    all_seasons = monitoring.records("crop_seasons", org_id, field_id)
+    all_seasons = monitoring.current_seasons(org_id, field_id)
     declared = set()
     for s in all_seasons:
         declared.update(s["payload"].get("crops", []))

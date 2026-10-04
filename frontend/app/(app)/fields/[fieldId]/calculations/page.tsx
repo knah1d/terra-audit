@@ -5,7 +5,7 @@ import { AMENDMENT_TYPE_OPTIONS } from "@/lib/schemas/ledger";
 import { formatDate, formatNumber, formatQueueTimestamp } from "@/lib/format";
 import { useState } from "react";
 import { ExplainButton } from "@/components/ai/ExplainDrawer";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useSession } from "@/app/providers";
 import { useFieldContext } from "@/components/fields/FieldContext";
 import { Badge } from "@/components/ui/Badge";
@@ -17,12 +17,12 @@ import { downloadBlob } from "@/lib/download";
 import {
   useCalculationHistory, useCommitCalculation, usePreviewCalculation, useReadiness, useRecordDetermination,
 } from "@/hooks/use-calculations";
-import { useProjects } from "@/hooks/use-projects";
+import { useCropSeasons } from "@/hooks/use-crop-seasons";
+import { useProjectMembers, useProjects } from "@/hooks/use-projects";
 import { useCreateSubmission } from "@/hooks/use-reviews";
 import type { AccountingPathway, CalculationHistoryRow, ReadinessCheck } from "@/types/api";
 import Link from "next/link";
 
-type SeasonRow = { id: string; payload: { name: string; crops: string[]; start_date: string; end_date: string } };
 
 const PATHWAY_BY_FIELD_TYPE: Record<string, AccountingPathway> = {
   rice_awd: "vm0051_rice_awd",
@@ -43,11 +43,11 @@ function download(value: unknown, name: string) {
   const a = document.createElement("a"); a.href = url; a.download = name; a.click(); URL.revokeObjectURL(url);
 }
 
-function ReadinessList({ checklist, explain }: { checklist: ReadinessCheck[]; explain?: (id: string) => React.ReactNode }) {
+function ReadinessList({ checklist, explain, highlightedRequirement }: { checklist: ReadinessCheck[]; explain?: (id: string) => React.ReactNode; highlightedRequirement?: string }) {
   return (
     <div className="space-y-2">
       {checklist.map((c) => (
-        <div key={c.requirement_id} className="flex flex-wrap items-start gap-2 border-t border-border py-2 text-sm first:border-t-0 first:pt-0">
+        <div key={c.requirement_id} className={`flex flex-wrap items-start gap-2 border-t border-border py-2 text-sm first:border-t-0 first:pt-0 ${c.requirement_id === highlightedRequirement ? "rounded-lg bg-brand-50 px-3" : ""}`}>
           <Badge tone={READINESS_TONE[c.status]}>{c.status.replace("_", " ")}</Badge>
           {explain && ["missing", "needs_review", "unsupported"].includes(c.status) && explain(c.requirement_id)}
           <div className="min-w-0 flex-1">
@@ -70,6 +70,12 @@ function ReadinessList({ checklist, explain }: { checklist: ReadinessCheck[]; ex
 export default function CalculationsPage() {
   const field = useFieldContext();
   const search = useSearchParams();
+  return <CalculationsView key={`${field.field_id}:${search.toString()}`} />;
+}
+
+function CalculationsView() {
+  const field = useFieldContext();
+  const search = useSearchParams();
   const requestedRequirement = search.get("requirement") ?? "";
   const requestedDate = (key: string) => /^\d{4}-\d{2}-\d{2}$/.test(search.get(key) ?? "") ? search.get(key)! : "";
   const session = useSession();
@@ -77,10 +83,7 @@ export default function CalculationsPage() {
   const queryClient = useQueryClient();
   const pathway = PATHWAY_BY_FIELD_TYPE[field.field_type];
 
-  const seasons = useQuery({
-    queryKey: ["crop-seasons", field.field_id],
-    queryFn: () => apiFetch<SeasonRow[]>(`/fields/${field.field_id}/crop-seasons`),
-  });
+  const seasons = useCropSeasons(field.field_id);
   const history = useCalculationHistory(field.field_id);
   const readiness = useReadiness(field.field_id);
   const preview = usePreviewCalculation(field.field_id);
@@ -96,6 +99,38 @@ export default function CalculationsPage() {
   const [projectId, setProjectId] = useState(() => search.get("project") ?? "");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+
+  const members = useProjectMembers(projectId || undefined);
+  const canReview = session?.role === "admin" || (session?.role === "analyst" &&
+    members.data?.some((member) => member.user_id === session.user_id && member.project_role === "lead"));
+  const [readinessContext, setReadinessContext] = useState<string | null>(null);
+  const [inputRevision, setInputRevision] = useState(0);
+  const [previewContext, setPreviewContext] = useState<string | null>(null);
+  const contextKey = JSON.stringify([field.field_id, pathway, projectId, periodStart, periodEnd,
+    [...selectedSeasons].sort().map((id) => [id, seasons.data?.find((season) => season.id === id)?.version_record_id])]);
+  const availableSeasons = seasons.data ?? [];
+  const unavailableSeasons = selectedSeasons.filter((id) => !availableSeasons.some((season) => season.id === id));
+  const contextIssue = !pathway ? "This field has no supported calculation pathway." :
+    !selectedSeasons.length ? "Select at least one crop season." :
+    !periodStart || !periodEnd ? "Set both monitoring dates." :
+    periodEnd < periodStart ? "Monitoring period end must be on or after its start." :
+    !seasons.data || unavailableSeasons.length > 0 ?
+      "A selected crop season is unavailable. Select a current season below." :
+    projectId && (!projects.data || !projects.data.some((project) => project.project_id === projectId)) ?
+      "The selected project is unavailable. Choose an accessible project below." : "";
+  const busy = preview.isPending || commit.isPending || determination.isPending || readiness.isPending;
+  const currentReadiness = !contextIssue && readinessContext === contextKey && !readiness.isPending && !readiness.isError ? readiness.data : undefined;
+  const previewKey = `${contextKey}:${inputRevision}`;
+  const currentPreview = !contextIssue && previewContext === previewKey && !preview.isPending && !preview.isError ? preview.data : undefined;
+  const reviewableRequirements = (currentPreview?.readiness ?? currentReadiness?.checklist ?? [])
+    .filter((item) => item.reviewer_authority !== "automated_only" && item.implementation_support !== "unsupported");
+
+  async function checkReadiness() {
+    if (contextIssue) throw new Error(contextIssue);
+    setReadinessContext(contextKey);
+    await readiness.mutateAsync({ project_id: projectId || null, accounting_pathway: pathway, season_ids: selectedSeasons,
+      monitoring_period_start: periodStart, monitoring_period_end: periodEnd });
+  }
 
   const openCalculations = (history.data ?? []).filter((r) => !r.legacy && r.status !== "superseded");
   const legacyCount = (history.data ?? []).filter((r) => r.legacy).length;
@@ -116,6 +151,7 @@ export default function CalculationsPage() {
   }
 
   function buildContext(engineInputs: Record<string, unknown>) {
+    if (contextIssue) throw new Error(contextIssue);
     return {
       project_id: projectId || null,
       accounting_pathway: pathway,
@@ -167,14 +203,14 @@ export default function CalculationsPage() {
 
       {requestedRequirement && <p role="status" className="ui-body">Review requested for <strong>{requestedRequirement}</strong>. Check the selected context, click Check readiness, then use Record an evidence review below. Only an authorized reviewer can record a decision.</p>}
       {error && <p role="alert" className="rounded-lg bg-danger-50 p-3 text-danger-700">{error}</p>}
-      {notice && <p role="status" className="text-sm text-success-700">{notice} <Link href="/reviews" className="underline">Go to Reviews</Link></p>}
+      {notice && <p role="status" className="text-sm text-success-700">{notice} <Link href={projectId ? `/reviews?project=${encodeURIComponent(projectId)}` : "/reviews"} className="underline">Go to Reviews</Link></p>}
 
       <Card>
         <h3 className="ui-subsection-title mb-3">Calculation context</h3>
         {seasons.isLoading ? <p role="status">Loading crop seasons…</p> : seasons.error ? <p role="alert">{seasons.error.message}</p> : !seasons.data?.length ? (
           <p className="ui-secondary">No crop seasons recorded yet — add one under Crop Seasons first.</p>
         ) : (
-          <div className="space-y-3 text-sm">
+          <fieldset disabled={busy} className="space-y-3 text-sm">
             <div>
               <p className="mb-1.5 font-medium">Crop seasons in this accounting period</p>
               <div className="flex flex-wrap gap-2">
@@ -199,35 +235,33 @@ export default function CalculationsPage() {
             <p className="ui-meta">Accounting pathway: <span className="font-mono">{pathway}</span> (fixed by this field&apos;s registered methodology — never inferred from a crop declaration).</p>
             <Button
               variant="secondary" loading={readiness.isPending}
-              disabled={!selectedSeasons.length || !periodStart || !periodEnd}
-              onClick={() => void perform(async () => {
-                await readiness.mutateAsync({
-                  project_id: projectId || null, accounting_pathway: pathway, season_ids: selectedSeasons,
-                  monitoring_period_start: periodStart, monitoring_period_end: periodEnd,
-                });
-              })}
+              disabled={!!contextIssue || busy}
+              onClick={() => void perform(checkReadiness)}
             >
               Check readiness
             </Button>
-          </div>
+            {contextIssue && <p role="status" className="ui-meta">{contextIssue}</p>}
+            {!!unavailableSeasons.length && <Button type="button" variant="secondary" size="sm" onClick={() => setSelectedSeasons((ids) => ids.filter((id) => availableSeasons.some((season) => season.id === id)))}>Remove unavailable season selections</Button>}
+            {(readiness.data || preview.data) && !currentReadiness && !currentPreview && !busy && <p role="status" className="ui-meta">The context or inputs changed. Run readiness or a fresh preview for this selection.</p>}
+          </fieldset>
         )}
       </Card>
 
-      {readiness.data && (
+      {currentReadiness && (
         <Card>
           <h3 className="ui-subsection-title mb-3">Readiness checklist</h3>
           <p className="ui-meta mb-3">
             This reflects what this implementation can check automatically, plus any recorded expert
             determinations — it is not a certification of full methodology compliance.
           </p>
-          <ReadinessList checklist={readiness.data.checklist} explain={explainRequirement} />
+          <ReadinessList checklist={currentReadiness.checklist} explain={explainRequirement} highlightedRequirement={requestedRequirement} />
         </Card>
       )}
 
-      {writable && !!selectedSeasons.length && periodStart && periodEnd && (
+      {writable && !contextIssue && (
         <Card>
           <h3 id="engine-inputs" className="ui-subsection-title mb-3 scroll-mt-28">Engine inputs</h3>
-          <form key={`${field.field_id}:${projectId}:${selectedSeasons.join()}:${periodStart}:${periodEnd}`} className="grid gap-3 sm:grid-cols-2" onSubmit={(e) => {
+          <form key={contextKey} className="grid gap-3 sm:grid-cols-2" onChange={() => { setInputRevision((revision) => revision + 1); setPreviewContext(null); }} onSubmit={(e) => {
             e.preventDefault();
             const submitter = (e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
             const action = submitter?.value === "commit" ? "commit" : "preview";
@@ -235,6 +269,7 @@ export default function CalculationsPage() {
             void perform(async () => {
               const engineInputs = readEngineInputs(form);
               if (action === "preview") {
+                setPreviewContext(previewKey);
                 await preview.mutateAsync(buildContext(engineInputs));
                 return;
               }
@@ -281,33 +316,33 @@ export default function CalculationsPage() {
             )}
             <label className="ui-label sm:col-span-2"><input type="checkbox" required className="mr-2" />I have checked these values against evidence for the selected period.</label>
             <div className="sm:col-span-2 flex gap-2">
-              <Button type="submit" name="action" value="preview" variant="secondary" loading={preview.isPending}>Preview calculation</Button>
-              <Button type="submit" name="action" value="commit" loading={commit.isPending}>Commit (freeze evidence)</Button>
+              <Button type="submit" name="action" value="preview" variant="secondary" disabled={busy} loading={preview.isPending}>Preview calculation</Button>
+              <Button type="submit" name="action" value="commit" disabled={busy} loading={commit.isPending}>Commit (freeze evidence)</Button>
             </div>
           </form>
         </Card>
       )}
 
-      {preview.data && (
+      {currentPreview && (
         <Card>
           <h3 className="ui-subsection-title mb-3">Preview result</h3>
-          <p className="text-sm">Calculated estimate (not issued credits): <span className="font-mono">{formatNumber(preview.data.result.final_issuance as number | null, "tco2e")}</span></p>
+          <p className="text-sm">Calculated estimate (not issued credits): <span className="font-mono">{formatNumber(currentPreview.result.final_issuance as number | null, "tco2e")}</span></p>
           {pathway === "vm0042_alm" && <div className="mt-2 space-y-1 text-sm">
-            <p>Annual displacement leakage: {String(preview.data.result.lk_disp_t ?? "blocked")} tCO2e/year</p>
-            <p>Allocated to reductions / removals: {String(preview.data.result.lk_er_t ?? "—")} / {String(preview.data.result.lk_cr_t ?? "—")} tCO2e/year</p>
-            {!!preview.data.result.leakage_block_reason && <p className="text-danger-700">{String(preview.data.result.leakage_block_reason)}</p>}
+            <p>Annual displacement leakage: {String(currentPreview.result.lk_disp_t ?? "blocked")} tCO2e/year</p>
+            <p>Allocated to reductions / removals: {String(currentPreview.result.lk_er_t ?? "—")} / {String(currentPreview.result.lk_cr_t ?? "—")} tCO2e/year</p>
+            {!!currentPreview.result.leakage_block_reason && <p className="text-danger-700">{String(currentPreview.result.leakage_block_reason)}</p>}
             <Link className="underline" href={`/fields/${field.field_id}/production-records`}>Manage production and leakage evidence</Link>
-            <details><summary>Leakage steps and sources</summary><pre className="overflow-auto whitespace-pre-wrap text-xs">{JSON.stringify(preview.data.result.leakage, null, 2)}</pre></details>
+            <details><summary>Leakage steps and sources</summary><pre className="overflow-auto whitespace-pre-wrap text-xs">{JSON.stringify(currentPreview.result.leakage, null, 2)}</pre></details>
           </div>}
-          <div className="mt-3"><ReadinessList checklist={preview.data.readiness} explain={explainRequirement} /></div>
+          <div className="mt-3"><ReadinessList checklist={currentPreview.readiness} explain={explainRequirement} highlightedRequirement={requestedRequirement} /></div>
         </Card>
       )}
 
-      {writable && projectId && selectedSeasons.length > 0 && periodStart && periodEnd && (preview.data || readiness.data) && (
+      {canReview && projectId && !contextIssue && (currentPreview || currentReadiness) && (
         <Card>
           <h3 id="evidence-review" className="ui-subsection-title scroll-mt-28">Record an evidence review</h3>
           <p className="my-2 text-sm text-text-secondary">Project leads and administrators can decide reviewable requirements. Decisions apply to the selected project, dates and current evidence. Changed leakage inputs or production records require a new review.</p>
-          <form className="space-y-2" onSubmit={(e) => {
+          <form key={`${contextKey}:${reviewableRequirements.map((item) => item.requirement_id).join()}`} className="space-y-2" onSubmit={(e) => {
             e.preventDefault();
             const data = new FormData(e.currentTarget);
             void perform(async () => {
@@ -315,27 +350,29 @@ export default function CalculationsPage() {
                 season_ids: selectedSeasons, monitoring_period_start: periodStart, monitoring_period_end: periodEnd,
                 requirement_id: String(data.get("requirement")), status: String(data.get("decision")), reason: String(data.get("reason")) });
               preview.reset();
-              await readiness.mutateAsync({ project_id: projectId, accounting_pathway: pathway, season_ids: selectedSeasons,
-                monitoring_period_start: periodStart, monitoring_period_end: periodEnd });
+              setPreviewContext(null);
+              await checkReadiness();
               setNotice("Review saved. Run a fresh preview before committing.");
             });
           }}>
-            <Select aria-label="Requirement to review" name="requirement" required defaultValue={requestedRequirement}><option value="">Select reviewable requirement</option>
-              {(preview.data?.readiness ?? readiness.data?.checklist ?? []).filter((c) => c.reviewer_authority !== "automated_only" && c.implementation_support !== "unsupported").map((c) => <option key={c.requirement_id} value={c.requirement_id}>{c.requirement_id}</option>)}
+            <Select aria-label="Requirement to review" name="requirement" disabled={busy} required defaultValue={reviewableRequirements.some((item) => item.requirement_id === requestedRequirement) ? requestedRequirement : ""}><option value="">Select reviewable requirement</option>
+              {reviewableRequirements.map((c) => <option key={c.requirement_id} value={c.requirement_id}>{c.requirement_id}</option>)}
             </Select>
-            <Select aria-label="Review decision" name="decision" defaultValue="satisfied"><option value="satisfied">Evidence accepted</option><option value="not_applicable">Not applicable (where permitted)</option><option value="needs_review">Further review needed</option></Select>
-            <TextInput aria-label="Review justification and sources" name="reason" required placeholder="Decision, source references and justification" />
-            <Button type="submit" loading={determination.isPending}>Record review</Button>
+            <Select aria-label="Review decision" name="decision" disabled={busy} defaultValue="satisfied"><option value="satisfied">Evidence accepted</option><option value="not_applicable">Not applicable (where permitted)</option><option value="needs_review">Further review needed</option></Select>
+            <TextInput aria-label="Review justification and sources" name="reason" disabled={busy} required placeholder="Decision, source references and justification" />
+            <Button type="submit" disabled={busy || !reviewableRequirements.length} loading={determination.isPending}>Record review</Button>
           </form>
         </Card>
       )}
+
+      {projectId && !canReview && (currentPreview || currentReadiness) && <p className="ui-secondary">Evidence review decisions require a project lead or administrator. {members.isPending ? "Checking your project role…" : members.isError ? "Your project role could not be loaded." : "Ask an authorized reviewer to review this context."}</p>}
 
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="ui-subsection-title">Calculation history</h3>
           {!!legacyCount && <Badge tone="neutral">{legacyCount} legacy (no snapshot)</Badge>}
         </div>
-        {history.isLoading ? <p className="mt-2 text-sm">Loading…</p> : !history.data?.length ? (
+        {history.isLoading ? <p className="mt-2 text-sm">Loading…</p> : history.isError ? <p role="alert">Unable to load calculation history: {history.error.message}</p> : !history.data?.length ? (
           <p className="mt-2 text-sm text-text-secondary">No calculations yet.</p>
         ) : (
           <div className="mt-3 space-y-2">
