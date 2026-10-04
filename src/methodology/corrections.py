@@ -272,6 +272,7 @@ def corrections_for(document_id, section="", equations=(), *, org_id=None, docum
     """
     if document_ids is not None and document_id not in document_ids:
         return []
+    from src.methodology.library import INDEX_VERSION
     eqs = set(re.findall(r"\d+", equations)) if isinstance(equations, str) else {str(e) for e in equations}
     with get_db_connection() as conn:
         links = [r for r in _list(conn, document_id, org_id)
@@ -292,7 +293,7 @@ def corrections_for(document_id, section="", equations=(), *, org_id=None, docum
             rows = documents[correction_doc]
             if not rows:
                 link["retrieval_status"] = "not_indexed"
-            elif any(r["document_sha256"] != link["correction_sha256"] for r in rows):
+            elif any(r["document_sha256"] != link["correction_sha256"] or r.get("index_version") != INDEX_VERSION for r in rows):
                 link["retrieval_status"] = "stale_index"
             else:
                 link["chunks"] = _item_chunks(link, rows)

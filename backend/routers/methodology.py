@@ -4,7 +4,7 @@ and guided enrollment — Phase 1/2 of docs/RESEARCH_IMPLEMENTATION_PLAN_
 """
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from backend.access import require_project_lead
+from backend.access import require_project_access, require_project_lead
 from backend.deps import get_current_user, get_owned_field, require_admin, require_writer
 from backend.schemas.methodology import ProjectApplicabilityRequest, QuantificationUnitCreate
 from src.methodology import registry
@@ -121,7 +121,7 @@ def library_ingest_job(job_id: str, user=Depends(require_admin)):
     job = get_job_row(user["org_id"], job_id)
     if job is None or job["job_type"] != "methodology_ingest":
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Methodology ingestion job not found")
-    return {"job_id": job_id, "status": job["status"], "error": job.get("error")}
+    return {"job_id": job_id, "status": job["status"], "error": job.get("error"), "result": job.get("result")}
 
 
 @router.get("/methodology/library/search")
@@ -168,3 +168,15 @@ def get_document_file(document_id: str, user=Depends(get_current_user)):
     if path is None or not path.resolve().is_relative_to(registry.METHODOLOGIES_DIR.resolve()) or not path.exists():
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Methodology document file not available")
     return FileResponse(path, media_type="application/pdf", filename=path.name)
+
+
+@router.get("/projects/{project_id}/methodology-library/coverage")
+def project_library_coverage(project_id: str, accounting_pathway: str, user=Depends(get_current_user)):
+    require_project_access(user["org_id"], project_id, user)
+    if accounting_pathway not in {"vm0051_rice_awd", "vm0042_alm"}:
+        raise HTTPException(422, "Unknown accounting pathway")
+    bundle = registry.resolve_bundle_for_project(user["org_id"], project_id, accounting_pathway)
+    if not bundle:
+        raise HTTPException(404, "No methodology bundle resolved for this project pathway")
+    from src.methodology.library import bundle_coverage
+    return bundle_coverage(bundle, org_id=user["org_id"])

@@ -102,3 +102,22 @@ export function useProjectEligibleArea(projectId: string) {
     queryFn: () => apiFetch<EligibleArea>(`/projects/${projectId}/eligible-area`),
   });
 }
+
+export interface MethodologySourceStatus {
+  document_id: string; title: string; chunks: number; pages: number;
+  status: "indexed" | "not_indexed" | "stale" | "missing_local_file" | "external_reference";
+  document_type: string; local_file_available?: boolean; role?: string;
+}
+export interface MethodologyCoverage {
+  bundle_id: string; bundle_version: string; documents: MethodologySourceStatus[];
+  counts: Record<string, number>; all_sources_indexed: boolean;
+  corrections: { total: number; unconfirmed: number; outside_bundle_document_ids: string[] };
+  notice: string;
+}
+export function useMethodologyCoverage(projectId: string, pathway: string) {
+  return useQuery({
+    queryKey: ["methodology-library-coverage", projectId, pathway],
+    queryFn: () => apiFetch<MethodologyCoverage>(`/projects/${encodeURIComponent(projectId)}/methodology-library/coverage?accounting_pathway=${encodeURIComponent(pathway)}`),
+    staleTime: 30000,
+  });
+}

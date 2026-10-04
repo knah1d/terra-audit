@@ -46,7 +46,7 @@ export function ExplainButton({ projectId, request, children }: {
         </div>)}
         {ai.explanation.missing_evidence.length > 0 && <section><h3 className="ui-subsection-title">Evidence and review needed</h3>{ai.explanation.missing_evidence.map(item => <p key={item.requirement_id} className="py-2">{item.explanation} {item.route && <a className="text-brand-600 underline" href={item.route}>{item.link_label || "View requirement"}</a>}</p>)}</section>}
         {ai.explanation.conflicts.length > 0 && <section><h3 className="ui-subsection-title">Conflicts</h3>{ai.explanation.conflicts.map((item, i) => <p key={i}>{item.description}</p>)}</section>}
-        {ai.explanation.limitations.map((item, i) => <p key={i} className="text-sm text-text-secondary">{item}</p>)}
+        {ai.explanation.limitations.length > 0 && <section className="rounded-lg border border-border p-3"><h3 className="ui-subsection-title">Source limitations</h3><ul className="mt-2 list-disc space-y-2 pl-5 text-sm text-text-secondary">{ai.explanation.limitations.map((item, i) => <li key={i}>{item}</li>)}</ul><a className="mt-3 inline-block text-sm text-brand-700 underline" href={`/projects/${encodeURIComponent(projectId)}/methodology`}>Inspect this project’s methodology source coverage</a></section>}
         <p className="break-all text-xs text-text-tertiary">Provider: {ai.explanation.provider.provider} · Model: {ai.explanation.provider.model || "none"} · Context: {ai.explanation.context_sha256}</p>
       </div>}
     </dialog>

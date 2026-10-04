@@ -227,7 +227,14 @@ def _notify_issue(org_id: str, field_id: str, issue: dict) -> None:
 
 def handle_methodology_ingest(job: dict, ctx) -> dict:
     from src.methodology.library import ingest_all
-    return {"documents": ingest_all()}
+    def checkpoint():
+        if ctx.cancel_requested():
+            raise JobCancelled("Methodology indexing cancelled between documents")
+        ctx.heartbeat()
+    documents = ingest_all(checkpoint=checkpoint)
+    attention = [row for row in documents if row["status"] in {"failed", "missing_local_file"}]
+    return {"documents": documents, "outcome": "needs_attention" if attention else "complete",
+            "attention_count": len(attention)}
 
 
 HANDLERS = {

@@ -4,6 +4,7 @@ import { formatDate } from "@/lib/format";
 
 import { useState } from "react";
 import { useProjectContext } from "@/components/projects/ProjectContext";
+import { MethodologyCoverage } from "@/components/ai/MethodologyCoverage";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -48,6 +49,7 @@ function PathwaySection({ projectId, pathway, label }: { projectId: string; path
           )}
         </>
       )}
+      <MethodologyCoverage projectId={projectId} pathway={pathway} />
       <details className="mt-3">
         <summary className="cursor-pointer text-sm underline">Pin this project to a specific bundle (project lead/admin only)</summary>
         <form className="mt-2 flex flex-wrap gap-2" onSubmit={(e) => {
@@ -57,7 +59,7 @@ function PathwaySection({ projectId, pathway, label }: { projectId: string; path
             .then(() => { setBundleId(""); setReason(""); })
             .catch((err) => setError(err instanceof Error ? err.message : "Failed to set applicability"));
         }}>
-          <Select value={bundleId} onChange={(e) => setBundleId(e.target.value)} required className="max-w-sm">
+          <Select aria-label="Methodology bundle to pin" value={bundleId} onChange={(e) => setBundleId(e.target.value)} required className="max-w-sm">
             <option value="">Choose a bundle…</option>
             {(bundles.data ?? []).map((b) => (
               <option key={b.bundle_id} value={b.bundle_id}>
@@ -65,7 +67,7 @@ function PathwaySection({ projectId, pathway, label }: { projectId: string; path
               </option>
             ))}
           </Select>
-          <TextInput value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason (e.g. transition eligibility)" required className="flex-1" />
+          <TextInput aria-label="Reason for pinning the methodology bundle" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason (e.g. transition eligibility)" required className="flex-1" />
           <Button type="submit" variant="secondary" size="sm" loading={setApplicability.isPending}>Pin bundle</Button>
         </form>
         {error && <p role="alert" className="mt-2 text-sm text-danger-700">{error}</p>}

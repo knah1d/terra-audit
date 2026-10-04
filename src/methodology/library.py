@@ -138,9 +138,13 @@ def ingest_document(document: dict) -> dict:
     """document: a row from src.methodology.registry.list_documents()."""
     from src.methodology.registry import METHODOLOGIES_DIR, _file_sha256
     doc_id, rel = document["document_id"], document.get("file_path")
-    if not rel or not (METHODOLOGIES_DIR / rel).exists():
-        return {"document_id": doc_id, "status": "skipped_no_local_file"}
+    if not rel:
+        return {"document_id": doc_id, "status": "external_reference"}
+    if not (METHODOLOGIES_DIR / rel).is_file():
+        return {"document_id": doc_id, "status": "missing_local_file", "error": "Registered PDF is missing on the worker host."}
     sha = _file_sha256(rel)
+    if not document.get("sha256") or sha != document["sha256"]:
+        raise ValueError("Worker PDF does not match the registered document hash. Synchronize methodology files and refresh the registry before indexing.")
     with get_db_connection() as conn:
         existing = conn.execute(text(
             "SELECT document_sha256, index_version FROM methodology_chunks WHERE document_id = :d LIMIT 1"
@@ -148,6 +152,10 @@ def ingest_document(document: dict) -> dict:
     if existing and existing["document_sha256"] == sha and existing["index_version"] == INDEX_VERSION:
         return {"document_id": doc_id, "status": "unchanged"}
     chunks = _segment_pages(_extract_pages(METHODOLOGIES_DIR / rel))
+    if _file_sha256(rel) != sha:
+        raise ValueError("PDF changed during extraction. Existing index retained; request indexing again after synchronizing files.")
+    if not chunks:
+        raise ValueError("PDF extraction produced no usable text. Existing index retained; scanned documents require a separate OCR decision.")
     with get_db_connection() as conn:
         if is_sqlite():
             conn.execute(text(
@@ -171,13 +179,24 @@ def ingest_document(document: dict) -> dict:
     return {"document_id": doc_id, "status": "indexed", "chunks": len(chunks), "sha256": sha}
 
 
-def ingest_all() -> list[dict]:
+def ingest_all(checkpoint=None) -> list[dict]:
+    """Report each document independently; a damaged PDF cannot hide other results."""
     from src.methodology.registry import list_documents
-    return [ingest_document(d) for d in list_documents()]
+    results = []
+    for document in list_documents():
+        if checkpoint:
+            checkpoint()
+        try:
+            results.append(ingest_document(document))
+        except (ValueError, RuntimeError, OSError, subprocess.TimeoutExpired) as exc:
+            results.append({"document_id": document["document_id"], "status": "failed", "error": str(exc)[:500]})
+    if checkpoint:
+        checkpoint()
+    return results
 
 
 def index_status() -> list[dict]:
-    from src.methodology.registry import list_documents
+    from src.methodology.registry import list_documents, METHODOLOGIES_DIR
     with get_db_connection() as conn:
         rows = conn.execute(text("""
             SELECT document_id, document_sha256, COUNT(*) AS chunks, MAX(page) AS pages,
@@ -192,7 +211,12 @@ def index_status() -> list[dict]:
         if row:
             state = "indexed" if (row["document_sha256"] == document.get("sha256")
                                   and row["index_version"] == INDEX_VERSION) else "stale"
+        local = bool(document.get("file_path") and (METHODOLOGIES_DIR / document["file_path"]).is_file())
+        if document.get("file_path") and not local:
+            state = "missing_local_file"
         result.append({"document_id": document["document_id"], "title": document["title"],
+                       "document_type": document["document_type"], "local_file_available": local,
+                       "expected_sha256": document.get("sha256"),
                        "document_sha256": row["document_sha256"] if row else None,
                        "chunks": row["chunks"] if row else 0, "pages": row["pages"] if row else 0,
                        "index_version": row["index_version"] if row else None, "status": state})
@@ -230,7 +254,7 @@ def search(query: str, document_ids: list[str], limit: int = 8, *, org_id: str |
                 ORDER BY rank DESC, document_id, page, segment LIMIT :limit
             """), {**params, "q": query, "limit": limit}).mappings().fetchall()
     chunks = [{k: v for k, v in dict(r).items() if k not in ("search", "rank")} for r in rows]
-    return attach_corrections(chunks, org_id=org_id, document_ids=document_ids)
+    return attach_corrections(_current_chunks(chunks), org_id=org_id, document_ids=document_ids)
 
 
 _EQ_REF = re.compile(r"Eqs?\.\s*(\d+)(?:\s*[-–/]\s*(\d+))?")
@@ -258,10 +282,38 @@ def chunks_for_reference(document_id: str, source_section: str, limit: int = 6, 
             "SELECT * FROM methodology_chunks WHERE document_id = :d ORDER BY page, segment"
         ), {"d": document_id}).mappings().fetchall()]
     picked = []
-    for r in rows:
+    for r in _current_chunks(rows):
         in_section = any(r["section"].lower() == s or r["section"].lower().startswith(s + ".") for s in sections)
         has_eq = bool(equations & set(filter(None, r["equations"].split(","))))
         if in_section or has_eq:
             picked.append({k: v for k, v in r.items() if k != "search"})
     return attach_corrections(picked[:limit], org_id=org_id, document_ids=document_ids,
                               reference=source_section)
+
+
+def bundle_coverage(bundle: dict, *, org_id: str) -> dict:
+    """Read-only source availability, distinct from readiness and compliance."""
+    statuses = {row["document_id"]: row for row in index_status()}
+    documents = []
+    for document in bundle.get("documents", []):
+        row = statuses.get(document["document_id"], {"document_id": document["document_id"], "title": document["title"], "status": "not_indexed", "chunks": 0, "pages": 0})
+        documents.append({**row, "role": document.get("role"), "document_type": document["document_type"]})
+    ids = {row["document_id"] for row in documents}
+    corrections = [row for row in list_corrections(org_id=org_id) if row["target_document_id"] in ids]
+    outside = sorted({row["correction_document_id"] for row in corrections if row["correction_document_id"] not in ids})
+    counts = {state: sum(row["status"] == state for row in documents) for state in
+              ("indexed", "not_indexed", "stale", "missing_local_file", "external_reference")}
+    return {"bundle_id": bundle["bundle_id"], "bundle_version": bundle["bundle_version"],
+            "documents": documents, "counts": counts,
+            "all_sources_indexed": bool(documents) and all(row["status"] == "indexed" for row in documents) and not outside,
+            "corrections": {"total": len(corrections), "unconfirmed": sum(row["status"] != "confirmed" for row in corrections),
+                            "outside_bundle_document_ids": outside},
+            "notice": "Index coverage only: it does not establish methodology applicability, readiness, or compliance. Correction mappings require separate review."}
+
+
+def _current_chunks(chunks: list[dict]) -> list[dict]:
+    """Never return a stale document or extraction version as citable text."""
+    from src.methodology.registry import list_documents
+    registered = {row["document_id"]: row.get("sha256") for row in list_documents()}
+    return [row for row in chunks if row.get("index_version") == INDEX_VERSION
+            and registered.get(row["document_id"]) and row["document_sha256"] == registered[row["document_id"]]]

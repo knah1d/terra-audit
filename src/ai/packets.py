@@ -287,10 +287,10 @@ class _Builder:
         chunks = library.chunks_for_reference(document_id, reference, org_id=self.org,
                                               document_ids=list(self.docs))
         if not chunks:
-            self.packet["limitations"].append(f"No indexed text is available for {document_id} {reference}.")
+            self.packet["limitations"].append(f"No indexed text is available for {document_id} {reference}. An administrator must check methodology-library coverage and indexing; project-record citations alone do not verify this requirement against methodology text.")
         for chunk in chunks:
-            if chunk["document_sha256"] != self.docs[document_id].get("sha256"):
-                self.packet["limitations"].append(f"The methodology index for {document_id} is stale; text was omitted.")
+            if chunk["document_sha256"] != self.docs[document_id].get("sha256") or chunk.get("index_version") != library.INDEX_VERSION:
+                self.packet["limitations"].append(f"The methodology index for {document_id} is stale; text was omitted. An administrator must re-index the registered PDF before requesting a new explanation.")
                 continue
             sid = f"methodology:{document_id}:p{chunk['page']}:c{chunk['segment']}"
             self.source(sid, f"{self.docs[document_id]['title']} — page {chunk['page']}", "methodology",
