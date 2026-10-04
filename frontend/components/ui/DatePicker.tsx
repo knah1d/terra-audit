@@ -281,11 +281,6 @@ export const DatePicker = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLI
             commit(parsed ?? "", parsed === null ? `Enter a valid date in ${format} format.` : "");
           }} />
       </label>}
-      <div className="ui-date-footer">
-        <button type="button" className="ui-date-nav" disabled={unavailable(iso(new Date()))} onClick={() => choose(new Date())}>Today</button>
-        {!props.required && <button type="button" className="ui-date-nav" onClick={() => { setText(""); commit(""); close(); }}>Clear</button>}
-        <button type="button" className="ui-date-nav" onClick={close}>Close</button>
-      </div>
     </div>, wrapper.current?.closest("dialog") ?? document.body)}
   </span>;
 });
