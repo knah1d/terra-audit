@@ -49,6 +49,8 @@ def handle_workspace(job, ctx):
 def handle_explanation(job, ctx):
     from src.ai.explanations import packet_for
     from src.ai.validate import generate_explanation
+    from src.ai.timing import StageTimings
+    timings = StageTimings("worker", job["job_id"])
     org, payload = job["org_id"], job["payload"]
     project = payload["project_id"]
 
@@ -64,22 +66,30 @@ def handle_explanation(job, ctx):
         return packet
 
     try:
-        packet = checkpoint()
-        try:
-            ws.get_entry(org, project, job["job_id"], "explanation")
-        except ValueError:
-            pass
-        else:
+        with timings.measure("initial_packet_and_checkpoint"):
+            packet = checkpoint()
+        with timings.measure("existing_record_lookup"):
+            try:
+                ws.get_entry(org, project, job["job_id"], "explanation")
+            except ValueError:
+                existing = False
+            else:
+                existing = True
+        if existing:
             return {"record_id": job["job_id"]}
-        output = generate_explanation(packet, org)
-        checkpoint()
+        with timings.measure("generation_and_validation"):
+            output = generate_explanation(packet, org)
+        with timings.measure("final_packet_and_checkpoint"):
+            checkpoint()
         output.update(action=packet["action"], field_id=packet["field_id"],
                       generation_signature=packet["generation_signature"],
                       evidence_fingerprint=packet["evidence_fingerprint"],
                       requested_by=payload["requested_by"],
                       calculation_id=payload["request"].get("calculation_id"),
                       assessment_id=payload["request"].get("assessment_id"))
-        ws.append(org, project, "explanation", output, job["job_id"])
-        return {"record_id": job["job_id"]}
+        output["worker_timings_seconds"] = timings.snapshot()
+        with timings.measure("save"):
+            ws.append(org, project, "explanation", output, job["job_id"])
+        return {"record_id": job["job_id"], "worker_timings_seconds": timings.snapshot()}
     except (ValueError, PermissionError, FileNotFoundError, TypeError) as exc:
         raise InvalidJobRequest(str(exc)) from exc

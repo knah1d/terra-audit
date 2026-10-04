@@ -36,17 +36,22 @@ def access(user, project_id, field_id=None):
 
 @router.post("/explain")
 def request_explanation(project_id: str, body: ExplainRequest, user=Depends(get_current_user)):
-    access(user, project_id, body.field_id)
+    from src.ai.timing import StageTimings
+    timings = StageTimings("api")
+    with timings.measure("authorization"):
+        access(user, project_id, body.field_id)
     request = body.model_dump(exclude_none=True)
     try:
-        packet = packet_for(user["org_id"], project_id, user["user_id"], request)
+        with timings.measure("packet_build"):
+            packet = packet_for(user["org_id"], project_id, user["user_id"], request)
     except PermissionError as exc:
         raise HTTPException(403, str(exc)) from exc
     except TypeError as exc:
         raise HTTPException(422, "Parameters do not match the selected explanation action") from exc
-    saved = cached(user["org_id"], project_id, packet)
+    with timings.measure("cache_lookup"):
+        saved = cached(user["org_id"], project_id, packet)
     if saved:
-        return {"explanation": saved["payload"], "record_id": saved["id"]}
+        return {"explanation": saved["payload"], "record_id": saved["id"], "request_timings_seconds": timings.snapshot()}
     name = provider_name()
     if packet.get("call_model", True) and name in {"openai", "groq"} and not ws.provider_allowed(user["org_id"], name):
         raise HTTPException(403, f"An organization administrator must enable {name} external-provider access")
@@ -70,8 +75,9 @@ def request_explanation(project_id: str, body: ExplainRequest, user=Depends(get_
         with get_db_connection() as conn:
             previous = conn.execute(text("SELECT job_id,status FROM background_jobs WHERE org_id=:o AND job_type='ai_explain' AND idempotency_key=:k"),
                                     {"o": user["org_id"], "k": key}).mappings().first()
-    job_id = create_job(user["org_id"], "ai_explain", payload, idempotency_key=key, max_attempts=1)
-    return JSONResponse({"job_id": job_id}, status_code=202)
+    with timings.measure("enqueue"):
+        job_id = create_job(user["org_id"], "ai_explain", payload, idempotency_key=key, max_attempts=1)
+    return JSONResponse({"job_id": job_id, "request_timings_seconds": timings.snapshot()}, status_code=202)
 
 
 @router.get("/explain/jobs/{job_id}")

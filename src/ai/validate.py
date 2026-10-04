@@ -233,6 +233,8 @@ def validate_response(response, packet, *, forbidden_claims=FORBIDDEN_CLAIMS):
 
 def generate_explanation(packet, org_id, *, generate_fn=None):
     from src.ai.providers import generate
+    from src.ai.timing import StageTimings
+    timings = StageTimings("generation")
     if packet["org_id"] != org_id:
         raise PermissionError("Explanation packet belongs to another organization")
     if not packet.get("call_model", True):
@@ -265,7 +267,8 @@ def generate_explanation(packet, org_id, *, generate_fn=None):
     for attempt in range(2):
         data = {"packet": packet, "validation_rejections": failures}
         try:
-            response, provider = call(prompt, data, RESPONSE_SCHEMA, org_id=org_id)
+            with timings.measure(f"provider_attempt_{attempt + 1}"):
+                response, provider = call(prompt, data, RESPONSE_SCHEMA, org_id=org_id)
         except ValueError as exc:
             if "invalid response" not in str(exc).lower() and "invalid structured response" not in str(exc).lower():
                 raise
@@ -274,13 +277,15 @@ def generate_explanation(packet, org_id, *, generate_fn=None):
                 raise ExplanationValidationError(failures) from exc
             continue
         try:
-            result = validate_response(response, packet)
+            with timings.measure(f"validation_attempt_{attempt + 1}"):
+                result = validate_response(response, packet)
         except ExplanationValidationError as exc:
             failures = exc.failed_checks
             if attempt:
                 raise
         else:
             result["provider"], result["retry_count"] = provider, attempt
+            result["generation_timings_seconds"] = timings.snapshot()
             result["limitations"] = sorted(set(result["limitations"] + packet.get("limitations", [])))
             return result
     raise AssertionError("Unreachable retry state")

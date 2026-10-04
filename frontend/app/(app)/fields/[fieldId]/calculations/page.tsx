@@ -94,11 +94,16 @@ export default function CalculationsPage() {
   const openCalculations = (history.data ?? []).filter((r) => !r.legacy && r.status !== "superseded");
   const legacyCount = (history.data ?? []).filter((r) => r.legacy).length;
 
-  const explainRequirement = projectId && periodStart && periodEnd ? (id: string) => (
+  const explainRequirement = (id: string) => projectId && periodStart && periodEnd ? (
     <ExplainButton projectId={projectId} request={{ action: "missing_evidence", field_id: field.field_id,
       requirement_id: id, monitoring_period_start: periodStart, monitoring_period_end: periodEnd,
       season_ids: selectedSeasons }}>Explain</ExplainButton>
-  ) : undefined;
+  ) : (
+    <span className="inline-flex max-w-56 flex-col items-start gap-1">
+      <Button variant="secondary" size="sm" disabled title={!projectId ? "Select a project to use AI explanations." : "Set both monitoring dates to use AI explanations."}>Explain</Button>
+      <span className="text-xs text-text-secondary">{!projectId ? "Select a project to use AI explanations." : "Set both monitoring dates to use AI explanations."}</span>
+    </span>
+  );
 
   function toggleSeason(id: string) {
     setSelectedSeasons((prev) => (prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]));

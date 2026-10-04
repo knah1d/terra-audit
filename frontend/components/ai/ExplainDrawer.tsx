@@ -31,7 +31,7 @@ export function ExplainButton({ projectId, request, children }: {
         <h2 className="ui-section-title">AI explanation — draft, not an official readiness decision</h2>
         <Button variant="secondary" size="sm" onClick={() => setOpen(false)}>Close</Button>
       </div>
-      {ai.loading && <p role="status" className="my-4">Generating explanation… Hosted models may take longer on a cold start.</p>}
+      {ai.loading && <p role="status" className="my-4">Preparing evidence, generating a draft, and checking citations… This may take a few minutes.</p>}
       {ai.error && <p role="alert" className="my-4 text-danger-700">{ai.error}</p>}
       {ai.explanation && <div className="space-y-4 py-4">
         {ai.explanation.deterministic_message && <p>{ai.explanation.deterministic_message}</p>}
