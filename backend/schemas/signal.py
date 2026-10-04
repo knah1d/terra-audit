@@ -1,14 +1,21 @@
-from datetime import datetime
-from typing import Any
+from datetime import date, datetime
+from typing import Any, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 
 class SignalRunRequest(BaseModel):
     window_start: str  # "YYYY-MM-DD"
     window_end: str
-    detector: str = "threshold"  # "threshold" | "random_forest" | "xgboost"
+    detector: Literal["threshold", "random_forest", "xgboost"] = "threshold"
     force_refresh: bool = False
+
+    @model_validator(mode="after")
+    def valid_window(self):
+        start, end = date.fromisoformat(self.window_start), date.fromisoformat(self.window_end)
+        if start.isoformat() != self.window_start or end.isoformat() != self.window_end or end <= start:
+            raise ValueError("Analysis dates must be YYYY-MM-DD with the end after the start")
+        return self
 
 
 class SignalResult(BaseModel):
@@ -36,6 +43,7 @@ class SignalResult(BaseModel):
     window_end: str
     area_ha: float
     timeseries: list[dict[str, Any]]
+    timings_seconds: dict[str, float] | None = None
 
 
 class JobStatusOut(BaseModel):
@@ -46,6 +54,7 @@ class JobStatusOut(BaseModel):
     error: str | None = None
     created_at: datetime | None = None
     finished_at: datetime | None = None
+    progress: dict[str, Any] | None = None
 
 
 class SignalRunAccepted(BaseModel):

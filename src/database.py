@@ -1307,7 +1307,7 @@ def get_job(org_id: str, job_id: str) -> dict | None:
     other function in this file."""
     with get_db_connection() as conn:
         row = conn.execute(
-            text("SELECT job_id, job_type, status, result_json, error, created_at, finished_at "
+            text("SELECT job_id, job_type, status, result_json, progress_json, error, created_at, finished_at "
                  "FROM background_jobs WHERE org_id = :org_id AND job_id = :job_id"),
             {"org_id": org_id, "job_id": job_id},
         ).mappings().fetchone()
@@ -1315,6 +1315,7 @@ def get_job(org_id: str, job_id: str) -> dict | None:
         return None
     result = dict(row)
     result["result"] = json.loads(result.pop("result_json")) if result["result_json"] else None
+    result["progress"] = json.loads(result.pop("progress_json") or "null")
     return result
 
 

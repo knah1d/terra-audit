@@ -114,6 +114,7 @@ export interface SignalResult {
   window_end: string;
   area_ha: number;
   timeseries: Array<Record<string, unknown>>;
+  timings_seconds?: Record<string, number> | null;
 }
 
 export interface JobStatusOut {
@@ -124,6 +125,7 @@ export interface JobStatusOut {
   error: string | null;
   created_at: string | null;
   finished_at: string | null;
+  progress?: { stage: string; timings_seconds: Record<string, number> } | null;
 }
 
 export interface SignalRunAccepted {

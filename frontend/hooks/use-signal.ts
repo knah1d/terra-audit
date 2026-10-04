@@ -36,6 +36,14 @@ export function useCancelSignalRun(fieldId: string) {
   });
 }
 
+export function useActiveSignalRuns(fieldId: string) {
+  return useQuery({
+    queryKey: ["signal-run", "active", fieldId],
+    queryFn: () => apiFetch<Array<{ job_id: string; request: SignalRunRequest }>>(`/fields/${fieldId}/signal-runs/active`),
+    retry: false,
+  });
+}
+
 /**
  * POST /fields/{fieldId}/signal-runs is a hybrid endpoint (backend/routers/
  * signal.py): a cache hit returns a SignalResult directly (200), a cache

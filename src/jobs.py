@@ -128,6 +128,8 @@ def initialize_tables(conn):
         for col, ddl in _NEW_COLUMNS:
             conn.execute(text(f"ALTER TABLE background_jobs ADD COLUMN IF NOT EXISTS {col} {ddl}"))
 
+    from src.signal_jobs import initialize_tables as initialize_signal_jobs
+    initialize_signal_jobs(conn)
     conn.execute(text("CREATE INDEX IF NOT EXISTS idx_background_jobs_org ON background_jobs(org_id)"))
     conn.execute(text("CREATE INDEX IF NOT EXISTS idx_background_jobs_claim ON background_jobs(status, next_attempt_at)"))
     conn.execute(text("CREATE INDEX IF NOT EXISTS idx_background_jobs_batch ON background_jobs(org_id, batch_id)"))

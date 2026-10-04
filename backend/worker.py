@@ -45,6 +45,7 @@ class WorkerContext:
     def __init__(self, job: dict, engine):
         self._org_id = job["org_id"]
         self._job_id = job["job_id"]
+        self._worker_id = job.get("locked_by")
         self.engine = engine
 
     def heartbeat(self) -> None:
@@ -52,6 +53,10 @@ class WorkerContext:
 
     def cancel_requested(self) -> bool:
         return is_cancel_requested(self._org_id, self._job_id)
+
+    def progress(self, stage: str, timings: dict) -> None:
+        from src.signal_jobs import update_progress
+        update_progress(self._org_id, self._job_id, self._worker_id, stage, timings)
 
 
 class _HeartbeatThread(threading.Thread):

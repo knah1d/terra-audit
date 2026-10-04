@@ -5,7 +5,7 @@ from backend.deps import get_current_user, get_owned_field, get_spatial_engine
 from backend.job_handlers import _run_signal_pipeline
 from backend.schemas.signal import JobStatusOut, SignalRunAccepted, SignalResult, SignalRunRequest
 from src.database import check_cache, get_job, get_latest_signal_result
-from src.jobs import create_job
+from src.signal_jobs import active_jobs, create_or_reuse, matching_active_job
 
 router = APIRouter(tags=["signal-analytics"])
 
@@ -33,6 +33,11 @@ def submit_signal_run(
     engine=Depends(get_spatial_engine),
 ):
     org_id = user["org_id"]
+    payload = {"field_id": field_id, **body.model_dump(), "requested_by": user["user_id"]}
+    existing = matching_active_job(org_id, payload)
+    if existing:
+        response.status_code = status.HTTP_202_ACCEPTED
+        return SignalRunAccepted(job_id=existing)
 
     if not body.force_refresh:
         df_processed = check_cache(org_id, field_id, body.window_start, body.window_end)
@@ -49,12 +54,15 @@ def submit_signal_run(
     # is still required here just to fail fast with a clean 503 if Earth
     # Engine isn't configured at all, rather than queuing a job that can
     # only ever fail.
-    job_id = create_job(org_id, "signal_run", {
-        "field_id": field_id, "window_start": body.window_start, "window_end": body.window_end,
-        "detector": body.detector, "force_refresh": body.force_refresh, "requested_by": user["user_id"],
-    })
+    job_id = create_or_reuse(org_id, payload)
     response.status_code = status.HTTP_202_ACCEPTED
     return SignalRunAccepted(job_id=job_id)
+
+
+@router.get("/fields/{field_id}/signal-runs/active")
+def get_active_signal_runs(field_id: str, user=Depends(get_current_user),
+                           field=Depends(get_owned_field(require_sar=True))):
+    return active_jobs(user["org_id"], field_id)
 
 
 @router.post("/fields/{field_id}/signal-runs/{job_id}/cancel")

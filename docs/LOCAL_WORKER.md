@@ -44,3 +44,10 @@ Satellite processing also requires working Earth Engine credentials on the
 worker computer. Existing pending signal jobs become eligible after this
 restart; do not submit duplicate runs. The analytics page distinguishes queued,
 running, cancellation requested and cancelled states, and offers cancellation.
+
+After updating to the analytics lifecycle implementation, restart the API and
+worker so normal startup adds the progress and active-request columns. Matching
+active submissions share one job; workers recheck the versioned observation
+cache unless live refresh was explicitly requested. Reopening the field restores
+its latest active job. The page shows named stages and successful worker timing
+details. No percentage estimate is supplied for Earth Engine processing.

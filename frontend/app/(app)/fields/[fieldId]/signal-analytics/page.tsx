@@ -1,7 +1,7 @@
 "use client";
 
 import { Play, Satellite } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AuditTrailTable } from "@/components/signal/AuditTrailTable";
 import { SignalTimeseriesChart } from "@/components/signal/SignalTimeseriesChart";
 import { useFieldContext } from "@/components/fields/FieldContext";
@@ -12,7 +12,7 @@ import { FieldLabel, Select, TextInput } from "@/components/ui/Field";
 import { IconTile } from "@/components/ui/IconTile";
 import { Switch } from "@/components/ui/Switch";
 import { useJobPoll } from "@/hooks/use-job-poll";
-import { isSignalRunAccepted, useCancelSignalRun, useLatestSignalRun, useRunSignalAnalysis } from "@/hooks/use-signal";
+import { isSignalRunAccepted, useActiveSignalRuns, useCancelSignalRun, useLatestSignalRun, useRunSignalAnalysis } from "@/hooks/use-signal";
 import type { SignalDetector, SignalResult } from "@/types/api";
 
 const SEASON_PRESETS: Record<string, { start: string; end: string } | null> = {
@@ -31,6 +31,19 @@ const DETECTOR_OPTIONS: Array<{ value: SignalDetector; label: string }> = [
 
 export default function SignalAnalyticsPage() {
   const field = useFieldContext();
+  return <SignalAnalyticsView key={field.field_id} />;
+}
+
+const STAGES: Record<string, string> = {
+  checking_cache: "Checking saved observations",
+  fetching_satellite_observations: "Fetching satellite observations from Earth Engine",
+  saving_observations: "Saving satellite observations",
+  analyzing_observations: "Analyzing observations",
+  saving_result: "Saving analysis result",
+};
+
+function SignalAnalyticsView() {
+  const field = useFieldContext();
   const [preset, setPreset] = useState<string>(Object.keys(SEASON_PRESETS)[0]);
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
@@ -46,6 +59,22 @@ export default function SignalAnalyticsPage() {
   // visit so a field you already analyzed doesn't come up blank; a fresh
   // handleRun() (below) always overwrites `result` with the new one.
   const latestSignal = useLatestSignalRun(field.field_id);
+  const activeRuns = useActiveSignalRuns(field.field_id);
+  const recoveryAttempted = useRef(false);
+  useEffect(() => {
+    if (recoveryAttempted.current || !activeRuns.isFetchedAfterMount || !activeRuns.data) return;
+    recoveryAttempted.current = true;
+    const active = activeRuns.data[0];
+    if (!active) return;
+    const request = active.request;
+    const savedPreset = Object.entries(SEASON_PRESETS).find(([, range]) => range?.start === request.window_start && range.end === request.window_end)?.[0];
+    setPreset(savedPreset || "Custom Range");
+    setCustomStart(request.window_start);
+    setCustomEnd(request.window_end);
+    setDetector(request.detector);
+    setForceRefresh(request.force_refresh);
+    setJobId(active.job_id);
+  }, [activeRuns.data, activeRuns.isFetchedAfterMount]);
 
   const window = preset === "Custom Range" ? { start: customStart, end: customEnd } : SEASON_PRESETS[preset]!;
   const rangeInvalid = !window.start || !window.end || window.end <= window.start;
@@ -60,6 +89,7 @@ export default function SignalAnalyticsPage() {
 
   async function handleRun() {
     if (isRunning || rangeInvalid) return;
+    recoveryAttempted.current = true;
     try {
       setJobId(null);
       setResult(null);
@@ -141,7 +171,7 @@ export default function SignalAnalyticsPage() {
 
           <Switch checked={forceRefresh} onChange={setForceRefresh} label="Bypass local cache (query live GEE)" />
 
-          <Button icon={Play} onClick={handleRun} loading={run.isPending || (processing && !jobPoll.isError)} disabled={rangeInvalid || jobActive}>
+          <Button icon={Play} onClick={handleRun} loading={run.isPending || (processing && !jobPoll.isError)} disabled={rangeInvalid || jobActive || !activeRuns.isFetchedAfterMount || activeRuns.isError}>
             {jobStatus === "pending" ? "Analysis queued" : "Run Analytics Engine"}
           </Button>
           {jobActive && <Button variant="secondary" loading={cancel.isPending} disabled={jobStatus === "cancel_requested"} onClick={() => {
@@ -150,9 +180,11 @@ export default function SignalAnalyticsPage() {
         </div>
 
         <div className="flex flex-col gap-4">
+          {activeRuns.isPending && <Alert tone="info">Checking for an existing analysis…</Alert>}
+          {activeRuns.isError && <Alert tone="danger" title="Unable to restore analysis status">{activeRuns.error.message} <button className="underline" onClick={() => void activeRuns.refetch()}>Retry</button></Alert>}
           {run.isPending && <Alert tone="info" title="Submitting analysis">Checking cached observations and preparing the request.</Alert>}
           {jobStatus === "pending" && <Alert tone="warning" title="Analysis queued — waiting for a worker">Processing has not started. Your worker must accept satellite analytics jobs; an AI-explanation-only worker cannot process this request. Check Worker &amp; queue, and keep your worker computer awake. Your selected season and detector are preserved.</Alert>}
-          {jobStatus === "running" && <Alert tone="info" title="Analysis in progress">The worker is processing satellite observations. Results will update when processing finishes.</Alert>}
+          {jobStatus === "running" && <Alert tone="info" title={STAGES[jobPoll.data?.progress?.stage ?? ""] || "Analysis in progress"}>Results will update when processing finishes. You can reopen this field to resume checking the active job.</Alert>}
           {jobStatus === "cancel_requested" && <Alert tone="info" title="Cancellation requested">The worker will stop at its next cancellation checkpoint.</Alert>}
           {jobStatus === "cancelled" && <Alert tone="info" title="Analysis cancelled">You can submit a new analysis when ready.</Alert>}
           {jobPoll.isError && <Alert tone="danger" title="Unable to check analysis status">{jobPoll.error.message}</Alert>}
@@ -173,6 +205,7 @@ export default function SignalAnalyticsPage() {
                 <Alert tone="info">Showing your most recent Signal Analytics run for this field.</Alert>
               )}
               <p className="text-xs text-text-secondary">Showing {effectiveResult.window_start} – {effectiveResult.window_end} · {effectiveResult.detector_used} · Source: {effectiveResult.cache_source}</p>
+              {effectiveResult.timings_seconds && <details className="text-xs text-text-secondary"><summary className="cursor-pointer">Worker processing times</summary><div className="mt-2 space-y-1">{Object.entries(effectiveResult.timings_seconds).map(([stage, seconds]) => <p key={stage}>{STAGES[stage] || stage.replaceAll("_", " ")}: {seconds.toFixed(2)} s</p>)}<p>These timings exclude queue waiting and the final result write.</p></div></details>}
               {!effectiveResult.from_phenology && (
                 <Alert tone="warning">
                   Phenology markers not detected — season length falls back to a 120-day default.

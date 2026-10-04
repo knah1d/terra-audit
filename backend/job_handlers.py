@@ -14,6 +14,9 @@ and how it reports outcomes (src.jobs.complete_job/fail_job instead of
 src.database.mark_job_done/mark_job_error).
 """
 import pandas as pd
+import logging
+import time
+from contextlib import contextmanager
 
 from src.ai import evaluate as ai_evaluate
 from src.ai.crop_benchmark import benchmark
@@ -80,26 +83,52 @@ def _run_signal_pipeline(org_id, field_id, district, area_ha, df_processed, req,
 
 def handle_signal_run(job: dict, ctx) -> dict:
     org_id, payload = job["org_id"], job["payload"]
-    if ctx.engine is None:
-        raise RuntimeError("Earth Engine is not initialized on the worker. Configure the worker's Earth Engine credentials and restart it.")
     field_id = payload["field_id"]
-    field = get_field(org_id, field_id)
+    started, timings = time.perf_counter(), {}
+
+    @contextmanager
+    def stage(name):
+        if ctx.cancel_requested():
+            raise JobCancelled("Analysis cancelled before " + name)
+        ctx.progress(name, timings)
+        tick = time.perf_counter()
+        outcome = "ok"
+        try:
+            yield
+        except Exception:
+            outcome = "error"
+            raise
+        finally:
+            timings[name] = round(time.perf_counter() - tick, 4)
+            logging.getLogger("worker").info("signal_run job=%s stage=%s seconds=%.4f outcome=%s",
+                                            job["job_id"], name, timings[name], outcome)
+
+    with stage("checking_cache"):
+        field = get_field(org_id, field_id)
+        df_processed = pd.DataFrame() if payload.get("force_refresh") else check_cache(
+            org_id, field_id, payload["window_start"], payload["window_end"])
     if field is None:
         raise InvalidJobRequest(f"Field {field_id!r} no longer exists")
-
-    geom = field["geojson_geometry"]["features"][0]["geometry"]
-    df_raw = ctx.engine.extract_clean_timeseries(geom, payload["window_start"], payload["window_end"])
-    if ctx.cancel_requested():
-        raise JobCancelled("Cancelled before publishing the signal-run result")
-    if df_raw.empty:
-        raise InvalidJobRequest("No valid Sentinel-1 observations found for this field and window.")
-
-    save_cache(org_id, field_id, df_raw, payload["window_start"], payload["window_end"])
-    df_processed = check_cache(org_id, field_id, payload["window_start"], payload["window_end"])
-    return _run_signal_pipeline(
-        org_id, field_id, field["district"], field["area_ha"] or 1.0,
-        df_processed, payload, cache_source="Live Google Earth Engine Core API",
-    )
+    cache_source = "Local relational data store"
+    if df_processed.empty:
+        if ctx.engine is None:
+            raise RuntimeError("Earth Engine is not initialized on the worker. Configure the worker's Earth Engine credentials and restart it.")
+        with stage("fetching_satellite_observations"):
+            geom = field["geojson_geometry"]["features"][0]["geometry"]
+            df_raw = ctx.engine.extract_clean_timeseries(geom, payload["window_start"], payload["window_end"])
+            if df_raw.empty:
+                raise InvalidJobRequest("No valid Sentinel-1 observations found for this field and window.")
+        with stage("saving_observations"):
+            save_cache(org_id, field_id, df_raw, payload["window_start"], payload["window_end"])
+            df_processed = check_cache(org_id, field_id, payload["window_start"], payload["window_end"])
+        cache_source = "Live Google Earth Engine Core API"
+    with stage("analyzing_observations"):
+        result = _run_signal_pipeline(org_id, field_id, field["district"], field["area_ha"] or 1.0,
+                                      df_processed, payload, cache_source=cache_source)
+    timings["total"] = round(time.perf_counter() - started, 4)
+    ctx.progress("saving_result", timings)
+    result["timings_seconds"] = timings
+    return result
 
 
 def handle_ai_train(job: dict, ctx) -> dict:
