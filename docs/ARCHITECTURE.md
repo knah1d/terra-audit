@@ -1,71 +1,107 @@
 # Terra-Audit architecture
 
-## Supported runtime
+## Where code belongs
 
-- Vercel: Next.js frontend and authenticated API proxy.
-- Render: FastAPI service and a separate durable job worker.
-- Shared Python core: calculation engines, methodology rules, project evidence,
-  snapshots, and persistence under `src/`.
-- API and worker must use the same database and compatible attachment storage.
-
-The Streamlit dashboard, session helpers, theme, and UI requirements were
-retired. Historical SRS and presentation artifacts retain their original
-architecture descriptions; they are not current setup instructions.
-`railway.json` remains an optional legacy deployment configuration, not the
-configuration for the current Render service.
+```text
+frontend/
+  app/                     Next.js pages, layouts and authenticated API proxy
+  components/
+    auth/                  Login/logout and account-recovery UI
+    layout/                Shared application shell and navigation
+    ui/                    Shared controls and appearance
+    fields/, projects/, …  Feature components
+  hooks/                   Client data queries, mutations and reusable behavior
+  lib/                     Browser/server adapters, validation and formatting
+  types/                   API response/request contracts
+backend/
+  main.py                  FastAPI composition and lifespan
+  routers/                 HTTP endpoints and request orchestration
+  schemas/                 Pydantic request/response DTOs
+  deps.py, access.py        Authentication/authorization dependencies
+  config.py, security.py   Runtime settings and JWT adapter
+  worker.py                Durable worker entry point and lease lifecycle
+  *_job_handlers.py        Worker orchestration using the shared core
+src/
+  accounts/                Account authentication and recovery primitives
+  persistence/
+    database.py            Connections, read scopes and shared SQL repositories
+    schema.py              Existing SQLite/Postgres schema and migrations
+    storage.py             Local/S3 attachment and model storage
+  projects/                Project/farm membership, attachments and reviews
+  evidence/                Crop seasons, crop taxonomy, soil, production and QA
+  methodology/             Document registry/library, corrections and readiness
+  carbon/                  Rice/ALM engines, leakage, snapshots and issuance
+  signals/                 Earth Engine acquisition, processing and detectors
+  jobs/                    Durable queue and signal job coordination
+  ai/
+    ml/                    Datasets, features, RF/XGBoost training and evaluation
+    providers.py           Model-provider adapters
+    packets.py, validate.py Deterministic context and explanation validation
+    assistant.py, …        Draft explanations, workspace and document assistance
+  reporting/               Audit/PDF report generation
+  field_types/             Pathway plug-in registration
+  paths.py                 Stable project/data/methodology locations
+scripts/                   Operational CLIs (backup, users, ingestion, migration)
+tests/                     Core and API tests; frontend tests live in frontend/tests
+methodologies/             Versioned source documents, not executable code
+data/                      Local runtime artifacts (not a code package)
+docs/, mid/                Product documentation and historical academic artifacts
+```
 
 ## Dependency boundaries
 
-Next.js calls FastAPI through its proxy; it never imports Python modules.
-FastAPI routers and workers reuse the core rather than implementing alternate
-calculation equations. Core calculation modules must remain independent of
-HTTP and UI frameworks. Authorization is enforced by the backend, including
-organization, project, and active-field checks. Frontend session claims only
-control display; they do not grant access.
+Next.js calls FastAPI through its authenticated server proxy. It does not import
+Python code. FastAPI routers translate requests, enforce permissions, and call
+shared core modules. The worker runs the same calculations and evidence logic.
+Core modules do not import FastAPI or frontend code.
 
-The frontend query cache is isolated by organization and user. Login/logout
-replace the document, and logout cancels queries and clears cached account data.
+The core is grouped by capability rather than by a generic service/repository
+class hierarchy. Evidence/project modules keep their existing SQL and business
+operations together where splitting them would only add forwarding layers.
+Shared connection handling is in persistence; schema setup is separate from
+normal queries. These modules create no database at import time.
 
-AI output is a draft explanation. Deterministic code owns numbers, readiness,
-and issuance decisions. Preserve this boundary in future refactors.
+AI output remains a draft. Deterministic code owns calculations, readiness,
+numbers and issuance. ML training is separate from the explanation pipeline.
+The frontend query cache remains isolated by organization and user.
 
-## Deployment configuration
+## Compatibility and operation
 
-Set `FRONTEND_PUBLIC_URL` on the Render API to the public HTTPS frontend origin
-for account invitation and recovery links. Set `BACKEND_URL` on Vercel to the
-backend origin. Localhost defaults are for development only. Follow
-`.env.example` for database, email, storage, and provider settings.
+HTTP routes, JSON contracts, table names, migrations, methodology identifiers,
+job types and saved model formats are unchanged. No database or stored artifact
+is moved. `src.paths` resolves locations relative to the project root, so deeper
+packages still use `data/project_store.db`, `data/attachments`, `data/ai_models`,
+`methodologies/` and the root `.env`.
 
-## Incremental reorganization roadmap
+Entry points remain:
 
-Completed: remove the legacy Streamlit runtime files and correct the primary
-setup and operations documentation. Existing calculation modules and import
-paths remain stable.
+```bash
+uvicorn backend.main:app
+python -m backend.worker --job-types ai_explain signal_run methodology_ingest
+```
 
-Configuration validation is now centralized in `backend/config.py` and
-`frontend/lib/server-config.ts`. Render or `APP_ENV=production` requires a
-private JWT secret of at least 32 characters and an explicit public HTTPS
-frontend origin. CORS defaults to that origin in production. Vercel requests
-require an explicit HTTPS backend origin. API and worker must both receive
-the backend settings. Invalid configuration stops startup or the frontend
-request rather than silently using localhost. No tests have been run.
+Internal Python imports now use domain packages (for example,
+`src.persistence.database`, `src.carbon.alm`, `src.methodology.registry`, and
+`src.ai.ml.models`). Repository scripts, tests and CLI examples use those paths.
+External scripts importing old flat module names must update their imports.
 
-Next, introduce versioned migrations. Inventory every existing initializer and establish a baseline for
-existing SQLite and Postgres databases before replacing startup DDL. Do not
-create a parallel migration system that leaves startup migrations competing
-with it. Never infer the public frontend origin from untrusted request headers.
+Vercel hosts Next.js; Render hosts FastAPI; the worker may run locally or on a
+separate service. API and worker need the same database and compatible artifact
+storage. Deploy/restart the API and worker from the same revision after package
+moves. Deployment was not performed by this restructuring.
 
-Then group Python modules incrementally into `src/methodology/`,
-`src/evidence/`, `src/calculations/`, and `src/persistence/`. `src/ai/` and
-`src/field_types/` already have useful boundaries. Move one group per change,
-update API/worker/script/test imports, and check persisted handler names,
-paths, registry identifiers, and database locations before removing any
-compatibility imports. A directory move must not change methodology outputs
-or relocate an existing database.
+`backend/config.py` and `frontend/lib/server-config.ts` retain runtime validation.
+Set `FRONTEND_PUBLIC_URL` on the API, `BACKEND_URL` on the frontend, and follow
+`.env.example` for database, provider, email and storage settings.
 
-Keep Next.js route files in `frontend/app/`; extract substantial feature
-components into the existing `components/` and `hooks/` directories as needed.
-Do not add a second parallel frontend organization just for naming symmetry.
+## Deliberate limits
 
-No Python module moves, migration replacement, or deployment have been
-performed by this cleanup. Verification remains the user's responsibility.
+Existing calculation formulas, readiness rules and startup migrations were not
+rewritten. Introducing a migration framework or splitting every domain operation
+into repository/service classes is a separate change, not necessary for these
+package moves. Large Next.js feature pages remain intact except for extracting
+shared shell/navigation and the browser-only account recovery form.
+
+Historical SRS/presentation documents are retained; they are not current runtime
+instructions. The legacy Streamlit runtime is retired. `railway.json` remains an
+optional deployment configuration.

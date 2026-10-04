@@ -18,7 +18,7 @@ const CHANCE_LINE = [{ fpr: 0, tpr: 0 }, { fpr: 1, tpr: 1 }];
 /** One-vs-rest ROC per class — each Line carries its own `data` (fpr/tpr
  * pairs), since classes don't share a common x-axis sample grid. A class
  * with `auc: null` (too few samples in the fold to compute it, a real,
- * flagged occurrence per src/ai/evaluate.py) still plots but its legend
+ * flagged occurrence per src/ai/ml/evaluate.py) still plots but its legend
  * label says "AUC: N/A" rather than hiding the curve. */
 export function RocCurveChart({ roc }: { roc: AiRocCurveData }) {
   const classes = Object.keys(roc);

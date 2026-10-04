@@ -20,7 +20,7 @@ Season corrections now keep their stable season identity in training and bulk co
 - `src/ai/managed_models.py` — training and inference.
 - `src/ai/assistant.py` — grounded answers and document extraction.
 - `src/ai/document_ocr.py` — page-preserving visual transcription and extraction modes.
-- `src/account_access.py`, `backend/routers/account_access.py` — invitations and recovery.
+- `src/accounts/account_access.py`, `backend/routers/account_access.py` — invitations and recovery.
 - `frontend/app/(app)/projects/[projectId]/ai/page.tsx` — user-facing AI workflow.
 - `frontend/app/(auth)/account-access/page.tsx` — invitation acceptance/recovery.
 

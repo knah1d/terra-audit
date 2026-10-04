@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict
 
 class CarbonCalcRequestRice(BaseModel):
     """Mirrors CarbonAssetEngine.calculate_credits()'s keyword arguments
-    exactly (src/carbon_calculator.py:117) — this is a small, stable,
+    exactly (src/carbon/rice.py:117) — this is a small, stable,
     intentionally-designed function signature, unlike its *result* dict
     (see CarbonResultOut below), so full enumeration here is correct."""
     awd_events: int
@@ -20,7 +20,7 @@ class CarbonCalcRequestRice(BaseModel):
 
 class CarbonCalcRequestAlm(BaseModel):
     """Mirrors AlmCarbonEngine.calculate_credits()'s keyword arguments
-    (src/carbon_calculator_alm.py:433). practice_schedule/soc_measurements
+    (src/carbon/alm.py:433). practice_schedule/soc_measurements
     are NOT included here — the backend loads those from the DB by
     field_id rather than trusting a client-resubmitted copy, per the
     plan's explicit goal of eliminating the Streamlit session_state

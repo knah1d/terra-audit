@@ -150,7 +150,7 @@ packages under Verra methodologies.
 - A working Streamlit dashboard (`app.py`) covering field management,
   signal analytics, both carbon ledgers, and AI validation.
 - A local SQLite-backed field registry, time-series cache, and ALM
-  practice/SOC data store (`src/database.py`).
+  practice/SOC data store (`src/persistence/database.py`).
 - Two independent, unit-tested carbon accounting engines:
   `CarbonAssetEngine` (VM0051 QA3) and `AlmCarbonEngine` (VM0042).
 - An AI detection pipeline (dataset builder, feature engineer, model
@@ -398,7 +398,7 @@ while `cropland_alm_vm0042` fields populate `alm_practice_schedule` and
 | `alm_practice_schedule` | `field_id`, `scenario` (`baseline`/`project`, composite PK) | Crop type, rotation/cover-crop/intercropping flags, tillage, residue handling, synthetic/organic N rates, N-fixing residue, fuel use, and yield per scenario. |
 | `soc_measurements` | `field_id`, `site_type` (`project`/`control`), `timepoint` (`t_start`/`t_final`), `sample_index` (composite PK), `soc_value_tco2e_ha` | Paired lab SOC samples feeding the VM0042 stock-change and uncertainty equations. |
 
-Schema migrations (`initialize_database()` in `src/database.py`) run at
+Schema migrations (`initialize_database()` in `src/persistence/database.py`) run at
 module import time and are idempotent — each `ALTER TABLE` is wrapped in
 a try/except so re-running the migration against an already-current
 database is a no-op rather than an error.

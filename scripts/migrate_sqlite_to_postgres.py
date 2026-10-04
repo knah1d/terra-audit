@@ -30,7 +30,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import pandas as pd
 from sqlalchemy import create_engine, text
 
-# Every table src/database.py or src/ai/dataset_builder.py owns. Order
+# Every table src/persistence/database.py or src/ai/ml/dataset_builder.py owns. Order
 # matters only in that none of these have real FK constraints to violate,
 # so any order is safe — listed in the same order the app's own schema
 # functions create them.
@@ -46,19 +46,19 @@ def migrate(sqlite_path: Path, postgres_url: str):
     postgres_engine = create_engine(postgres_url)
 
     # Ensure the target schema exists (final shape, no ALTER-TABLE history
-    # to replay — see src.database._init_postgres). Import here, not at
+    # to replay — see src.persistence.database._init_postgres). Import here, not at
     # module level, so this script works even before DATABASE_URL is set
     # anywhere else in the process.
     os.environ["DATABASE_URL"] = postgres_url
-    import src.database as db
+    import src.persistence.database as db
     db._ENGINE = postgres_engine  # reuse the engine we already created
     db._DB_INITIALIZED = False
     db.initialize_database()
 
     # ai_dataset_rows isn't created by initialize_database() — it's owned
-    # by src.ai.dataset_builder and created lazily on first use. Ensure it
+    # by src.ai.ml.dataset_builder and created lazily on first use. Ensure it
     # exists in the target too, or the DELETE/copy loop below fails on it.
-    from src.ai.dataset_builder import _ensure_ai_tables
+    from src.ai.ml.dataset_builder import _ensure_ai_tables
     with db.get_db_connection() as conn:
         _ensure_ai_tables(conn)
         conn.commit()
@@ -89,7 +89,7 @@ def migrate(sqlite_path: Path, postgres_url: str):
                 continue
 
             # credit_history.id is GENERATED ALWAYS AS IDENTITY on the
-            # Postgres side (see src.database._init_postgres) — unlike
+            # Postgres side (see src.persistence.database._init_postgres) — unlike
             # SQLite's AUTOINCREMENT, Postgres rejects an explicit id value
             # on insert by default. Nothing else has a foreign key into
             # this column, so dropping it and letting Postgres assign fresh

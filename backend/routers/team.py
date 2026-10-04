@@ -1,5 +1,5 @@
 """
-Team management — admin-only roster + invite, wrapping src.auth's existing
+Team management — admin-only roster + invite, wrapping src.accounts.auth's existing
 create_org_user/list_org_users (previously called only from app.py,
 bypassing the API entirely). See app.py's admin-only Team UI (the
 if auth_user["role"] == "admin": block) for the Streamlit precedent this
@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from backend.deps import require_admin
 from backend.schemas.team import CreateUserIn, TeamUserOut
-from src.auth import VALID_ROLES, create_org_user, list_org_users
+from src.accounts.auth import VALID_ROLES, create_org_user, list_org_users
 
 router = APIRouter(tags=["team"])
 

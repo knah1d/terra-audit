@@ -17,7 +17,7 @@ COPY src/ src/
 COPY backend/ backend/
 COPY methodologies/ methodologies/
 
-# src/database.py resolves its default SQLite path relative to this file
+# src/persistence/database.py resolves its default SQLite path relative to this file
 # (repo_root/data/project_store.db) and creates the directory itself —
 # /app/data is where docker-compose mounts the persistent volume.
 #

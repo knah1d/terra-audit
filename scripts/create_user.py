@@ -22,15 +22,15 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from sqlalchemy import text
 
-from src.database import get_db_connection, initialize_database
-from src.auth import create_org_user, VALID_ROLES
+from src.persistence.database import get_db_connection, initialize_database
+from src.accounts.auth import create_org_user, VALID_ROLES
 
 
 def create_user(email: str, password: str, org_id: str, role: str) -> str:
     """Ensures the org row exists (this script is also how a brand-new org
     gets created, unlike the in-app Team flow which only adds users to an
     org that already has an admin), then delegates the actual user-row
-    creation to src.auth.create_org_user so this logic lives in one place."""
+    creation to src.accounts.auth.create_org_user so this logic lives in one place."""
     with get_db_connection() as conn:
         org = conn.execute(
             text("SELECT org_id FROM organizations WHERE org_id = :org_id"), {"org_id": org_id}

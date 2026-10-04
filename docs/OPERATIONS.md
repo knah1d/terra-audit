@@ -3,12 +3,12 @@
 Phase 4 replaces in-process `BackgroundTasks` execution (satellite
 collection, AI training/benchmark, generic multi-crop monitoring, and
 bulk monitoring batches) with a durable, database-backed queue
-(`src/jobs.py`) and a separate worker process (`backend/worker.py`).
+(`src/jobs/queue.py`) and a separate worker process (`backend/worker.py`).
 
 ## Why a database-backed queue, not Celery/Redis/SQS
 
 This app already runs on "one process + SQLite (dev/small deploy) or
-Postgres (bigger deploy)" — see `src/jobs.py`'s module docstring for the
+Postgres (bigger deploy)" — see `src/jobs/queue.py`'s module docstring for the
 full reasoning. Short version: introducing a message broker is real new
 infrastructure (another service to deploy and keep available) that
 isn't justified at this app's scale. A worker just needs to atomically
@@ -57,7 +57,7 @@ registers itself in the `workers` table (visible to admins at
 A job's own `lease_seconds` (default 300) governs abandonment detection:
 if a job's heartbeat goes stale past its lease (worker crashed, was
 OOM-killed, or was deployed over mid-job), any live worker's next loop
-iteration reclaims it via `src.jobs.reclaim_abandoned_jobs()` — retried
+iteration reclaims it via `src.jobs.queue.reclaim_abandoned_jobs()` — retried
 if attempts remain, else marked terminally failed.
 
 ## Restart / shutdown behavior
@@ -82,7 +82,7 @@ Two distinct concerns, both handled:
   check), so this can't happen.
 - **A job is re-run after a crash mid-execution** (abandoned, reclaimed,
   retried): its non-idempotent side effect (appending a `monitoring_runs`
-  record) is guarded by `src.monitoring.append_record_once_per_job`,
+  record) is guarded by `src.evidence.monitoring.append_record_once_per_job`,
   which tags the payload with the job's own id and checks for a prior
   successful append under that same id before creating a second one.
   `signal_run`/`ai_train` are naturally idempotent (cache replace / model

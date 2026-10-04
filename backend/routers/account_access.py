@@ -6,8 +6,8 @@ from pydantic import BaseModel, Field, field_validator
 
 from backend.config import BREVO_API_KEY, EMAIL_FROM, FRONTEND_PUBLIC_URL
 from backend.deps import require_admin
-from src import account_access as accounts
-from src.auth import get_user_by_email
+from src.accounts import account_access as accounts
+from src.accounts.auth import get_user_by_email
 from typing import Literal
 
 router = APIRouter(tags=["account access"])

@@ -7,10 +7,10 @@ import zipfile
 import xml.etree.ElementTree as ET
 
 from src.ai import workspace as ws
-from src.database import get_field
-from src.monitoring import records, digest
-from src.projects import get_attachment, get_project
-from src.storage import get_storage
+from src.persistence.database import get_field
+from src.evidence.monitoring import records, digest
+from src.projects.repository import get_attachment, get_project
+from src.persistence.storage import get_storage
 
 
 # Provider selection (self-hosted / OpenAI / fake) lives in src/ai/providers.py;
@@ -53,7 +53,7 @@ def context_sources(org_id, project_id, question):
             for r in rows:
                 payload = {k: v for k, v in r["payload"].items() if k != "observations"} if table == "monitoring_runs" else r["payload"]
                 add(table + ":" + r["id"], table.replace("_", " "), {"field_id": fid, "season_id": r["season_id"], **payload})
-    from src.calculations import list_calculations
+    from src.carbon.calculations import list_calculations
     for calc in list_calculations(org_id, project_id=project_id, latest_only=True):
         if calc["field_id"] in fields:
             add("calculation:" + calc["calculation_id"], "Deterministic calculation and readiness", {

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 
 from backend.deps import get_current_user
-from src.database import get_portfolio_summary
+from src.persistence.database import get_portfolio_summary
 
 router = APIRouter(tags=["portfolio"])
 

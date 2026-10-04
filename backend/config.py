@@ -109,7 +109,7 @@ OTP_MAX_ATTEMPTS = int(os.environ.get("OTP_MAX_ATTEMPTS", "5"))
 OTP_RESEND_COOLDOWN_SECONDS = int(os.environ.get("OTP_RESEND_COOLDOWN_SECONDS", "60"))
 
 # Document/photo attachments (Phase 1 — see docs/MULTICROP.md). Files
-# themselves live under ATTACHMENTS_DIR (see src/storage.py), not in the
+# themselves live under ATTACHMENTS_DIR (see src/persistence/storage.py), not in the
 # database; only metadata is stored in the `attachments` table.
 MAX_ATTACHMENT_SIZE_BYTES = int(os.environ.get("MAX_ATTACHMENT_SIZE_BYTES", str(15 * 1024 * 1024)))
 ALLOWED_ATTACHMENT_CONTENT_TYPES = {

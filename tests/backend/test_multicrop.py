@@ -3,9 +3,9 @@ from copy import deepcopy
 import pandas as pd
 from sqlalchemy import text
 
-from src import monitoring
-from src.ai.crop_benchmark import build_corpus
-from src.processing import MULTICROP_VERSION
+from src.evidence import monitoring
+from src.ai.ml.crop_benchmark import build_corpus
+from src.signals.processing import MULTICROP_VERSION
 
 
 def create_season(client, headers, field, crops=None):
@@ -80,7 +80,7 @@ def test_monitoring_is_generic_and_snapshots_are_stable(client, auth_headers, al
     assert client.get(f"/multi-crop/jobs/{jobid}", headers=auth_headers["admin"]).json()["status"] == "done"
     assert client.get(f"/multi-crop/jobs/{jobid}", headers=auth_headers["other_org_admin"]).status_code == 404
     before = client.get(f"{path}/evidence", headers=auth_headers["admin"]).json()
-    from src.database import update_field_info
+    from src.persistence.database import update_field_info
     update_field_info("testorg", alm_field, "Changed", "Changed")
     after = client.get(f"{path}/evidence", headers=auth_headers["admin"]).json()
     assert before == after

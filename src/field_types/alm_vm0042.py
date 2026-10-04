@@ -9,7 +9,7 @@ AlmPracticeValidator stands in for the SAR "detector" role: it checks that
 schedule/SOC data is complete rather than analyzing a timeseries.
 """
 
-from src.carbon_calculator_alm import AlmCarbonEngine
+from src.carbon.alm import AlmCarbonEngine
 from src.field_types.registry import register_field_type
 
 FIELD_TYPE_KEY = "cropland_alm_vm0042"

@@ -4,9 +4,9 @@ import uuid
 from datetime import date, datetime, timezone
 
 from sqlalchemy import text
-from src.database import get_db_connection
-from src.monitoring import digest
-from src.projects import get_project, get_project_member, list_project_fields
+from src.persistence.database import get_db_connection
+from src.evidence.monitoring import digest
+from src.projects.repository import get_project, get_project_member, list_project_fields
 
 KINDS = {"model", "prediction", "answer", "document", "document_review", "deployment", "explanation"}
 
@@ -112,7 +112,7 @@ def set_deployment(org_id, project_id, model_id, threshold, expected_revision, a
 
 
 def frozen_corpus(org_id, project_id):
-    from src.ai.crop_benchmark import build_corpus
+    from src.ai.ml.crop_benchmark import build_corpus
     corpus = build_corpus(org_id, active_fields(org_id, project_id))
     corpus.pop("sha256", None)
     corpus["project_id"] = project_id

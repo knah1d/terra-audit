@@ -7,8 +7,10 @@ import re
 import pytest
 from sqlalchemy import create_engine, text
 
-from src import database, methodology_library as library, methodology_registry as registry
-from src import methodology_corrections as corrections
+from src.persistence import database
+from src.methodology import library as library
+from src.methodology import registry as registry
+from src.methodology import corrections as corrections
 
 
 @pytest.fixture()

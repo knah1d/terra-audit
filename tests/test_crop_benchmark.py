@@ -2,10 +2,10 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from src.ai.crop_benchmark import benchmark, make_splits, seasonal_features
-from src.ai.models import train_and_evaluate
-from src.multicrop_data import quality_summary
-from src.processing import rvi_from_db
+from src.ai.ml.crop_benchmark import benchmark, make_splits, seasonal_features
+from src.ai.ml.models import train_and_evaluate
+from src.signals.multicrop import quality_summary
+from src.signals.processing import rvi_from_db
 
 
 def examples():

@@ -1,4 +1,4 @@
-"""Evidence-linked calculations — Phase 2 (see src/calculations.py's
+"""Evidence-linked calculations — Phase 2 (see src/carbon/calculations.py's
 module docstring for the compatibility strategy with the existing
 stateless preview/commit endpoints in backend/routers/carbon.py, which
 are untouched by this router).
@@ -10,14 +10,14 @@ from backend.schemas.calculations import (
     CalculationCommitRequest, CalculationContext, DeterminationRequest, EngineInputsAlm, EngineInputsRice,
     ReadinessRequest,
 )
-from src import calculations as calculations_db
-from src import methodology_registry as registry
-from src import projects as projects_db
-from src import readiness as readiness_engine
-from src.calculations import PATHWAYS
-from src.database import get_credit_history
-from src.issuance import result_is_issuable
-from src.snapshot import build_snapshot, calculate_from_snapshot
+from src.carbon import calculations as calculations_db
+from src.methodology import registry as registry
+from src.projects import repository as projects_db
+from src.methodology import readiness as readiness_engine
+from src.carbon.calculations import PATHWAYS
+from src.persistence.database import get_credit_history
+from src.carbon.issuance import result_is_issuable
+from src.carbon.snapshot import build_snapshot, calculate_from_snapshot
 
 router = APIRouter(tags=["calculations"])
 _field = get_owned_field()
@@ -96,7 +96,7 @@ def commit_calculation(
 ):
     """Freezes evidence into an immutable snapshot and persists one
     calculation version. Never becomes 'ready_for_review' while a
-    blocking readiness item remains (src.calculations._is_blocking) —
+    blocking readiness item remains (src.carbon.calculations._is_blocking) —
     the caller cannot override this by asking nicely."""
     org_id = user["org_id"]
     _validate_pathway(field, body.accounting_pathway)
@@ -191,7 +191,7 @@ def get_determinations(
 ):
     """`season_ids` is a comma-separated list — needed (not just the
     bundle/dates) to recompute the same evidence fingerprint a
-    determination was scoped against; see src.readiness.
+    determination was scoped against; see src.methodology.readiness.
     compute_evidence_fingerprint."""
     bundle = registry.resolve_bundle_for_project(user["org_id"], project_id, accounting_pathway)
     sids = [s for s in season_ids.split(",") if s]
@@ -213,7 +213,7 @@ def record_determination(
     period, AND the current evidence fingerprint over `season_ids`;
     restricted to reviewable requirements (raises 422 via the existing
     ValueError handler for anything unsupported/automated_only — see
-    src.calculations.record_determination)."""
+    src.carbon.calculations.record_determination)."""
     _validate_pathway(field, body.accounting_pathway)
     if body.project_id:
         from backend.access import require_project_lead

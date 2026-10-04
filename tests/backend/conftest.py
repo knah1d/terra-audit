@@ -2,7 +2,7 @@
 Shared fixtures for backend contract/integration tests
 (.claude/plans/misty-growing-yao.md Part A7).
 
-Each test gets a fresh, isolated throwaway SQLite file — src.database's
+Each test gets a fresh, isolated throwaway SQLite file — src.persistence.database's
 module-level engine singleton is forcibly reset per test so DATABASE_URL
 changes actually take effect (it's normally created once per process,
 which would otherwise leak state between tests or point at the real
@@ -21,18 +21,18 @@ from fastapi.testclient import TestClient
 
 @pytest.fixture()
 def isolated_db(tmp_path, monkeypatch):
-    """Points src.database at a fresh temp SQLite file for the duration of
+    """Points src.persistence.database at a fresh temp SQLite file for the duration of
     one test, then restores the module's engine singleton afterward so
     other test files aren't left pointed at a now-deleted temp file.
 
     The engine is still a module-level singleton created on first use, so
     it has to be reset for a new DATABASE_URL to take effect. What this
-    no longer has to work around is src.database running initialize_database()
+    no longer has to work around is src.persistence.database running initialize_database()
     as an import-time side effect — the engine used to be built (and DDL
     run against the developer's real project_store.db) simply by importing
     the module, before any fixture could redirect it.
     """
-    import src.database as db
+    import src.persistence.database as db
 
     db_path = tmp_path / "test.db"
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
@@ -65,7 +65,7 @@ def stub_spatial_engine(monkeypatch):
                 "should never touch GEE (cache-hit fast path expected)."
             )
 
-    monkeypatch.setattr("src.data_engine.SpatialDataEngine", _StubEngine)
+    monkeypatch.setattr("src.signals.earth_engine.SpatialDataEngine", _StubEngine)
     return _StubEngine
 
 
@@ -80,7 +80,7 @@ def client(isolated_db, stub_spatial_engine):
 def seeded_users(isolated_db):
     """Creates one admin, one analyst, one viewer in org 'testorg', plus
     a second org 'otherorg' admin — for cross-tenant isolation tests."""
-    from src.auth import create_org_user
+    from src.accounts.auth import create_org_user
 
     users = {
         "admin": create_org_user("testorg", "admin@test.local", "AdminPass123!", "admin"),
@@ -97,7 +97,7 @@ def tokens(seeded_users):
     speed in tests that aren't specifically testing login itself."""
     from backend.config import JWT_EXPIRE_MINUTES, JWT_SECRET
     from backend.security import create_access_token
-    from src.auth import get_user_by_email
+    from src.accounts.auth import get_user_by_email
 
     emails = {
         "admin": "admin@test.local", "analyst": "analyst@test.local",

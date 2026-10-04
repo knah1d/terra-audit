@@ -40,9 +40,9 @@ Official sources checked:
 
 ## Concrete implementation gaps
 
-1. `src/readiness.py` currently treats a matching field-type/pathway mapping as methodology applicability. Replace this with actual conditions and supporting evidence. A present baseline dictionary also does not establish a complete historical baseline.
+1. `src/methodology/readiness.py` currently treats a matching field-type/pathway mapping as methodology applicability. Replace this with actual conditions and supporting evidence. A present baseline dictionary also does not establish a complete historical baseline.
 2. Manual determinations can replace automated statuses, including unsupported requirements. Limit decisions to explicitly reviewable requirements. Scope each decision to the project, methodology bundle, period, evidence version, and authorized reviewer; expire it when its inputs change.
-3. `src/issuance.py` allows missing compatibility flags by default. Preserve historical records, but require new claim-ready results to pass a common explicit gate across every calculation entry point. An internal approval must remain distinct from external registry issuance.
+3. `src/carbon/issuance.py` allows missing compatibility flags by default. Preserve historical records, but require new claim-ready results to pass a common explicit gate across every calculation entry point. An internal approval must remain distinct from external registry issuance.
 4. Historical activity data must represent at least the applicable look-back and full crop rotation. Model sequential crops, intercropping, cover crops, fallow, quantities, units, and commodity-specific yields. Date-span checks alone cannot prove complete records.
 5. The ALM engine explicitly excludes some calculations and leakage components. Build a source-by-source applicability matrix; implement applicable gaps or return a specific unsupported outcome. Do not silently interpret missing data as zero or not applicable.
 6. Soil inputs need traceable samples, strata, controls, depths, bulk density, laboratory evidence, and consistent measurement methods. Current aggregate stock inputs are not the whole sampling workflow.
@@ -77,7 +77,7 @@ Implement a source registry with document hashes, versions, publication/effectiv
 
 Replace routing-only eligibility, restrict manual overrides, scope decisions to evidence versions, and unify new-result readiness gates. Separate estimate, internally reviewed, externally verified, and registry-issued states. Preserve immutable historical results.
 
-Deliverable: every readiness outcome identifies the applicable rule, its evidence, and any unsupported calculation. Primary touchpoints: `src/readiness.py`, `src/calculations.py`, `src/issuance.py`, calculation APIs, project settings, and calculation screens.
+Deliverable: every readiness outcome identifies the applicable rule, its evidence, and any unsupported calculation. Primary touchpoints: `src/methodology/readiness.py`, `src/carbon/calculations.py`, `src/carbon/issuance.py`, calculation APIs, project settings, and calculation screens.
 
 ### Phase 2 — Complete multi-crop evidence records
 

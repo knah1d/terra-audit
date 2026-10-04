@@ -14,15 +14,21 @@ from urllib.parse import quote
 
 from sqlalchemy import bindparam, text
 
-from src import calculations, methodology_library as library, methodology_registry as registry
-from src import monitoring, production_records, projects, readiness, soil_evidence
+from src.carbon import calculations
+from src.methodology import library as library
+from src.methodology import registry as registry
+from src.evidence import monitoring
+from src.evidence import production as production_records
+from src.projects import repository as projects
+from src.methodology import readiness
+from src.evidence import soil as soil_evidence
 from src.ai import workspace as ws
-from src.database import (
+from src.persistence.database import (
     get_db_connection, get_field, get_alm_practice_schedule, get_alm_livestock_schedule,
     get_soc_measurements, read_connection_scope,
 )
-from src.issuance import result_is_issuable
-from src.methodology_corrections import CORRECTION_USAGE_INSTRUCTIONS
+from src.carbon.issuance import result_is_issuable
+from src.methodology.corrections import CORRECTION_USAGE_INSTRUCTIONS
 
 PACKET_VERSION = "ai-packet-v1"
 DEFAULT_PACKET_TOKENS = 12000  # Leaves room in a 16k context for prompt/schema/output.
@@ -515,7 +521,7 @@ def explain_leakage(org_id, project_id, user_id, field_id, *, assessment_id=None
             raise ValueError("Leakage assessment not found in this project and field")
         if assessment["bundle_id"] != b.packet["bundle_id"]:
             raise ValueError("Leakage assessment uses a different methodology bundle")
-        from src.leakage_vmd0054 import calculate_frozen_leakage, _whole_years
+        from src.carbon.leakage_vmd0054 import calculate_frozen_leakage, _whole_years
         period = {"start": assessment["period_start"], "end": assessment["period_end"]}
         try:
             years = _whole_years(period["start"], period["end"])
@@ -539,7 +545,7 @@ def explain_leakage(org_id, project_id, user_id, field_id, *, assessment_id=None
 
 
 def diff_since_previous(org_id, project_id, user_id, field_id, calculation_id, *, max_tokens=DEFAULT_PACKET_TOKENS):
-    from src.reviews import diff_calculations
+    from src.projects.reviews import diff_calculations
     b = _Builder(org_id, project_id, user_id, field_id, "diff_since_previous")
     calc = b.calculation(calculation_id)
     previous_id = calc.get("supersedes_calculation_id")

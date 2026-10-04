@@ -25,7 +25,7 @@ def test_missing_idempotency_key_is_422(client, rice_field, auth_headers):
 
 
 def test_alm_cumulative_delta_bumps_exactly_once_on_retry(client, alm_field, auth_headers):
-    from src.database import get_alm_cumulative_delta
+    from src.persistence.database import get_alm_cumulative_delta
 
     before = get_alm_cumulative_delta("testorg", alm_field)
     body = {"area_ha": 10.0, "verification_years": 1.0, "non_permanence_risk_pct": 20.0}

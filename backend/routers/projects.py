@@ -1,5 +1,5 @@
 """Projects: operational grouping of fields for monitoring/reporting —
-deliberately separate from carbon-claim allocation (src.issuance/
+deliberately separate from carbon-claim allocation (src.carbon.issuance/
 credit_history). A field can belong to more than one project at once;
 this router surfaces that overlap rather than hiding it, and never
 infers or changes a field's accounting methodology (field_type) from
@@ -13,9 +13,9 @@ from backend.schemas.projects import (
     FieldMembershipAssign, FieldMembershipEnd, FieldMembershipOut,
     ProjectCreate, ProjectMemberCreate, ProjectMemberOut, ProjectOut, ProjectUpdate,
 )
-from src.auth import list_org_users
-from src.database import get_field
-from src import projects as projects_db
+from src.accounts.auth import list_org_users
+from src.persistence.database import get_field
+from src.projects import repository as projects_db
 
 router = APIRouter(tags=["projects"])
 

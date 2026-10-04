@@ -95,7 +95,7 @@ def _groq(instructions, data, schema, org_id, media, vision):
 
 
 def _throttle(org_id: str) -> None:
-    from src.account_access import throttle
+    from src.accounts.account_access import throttle
     if not throttle("ai-provider:" + org_id, int(os.environ.get("AI_PROVIDER_REQUESTS_PER_DAY", "100")), 86400):
         raise ValueError("Organization AI daily provider-request limit reached")
 

@@ -25,7 +25,7 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
-      # Earth Engine auth (ee.Initialize() in src/data_engine.py) can take
+      # Earth Engine auth (ee.Initialize() in src/signals/earth_engine.py) can take
       # 20s+ to time out/fail before the app finishes startup, even though
       # that failure is caught and non-fatal (see backend/main.py lifespan)
       # — give it enough room to not be killed as unhealthy mid-startup.
@@ -33,11 +33,11 @@ services:
 
   # Durable job worker (Phase 4) — same image as `backend`, different
   # entrypoint. Runs OUT OF PROCESS from the web app; the two only ever
-  # communicate through the background_jobs table (src/jobs.py), never
+  # communicate through the background_jobs table (src/jobs/queue.py), never
   # in-memory, so either can restart independently without losing queued
   # work. See docs/OPERATIONS.md for what this actually processes
   # (satellite collection, AI training/benchmark jobs) and how to scale
-  # it (run more than one — claiming is race-safe, see src/jobs.py).
+  # it (run more than one — claiming is race-safe, see src/jobs/queue.py).
   worker:
     build:
       context: .

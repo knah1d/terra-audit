@@ -6,11 +6,11 @@ from backend.deps import get_current_user, get_owned_field, get_spatial_engine, 
 from backend.schemas.monitoring import (
     BenchmarkRequest, ObservationCreate, PracticeEventCreate, ReviewCreate, SeasonCorrection, SeasonCreate,
 )
-from src import monitoring
-from src.ai.crop_benchmark import build_corpus
-from src.database import get_job, list_completed_jobs
-from src.jobs import create_job, request_cancel
-from src.processing import MULTICROP_VERSION
+from src.evidence import monitoring
+from src.ai.ml.crop_benchmark import build_corpus
+from src.persistence.database import get_job, list_completed_jobs
+from src.jobs.queue import create_job, request_cancel
+from src.signals.processing import MULTICROP_VERSION
 
 router = APIRouter(tags=["multi-crop-monitoring"])
 _field = get_owned_field()

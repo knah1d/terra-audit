@@ -4,7 +4,7 @@ Regression tests for AlmCarbonEngine (VM0042 cropland-ALM credit calculation).
 
 import pytest
 
-from src.carbon_calculator_alm import AlmCarbonEngine
+from src.carbon.alm import AlmCarbonEngine
 
 
 @pytest.fixture

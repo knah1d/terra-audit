@@ -148,7 +148,7 @@ export interface LivestockScheduleOut {
   project: LivestockEntry[];
 }
 
-// --- Portfolio (mirrors src/database.py's get_portfolio_summary dict) --
+// --- Portfolio (mirrors src/persistence/database.py's get_portfolio_summary dict) --
 
 export interface PortfolioEntry {
   field_id: string;
@@ -160,7 +160,7 @@ export interface PortfolioEntry {
   calculated_at: string | null;
 }
 
-// --- AI Validation (mirrors src/ai/evaluate.py's shapes) ---------------
+// --- AI Validation (mirrors src/ai/ml/evaluate.py's shapes) ---------------
 
 export interface AiDatasetBuildResult {
   row_count: number;
@@ -258,7 +258,7 @@ export interface FieldMembershipOut {
   removed_reason: string | null;
 }
 
-// --- Evidence-linked calculations (Phase 2 — mirrors src/calculations.py & src/readiness.py) ---
+// --- Evidence-linked calculations (Phase 2 — mirrors src/carbon/calculations.py & src/methodology/readiness.py) ---
 
 export type AccountingPathway = "vm0051_rice_awd" | "vm0042_alm";
 export type CalculationStatus = "draft" | "ready_for_review" | "superseded";
@@ -320,7 +320,7 @@ export interface LegacyCalculationRow {
 
 export type CalculationHistoryRow = (CalculationOut & { legacy: false; has_snapshot: true }) | LegacyCalculationRow;
 
-// --- Internal review (Phase 3 — mirrors src/reviews.py) ---
+// --- Internal review (Phase 3 — mirrors src/projects/reviews.py) ---
 
 export type SubmissionStatus = "submitted" | "in_review" | "changes_requested" | "internally_approved" | "rejected" | "withdrawn";
 export type FindingSeverity = "blocking" | "major" | "minor" | "info";
@@ -420,7 +420,7 @@ export interface NotificationOut {
 // ---------------------------------------------------------------------
 // Soil evidence (sampling plans, strata, samples, lab results,
 // chain-of-custody, and the reviewed SOC evidence mapping) — mirrors
-// backend/schemas/soil_evidence.py and src/soil_evidence.py's row shapes.
+// backend/schemas/soil_evidence.py and src/evidence/soil.py's row shapes.
 // ---------------------------------------------------------------------
 
 export type SoilSiteType = "project" | "control";

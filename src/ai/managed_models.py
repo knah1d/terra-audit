@@ -12,10 +12,10 @@ from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import LabelEncoder
 
 from src.ai import workspace as ws
-from src.ai.crop_benchmark import FEATURE_VERSION, benchmark, seasonal_features
-from src.monitoring import digest
-from src.processing import MULTICROP_VERSION
-from src.storage import get_storage
+from src.ai.ml.crop_benchmark import FEATURE_VERSION, benchmark, seasonal_features
+from src.evidence.monitoring import digest
+from src.signals.processing import MULTICROP_VERSION
+from src.persistence.storage import get_storage
 
 
 def train(org_id, project_id, job_id, payload, checkpoint):

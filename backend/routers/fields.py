@@ -5,9 +5,9 @@ from backend.schemas.fields import (
     AreaResponse, FieldCreate, FieldDetailOut, FieldOut, FieldUpdate,
     GeometryParseResponse, ParseContentRequest, ParseCoordinatesRequest,
 )
-from src.database import create_field, delete_field, get_field, list_fields, update_field_info
+from src.persistence.database import create_field, delete_field, get_field, list_fields, update_field_info
 from src.field_types.registry import FIELD_TYPES
-from src.geo_utils import (
+from src.signals.geometry import (
     compute_area_ha, parse_coordinate_text, parse_geojson_upload, parse_kml_upload,
 )
 
@@ -115,7 +115,7 @@ def remove_field(field_id: str, user: dict = Depends(require_admin),
     a submitted, in-review, or internally-approved package must stay
     reproducible; there is no "force delete" escape hatch here."""
     org_id = user["org_id"]
-    from src.reviews import field_has_submissions
+    from src.projects.reviews import field_has_submissions
     if field_has_submissions(org_id, field_id):
         raise HTTPException(
             status.HTTP_409_CONFLICT,

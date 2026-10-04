@@ -1,12 +1,12 @@
 """Commodity-level, multi-year production records feeding VMD0054 Step 1
-(see src/production_records.py's module docstring). ALM-only, mirroring
+(see src/evidence/production.py's module docstring). ALM-only, mirroring
 backend/routers/soil_evidence.py's field-type gating.
 """
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from backend.deps import get_current_user, get_owned_field, require_writer
 from backend.schemas.production_records import ProductionRecordCreate, ProductionRecordsImport, Vmd0054LeakageRequest, LeakageAssessmentSave
-from src import production_records
+from src.evidence import production as production_records
 
 router = APIRouter(tags=["production-records"])
 _alm_field = get_owned_field(expect_type="cropland_alm_vm0042")
@@ -61,19 +61,19 @@ def import_records(field_id: str, body: ProductionRecordsImport,
 @router.get("/fields/{field_id}/production-records/summary")
 def get_summary(field_id: str, user=Depends(get_current_user), field=Depends(_alm_field)):
     """Grouped {commodity: {period_type: [records]}} view — what
-    src.leakage_vmd0054's Step 1 branching reads."""
+    src.carbon.leakage_vmd0054's Step 1 branching reads."""
     return production_records.production_summary(user["org_id"], field_id)
 
 
 @router.post("/fields/{field_id}/production-records/vmd0054-leakage")
 def compute_vmd0054_leakage(field_id: str, body: Vmd0054LeakageRequest,
                              user=Depends(get_current_user), field=Depends(_alm_field)):
-    """Steps 1/3/4/5 of VMD0054 v1.1 (src.leakage_vmd0054) computed
+    """Steps 1/3/4/5 of VMD0054 v1.1 (src.carbon.leakage_vmd0054) computed
     against this field's recorded production_records. Read-only —
     exploratory, mirroring the calculation preview endpoints' no-write
     contract. Always reports per-commodity Step 1/3 results even where
     the field total is blocked at Step 4/5 for missing regional data."""
-    from src.leakage_vmd0054 import compute_vmd0054_leakage as _compute
+    from src.carbon.leakage_vmd0054 import compute_vmd0054_leakage as _compute
     commodity_params = {
         commodity: params.model_dump() for commodity, params in body.commodity_params.items()
     }
@@ -91,7 +91,8 @@ def leakage_assessments(field_id: str, user=Depends(get_current_user), field=Dep
 @router.post("/fields/{field_id}/production-records/leakage-assessments", status_code=201)
 def save_leakage_assessment(field_id: str, body: LeakageAssessmentSave,
                             user=Depends(require_writer), field=Depends(_alm_field)):
-    from src import methodology_registry, projects
+    from src.methodology import registry as methodology_registry
+    from src.projects import repository as projects
     from backend.access import require_project_access
     role = require_project_access(user["org_id"], body.project_id, user)
     if role == "viewer":
@@ -106,10 +107,10 @@ def save_leakage_assessment(field_id: str, body: LeakageAssessmentSave,
     if not bundle or bundle["bundle_id"] != body.bundle_id:
         raise HTTPException(422, "Select the project's applicable methodology bundle.")
     saved = production_records.save_leakage_assessment(user["org_id"], field_id, body.model_dump(mode="json"), user["user_id"])
-    from src.leakage_vmd0054 import calculate_frozen_leakage
+    from src.carbon.leakage_vmd0054 import calculate_frozen_leakage
     evidence = {"assessment": saved, "production_records": production_records.list_production_records(user["org_id"], field_id),
                 "project_fields": memberships}
-    from src.leakage_vmd0054 import _whole_years
+    from src.carbon.leakage_vmd0054 import _whole_years
     try:
         years = _whole_years(body.monitoring_period_start.isoformat(), body.monitoring_period_end.isoformat())
     except ValueError:

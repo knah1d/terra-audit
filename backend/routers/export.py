@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 
 from backend.deps import get_current_user, get_owned_field
-from src.database import (
+from src.persistence.database import (
     get_alm_livestock_schedule, get_alm_practice_schedule,
     get_credit_history_entry, get_latest_signal_result, get_soc_measurements,
 )
-from src.report_generator import (
+from src.reporting.reports import (
     generate_audit_json, generate_audit_json_alm, generate_alm_data_csv,
     generate_pdf, generate_pdf_alm, generate_timeseries_csv,
 )
@@ -19,7 +19,7 @@ _field = get_owned_field()
 @router.get("/calculations/{calculation_id}/evidence/pdf")
 def export_calculation_pdf(calculation_id: str, user: dict = Depends(get_current_user)):
     """Render an ALM estimate using stored evidence only, never today's field data."""
-    from src.calculations import get_calculation
+    from src.carbon.calculations import get_calculation
     from backend.access import require_project_access
     calculation = get_calculation(user["org_id"], calculation_id)
     if calculation is None:

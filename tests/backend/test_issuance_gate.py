@@ -1,5 +1,5 @@
 """
-Regression tests for the issuance gate (see src/issuance.py).
+Regression tests for the issuance gate (see src/carbon/issuance.py).
 
 The bug these lock down: app.py used to call save_credit_history BEFORE
 checking VM0051's QA3 project-size gate, so a project that failed the
@@ -12,7 +12,7 @@ single write path, so neither client can persist a blocked result.
 import pytest
 from sqlalchemy import text
 
-from src.issuance import NonIssuableResultError, result_is_issuable
+from src.carbon.issuance import NonIssuableResultError, result_is_issuable
 
 
 def _credit_history_count(db, org_id: str, field_id: str) -> int:

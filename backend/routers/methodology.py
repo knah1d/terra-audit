@@ -7,10 +7,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from backend.access import require_project_lead
 from backend.deps import get_current_user, get_owned_field, require_admin, require_writer
 from backend.schemas.methodology import ProjectApplicabilityRequest, QuantificationUnitCreate
-from src import methodology_registry as registry
-from src import projects as projects_db
-from src import quantification
-from src import readiness as readiness_engine
+from src.methodology import registry as registry
+from src.projects import repository as projects_db
+from src.methodology import quantification
+from src.methodology import readiness as readiness_engine
 
 router = APIRouter(tags=["methodology"])
 _field = get_owned_field()
@@ -54,7 +54,7 @@ def get_project_applicability(project_id: str, accounting_pathway: str, user=Dep
 def set_project_applicability(project_id: str, body: ProjectApplicabilityRequest, user=Depends(require_writer)):
     """Project-lead/admin only — pins a project to a specific methodology
     bundle (e.g. VM0051 v1.0 transition eligibility) rather than always
-    "whatever is current." See src.methodology_registry's BUNDLES."""
+    "whatever is current." See src.methodology.registry's BUNDLES."""
     if projects_db.get_project(user["org_id"], project_id) is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Project not found")
     require_project_lead(user["org_id"], project_id, user)
@@ -98,26 +98,26 @@ def get_guided_enrollment(field_id: str, user=Depends(get_current_user), field=D
 
 
 # --------------------------------------------------------------------------
-# Methodology knowledge library (Phase 4A) — see src/methodology_library.py
+# Methodology knowledge library (Phase 4A) — see src/methodology/library.py
 # --------------------------------------------------------------------------
 
 @router.post("/methodology/library/ingest", status_code=status.HTTP_202_ACCEPTED)
 def ingest_library(user=Depends(require_admin)):
     """Queues (re)indexing of every registered local methodology PDF.
     Idempotent per document sha256 — unchanged PDFs are skipped."""
-    from src.jobs import create_job
+    from src.jobs.queue import create_job
     return {"job_id": create_job(user["org_id"], "methodology_ingest", {"requested_by": user["user_id"]})}
 
 
 @router.get("/methodology/library/status")
 def library_status(user=Depends(get_current_user)):
-    from src import methodology_library
+    from src.methodology import library as methodology_library
     return methodology_library.index_status()
 
 
 @router.get("/methodology/library/ingest/jobs/{job_id}")
 def library_ingest_job(job_id: str, user=Depends(require_admin)):
-    from src.jobs import get_job_row
+    from src.jobs.queue import get_job_row
     job = get_job_row(user["org_id"], job_id)
     if job is None or job["job_type"] != "methodology_ingest":
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Methodology ingestion job not found")
@@ -127,7 +127,7 @@ def library_ingest_job(job_id: str, user=Depends(require_admin)):
 @router.get("/methodology/library/search")
 def search_library(q: str, bundle_id: str, limit: int = 8, user=Depends(get_current_user)):
     """Full-text search limited to one bundle's documents."""
-    from src import methodology_library
+    from src.methodology import library as methodology_library
     bundle = registry.get_bundle(bundle_id)
     if bundle is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Methodology bundle not found")
@@ -138,7 +138,7 @@ def search_library(q: str, bundle_id: str, limit: int = 8, user=Depends(get_curr
 @router.get("/methodology/corrections")
 def get_corrections(document_id: str | None = None, user=Depends(get_current_user)):
     """Public reference mappings with this organization's confirmation status."""
-    from src import methodology_library
+    from src.methodology import library as methodology_library
     if document_id and not any(d["document_id"] == document_id for d in registry.list_documents()):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Methodology document not found")
     return methodology_library.list_corrections(document_id, org_id=user["org_id"])
@@ -147,7 +147,7 @@ def get_corrections(document_id: str | None = None, user=Depends(get_current_use
 @router.post("/methodology/corrections/{correction_id}/confirm")
 def confirm_correction(correction_id: str, user=Depends(require_admin)):
     """Confirm the reference mapping for this org; never a readiness decision."""
-    from src import methodology_library
+    from src.methodology import library as methodology_library
     try:
         return methodology_library.confirm_correction(correction_id, user["org_id"], user["user_id"])
     except LookupError as exc:

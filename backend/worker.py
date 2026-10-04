@@ -1,6 +1,6 @@
 """Durable job worker — Phase 4. Runs OUT OF PROCESS from the FastAPI web
 app (backend.main:app); the two communicate only through the
-background_jobs table (src.jobs), never in-memory.
+background_jobs table (src.jobs.queue), never in-memory.
 
 Run with:  python -m backend.worker
 Stop with: SIGINT/SIGTERM (graceful — finishes the job currently in
@@ -21,8 +21,8 @@ from backend.config import (
     MAX_CONCURRENT_JOBS_PER_ORG, WORKER_HEARTBEAT_INTERVAL_SECONDS, WORKER_POLL_INTERVAL_SECONDS,
 )
 from backend.job_handlers import HANDLERS
-from src.database import initialize_database
-from src.jobs import (
+from src.persistence.database import initialize_database
+from src.jobs.queue import (
     JobCancelled, InvalidJobRequest, claim_next_job, complete_job, deregister_worker, fail_job,
     get_job_row, heartbeat, heartbeat_worker, is_cancel_requested, mark_cancelled,
     reclaim_abandoned_jobs, register_worker, worker_identity,
@@ -55,7 +55,7 @@ class WorkerContext:
         return is_cancel_requested(self._org_id, self._job_id)
 
     def progress(self, stage: str, timings: dict) -> None:
-        from src.signal_jobs import update_progress
+        from src.jobs.signals import update_progress
         update_progress(self._org_id, self._job_id, self._worker_id, stage, timings)
 
 
@@ -121,7 +121,7 @@ def _maybe_notify_exhausted(org_id: str, job_id: str) -> None:
         return  # still retrying — only notify once attempts are truly exhausted
     requested_by = (job.get("payload") or {}).get("requested_by")
     if requested_by:
-        from src import reviews as reviews_db
+        from src.projects import reviews as reviews_db
         reviews_db.notify(
             org_id, requested_by, "job_retries_exhausted",
             f"A {job['job_type']} job failed after {job['attempt_count']} attempt(s) and will not retry further.",
@@ -133,7 +133,7 @@ def run(job_types=None, max_iterations: int | None = None) -> None:
     to process what's queued and then return, instead of polling
     forever."""
     initialize_database()
-    from src.data_engine import SpatialDataEngine
+    from src.signals.earth_engine import SpatialDataEngine
     try:
         engine = SpatialDataEngine()
     except RuntimeError as exc:

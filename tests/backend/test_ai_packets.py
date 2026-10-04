@@ -4,10 +4,17 @@ import json
 import pytest
 from sqlalchemy import text
 
-from src import calculations, database, methodology_library as library, methodology_registry as registry
-from src import monitoring, production_records, projects, readiness, soil_evidence
+from src.carbon import calculations
+from src.persistence import database
+from src.methodology import library as library
+from src.methodology import registry as registry
+from src.evidence import monitoring
+from src.evidence import production as production_records
+from src.projects import repository as projects
+from src.methodology import readiness
+from src.evidence import soil as soil_evidence
 from src.ai import packets
-from src.reviews import diff_calculations
+from src.projects.reviews import diff_calculations
 
 
 @pytest.fixture()
@@ -146,7 +153,7 @@ def test_leakage_explains_stored_result_without_recomputing(scope, monkeypatch):
         "computable": False, "AL_t_ha": 2.5, "leakage_block_reason": "Regional carbon stock parameters missing."}})
     def forbidden(*a, **kw):
         raise AssertionError("Stored leakage must not be recomputed")
-    monkeypatch.setattr("src.leakage_vmd0054.calculate_frozen_leakage", forbidden)
+    monkeypatch.setattr("src.carbon.leakage_vmd0054.calculate_frozen_leakage", forbidden)
     packet = packets.explain_leakage(**args(scope), calculation_id=cid)
     result = next(f["data"] for f in packet["facts"] if f["kind"] == "leakage_result")
     assert result["AL_t_ha"] == 2.5 and result["computable"] is False

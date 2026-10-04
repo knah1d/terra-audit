@@ -63,5 +63,5 @@ requires real Earth Engine credentials — see `tests/backend/conftest.py`.
 - `org_id` always comes from the JWT, never from a URL path or request
   body.
 - Signal-analytics (GEE fetch) and AI training run as background jobs
-  (`background_jobs` table in `src/database.py`) when the DB cache
+  (`background_jobs` table in `src/persistence/database.py`) when the DB cache
   misses; a cache hit stays synchronous. See plan Part A4.

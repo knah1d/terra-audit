@@ -5,7 +5,7 @@ everywhere rather than two slightly-different copies drifting apart.
 """
 from fastapi import HTTPException, status
 
-from src.projects import get_project_member
+from src.projects.repository import get_project_member
 
 
 def project_role(org_id: str, project_id: str, user_id: str) -> str | None:

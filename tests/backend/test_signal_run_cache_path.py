@@ -6,7 +6,7 @@ not a 202 job — the whole point of checking the DB cache first.
 
 import pandas as pd
 
-from src.database import save_cache
+from src.persistence.database import save_cache
 
 
 def _seed_cache(field_id: str, window_start: str, window_end: str):

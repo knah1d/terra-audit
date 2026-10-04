@@ -170,7 +170,7 @@ Target:
 Current report still incorrectly states:
   calculation_id (PK), field_id (FK), methodology, timestamp
 
-Actual src/database.py columns:
+Actual src/persistence/database.py columns:
   id (PK AUTOINCREMENT)
   field_id
   field_type
@@ -196,7 +196,7 @@ PRIORITY 4 — FIX VM0051 QA3 EXPORT LABELS IN CODE
 =================================================
 
 The report correctly calls the implemented rice approach VM0051 v1.0 QA3, but
-src/report_generator.py still contains "Verra VM0051 Tier 2" labels.
+src/reporting/reports.py still contains "Verra VM0051 Tier 2" labels.
 
 Required code change:
   Search report_generator.py/UI for "VM0051 Tier 2" and "Tier 2" and replace
@@ -293,7 +293,7 @@ PRIORITY 9 — KEEP AI AND EXPORT CLAIMS ACCURATE
 ===============================================
 
 AI artifact metadata:
-  NFR12 remains a target. src/ai/models.py currently persists model, classes
+  NFR12 remains a target. src/ai/ml/models.py currently persists model, classes
   and feature_names, not every claimed reproducibility field. Keep empirical
   status In Progress until versions, timestamp, dataset/class summary, label
   provenance and CV metadata are stored.

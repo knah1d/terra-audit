@@ -2,9 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 
 from backend.deps import get_current_user, require_writer
 from backend.schemas.ai import DatasetBuildResult, TrainAccepted, TrainRequest
-from src.ai.dataset_builder import build_dataset, save_dataset, load_dataset
-from src.database import get_job, list_completed_jobs
-from src.jobs import create_job
+from src.ai.ml.dataset_builder import build_dataset, save_dataset, load_dataset
+from src.persistence.database import get_job, list_completed_jobs
+from src.jobs.queue import create_job
 
 router = APIRouter(tags=["ai-validation"])
 
@@ -46,7 +46,7 @@ def submit_train_job(body: TrainRequest, response: Response, user: dict = Depend
 
 @router.post("/ai/train/{job_id}/cancel")
 def cancel_train_job(job_id: str, user: dict = Depends(require_writer)):
-    from src.jobs import request_cancel
+    from src.jobs.queue import request_cancel
     job = get_job(user["org_id"], job_id)
     if job is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Job not found")
@@ -73,7 +73,7 @@ def get_last_validation(model_key: str, user: dict = Depends(get_current_user)):
     # Scans this org's completed training jobs newest-first and returns the
     # first whose stored metrics belong to the requested model. The scan is
     # caller-side because the predicate lives inside the opaque result
-    # payload; the query itself now belongs to src/database.py.
+    # payload; the query itself now belongs to src/persistence/database.py.
     for job in list_completed_jobs(org_id, "ai_train"):
         result = job["result"]
         if result and result.get("summary", {}).get("model_name") == f"{org_id}_{model_key}":

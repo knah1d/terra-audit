@@ -1,7 +1,7 @@
 /**
  * Centralizes numeric display precision so every derivation step and
  * result card is consistent — per-unit decimal places matching the
- * backend's own formatting conventions (see src/report_generator.py's
+ * backend's own formatting conventions (see src/reporting/reports.py's
  * .4f usage for tCO2e figures).
  */
 const DECIMALS: Record<string, number> = {

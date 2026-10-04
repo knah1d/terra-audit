@@ -19,9 +19,9 @@ def main():
     selection.add_argument("--all", action="store_true", help="Index all registered local PDFs")
     selection.add_argument("--document-id", action="append", help="Registered document ID; repeat as needed")
     args = parser.parse_args()
-    from src.database import get_db_connection
-    from src.methodology_library import initialize_tables, ingest_document
-    from src.methodology_registry import list_documents
+    from src.persistence.database import get_db_connection
+    from src.methodology.library import initialize_tables, ingest_document
+    from src.methodology.registry import list_documents
     documents = list_documents()
     if args.document_id:
         unknown = set(args.document_id) - {d["document_id"] for d in documents}

@@ -8,7 +8,7 @@ from backend.deps import get_current_user, require_admin
 from src.ai import workspace as ws
 from src.ai.explanations import packet_for, cached
 from src.ai.providers import configured, provider_name
-from src.jobs import create_job, get_job_row
+from src.jobs.queue import create_job, get_job_row
 
 router = APIRouter(prefix="/projects/{project_id}/ai", tags=["AI explanations"])
 
@@ -66,7 +66,7 @@ def request_explanation(project_id: str, body: ExplainRequest, user=Depends(get_
     # Terminal failures may be retried explicitly; successful/in-flight jobs
     # retain their stable key and cache behavior.
     from sqlalchemy import text
-    from src.database import get_db_connection
+    from src.persistence.database import get_db_connection
     with get_db_connection() as conn:
         previous = conn.execute(text("SELECT job_id,status FROM background_jobs WHERE org_id=:o AND job_type='ai_explain' AND idempotency_key=:k"),
                                 {"o": user["org_id"], "k": key}).mappings().first()

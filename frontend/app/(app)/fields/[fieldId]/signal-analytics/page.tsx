@@ -1,7 +1,7 @@
 "use client";
 
 import { Play, Satellite } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { AuditTrailTable } from "@/components/signal/AuditTrailTable";
 import { SignalTimeseriesChart } from "@/components/signal/SignalTimeseriesChart";
 import { useFieldContext } from "@/components/fields/FieldContext";
@@ -61,21 +61,24 @@ function SignalAnalyticsView() {
   // handleRun() (below) always overwrites `result` with the new one.
   const latestSignal = useLatestSignalRun(field.field_id);
   const activeRuns = useActiveSignalRuns(field.field_id);
-  const recoveryAttempted = useRef(false);
-  useEffect(() => {
-    if (recoveryAttempted.current || !activeRuns.isFetchedAfterMount || !activeRuns.data) return;
-    recoveryAttempted.current = true;
+  const [recoveryAttempted, setRecoveryAttempted] = useState(false);
+  // Recover once from fresh query data. Updating this component's state
+  // during render avoids showing one frame of default inputs before an
+  // effect restores the in-flight request. The guard prevents loops.
+  if (!recoveryAttempted && activeRuns.isFetchedAfterMount && activeRuns.data) {
+    setRecoveryAttempted(true);
     const active = activeRuns.data[0];
-    if (!active) return;
-    const request = active.request;
-    const savedPreset = Object.entries(SEASON_PRESETS).find(([, range]) => range?.start === request.window_start && range.end === request.window_end)?.[0];
-    setPreset(savedPreset || "Custom Range");
-    setCustomStart(request.window_start);
-    setCustomEnd(request.window_end);
-    setDetector(request.detector);
-    setForceRefresh(request.force_refresh);
-    setJobId(active.job_id);
-  }, [activeRuns.data, activeRuns.isFetchedAfterMount]);
+    if (active) {
+      const request = active.request;
+      const savedPreset = Object.entries(SEASON_PRESETS).find(([, range]) => range?.start === request.window_start && range.end === request.window_end)?.[0];
+      setPreset(savedPreset || "Custom Range");
+      setCustomStart(request.window_start);
+      setCustomEnd(request.window_end);
+      setDetector(request.detector);
+      setForceRefresh(request.force_refresh);
+      setJobId(active.job_id);
+    }
+  }
 
   const window = preset === "Custom Range" ? { start: customStart, end: customEnd } : SEASON_PRESETS[preset]!;
   const rangeInvalid = !window.start || !window.end || window.end <= window.start;
@@ -90,7 +93,7 @@ function SignalAnalyticsView() {
 
   async function handleRun() {
     if (isRunning || rangeInvalid) return;
-    recoveryAttempted.current = true;
+    setRecoveryAttempted(true);
     try {
       setJobId(null);
       setResult(null);

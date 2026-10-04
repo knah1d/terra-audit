@@ -1,7 +1,7 @@
 """Job handler functions run by the durable worker (backend/worker.py).
 
 Each handler takes (job, ctx) and returns a JSON-serializable result
-dict on success. `job` is a decoded background_jobs row (src.jobs.
+dict on success. `job` is a decoded background_jobs row (src.jobs.queue.
 get_job_row shape: org_id, job_id, payload, attempt_count, ...). `ctx`
 (WorkerContext, defined in backend/worker.py) provides the shared
 SpatialDataEngine, a heartbeat() callback, and cancel_requested().
@@ -10,27 +10,27 @@ These replace the old BackgroundTasks closures in backend/routers/
 signal.py, ai.py, monitoring.py — the logic is unchanged, only how it
 receives its inputs (a JSON payload instead of already-fetched Python
 objects, since the worker runs in a separate process/request lifecycle)
-and how it reports outcomes (src.jobs.complete_job/fail_job instead of
-src.database.mark_job_done/mark_job_error).
+and how it reports outcomes (src.jobs.queue.complete_job/fail_job instead of
+src.persistence.database.mark_job_done/mark_job_error).
 """
 import pandas as pd
 import logging
 import time
 from contextlib import contextmanager
 
-from src.ai import evaluate as ai_evaluate
-from src.ai.crop_benchmark import benchmark
-from src.ai.dataset_builder import load_dataset
-from src.ai.feature_engineering import build_features
-from src.ai.models import save_model, train_and_evaluate
-from src.ai.predictor import predict_awd_states
-from src.database import check_cache, get_field, save_cache
-from src.jobs import InvalidJobRequest, JobCancelled
-from src.multicrop_data import extract_observations
-from src import monitoring
-from src import monitoring_ops
-from src import reviews as reviews_db
-from src.threshold_gate import AdaptiveAWDGate
+from src.ai.ml import evaluate as ai_evaluate
+from src.ai.ml.crop_benchmark import benchmark
+from src.ai.ml.dataset_builder import load_dataset
+from src.ai.ml.feature_engineering import build_features
+from src.ai.ml.models import save_model, train_and_evaluate
+from src.ai.ml.predictor import predict_awd_states
+from src.persistence.database import check_cache, get_field, save_cache
+from src.jobs.queue import InvalidJobRequest, JobCancelled
+from src.signals.multicrop import extract_observations
+from src.evidence import monitoring
+from src.evidence import operations as monitoring_ops
+from src.projects import reviews as reviews_db
+from src.signals.threshold_gate import AdaptiveAWDGate
 
 
 def _run_signal_pipeline(org_id, field_id, district, area_ha, df_processed, req, cache_source):
@@ -212,7 +212,7 @@ def _notify_issue(org_id: str, field_id: str, issue: dict) -> None:
     """One notification per NEWLY created issue, sent to the field's
     project leads — never per re-detection (that's the whole point of
     monitoring_ops' dedup-by-open-issue logic upstream of this call)."""
-    from src import projects as projects_db
+    from src.projects import repository as projects_db
     for project_membership in projects_db.list_projects_for_field(org_id, field_id):
         if project_membership["removed_at"] is not None:
             continue
@@ -226,7 +226,7 @@ def _notify_issue(org_id: str, field_id: str, issue: dict) -> None:
 
 
 def handle_methodology_ingest(job: dict, ctx) -> dict:
-    from src.methodology_library import ingest_all
+    from src.methodology.library import ingest_all
     return {"documents": ingest_all()}
 
 

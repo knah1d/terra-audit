@@ -8,7 +8,7 @@ rewriting every golden value here.
 
 import pytest
 
-from src.carbon_calculator import CarbonAssetEngine
+from src.carbon.rice import CarbonAssetEngine
 
 
 @pytest.fixture

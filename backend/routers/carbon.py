@@ -5,12 +5,12 @@ from backend.schemas.carbon import (
     CarbonCalcRequestAlm, CarbonCalcRequestRice, CommitResponse,
     CreditHistoryEntry, CarbonResultOut,
 )
-from src.database import (
+from src.persistence.database import (
     commit_carbon_credit_result, get_alm_cumulative_delta, get_alm_livestock_schedule,
     get_alm_practice_schedule, get_credit_history, get_soc_measurements,
 )
 from src.field_types.registry import build_methodology
-from src.issuance import result_is_issuable
+from src.carbon.issuance import result_is_issuable
 
 _field = get_owned_field()
 
@@ -73,17 +73,17 @@ def commit_carbon_credits(
 ):
     """Writer-only. Requires an Idempotency-Key header — a retried request
     with the same key returns the original result instead of re-computing
-    and double-accruing the ALM cumulative delta (src.database.
+    and double-accruing the ALM cumulative delta (src.persistence.database.
     commit_carbon_credit_result handles the atomicity)."""
     org_id = user["org_id"]
     field_type = field["field_type"]
     result = _calculate(org_id, field_id, field, body)
 
-    # One rule for both methodologies (src/issuance.py). commit_carbon_
+    # One rule for both methodologies (src/carbon/issuance.py). commit_carbon_
     # credit_result enforces this again at the write path; checking here
     # turns it into a clean 422 with the methodology's own reason instead
     # of surfacing the guard's exception.
-    from src.calculations import PATHWAYS
+    from src.carbon.calculations import PATHWAYS
     issuable, block_reason = result_is_issuable(result, PATHWAYS.get(field_type))
     if not issuable:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, block_reason)

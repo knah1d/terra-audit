@@ -5,7 +5,7 @@ from backend.schemas.alm import (
     CompletenessOut, LivestockScheduleIn, LivestockScheduleOut,
     PracticeScheduleIn, PracticeScheduleOut, SocMeasurementsOut, SocValuesIn,
 )
-from src.database import (
+from src.persistence.database import (
     get_alm_livestock_schedule, get_alm_practice_schedule,
     get_soc_measurements, save_alm_livestock_schedule, save_alm_practice_schedule,
     save_soc_measurements,

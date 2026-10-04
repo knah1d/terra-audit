@@ -3,7 +3,7 @@
 Two permission layers, same pattern the rest of the API already uses:
   1. Org role (backend.deps.require_writer/require_admin) — general
      ability to write at all.
-  2. Project-scoped role (src.projects.get_project_member) — whether
+  2. Project-scoped role (src.projects.repository.get_project_member) — whether
      THIS user may act on THIS project's submissions. An org 'admin'
      always passes layer 2 too (matches the rest of the app's admin
      model); nothing here ever trusts a client-supplied role claim.
@@ -16,10 +16,10 @@ from backend.deps import get_current_user, require_writer
 from backend.schemas.reviews import (
     AssignReviewerRequest, CommentCreate, FindingClose, FindingCreate, SubmissionCreate, TransitionRequest,
 )
-from src import projects as projects_db
-from src import reviews as reviews_db
-from src.calculations import get_calculation
-from src.reviews import StaleSubmissionError
+from src.projects import repository as projects_db
+from src.projects import reviews as reviews_db
+from src.carbon.calculations import get_calculation
+from src.projects.reviews import StaleSubmissionError
 
 router = APIRouter(tags=["reviews"])
 
@@ -194,7 +194,7 @@ def assign_reviewer(submission_id: str, body: AssignReviewerRequest, user=Depend
         # and if someone new is genuinely needed, a project lead/admin
         # must explicitly add them via POST /projects/{id}/members first
         # (its own permission-controlled, audited action — see
-        # src.projects.add_project_member's append-only event log).
+        # src.projects.repository.add_project_member's append-only event log).
         if projects_db.get_project_member(org_id, submission["project_id"], body.reviewer_id) is None:
             raise HTTPException(
                 status.HTTP_422_UNPROCESSABLE_ENTITY,

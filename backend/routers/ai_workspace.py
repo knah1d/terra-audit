@@ -12,10 +12,10 @@ from backend.deps import get_current_user
 from backend.schemas.monitoring import ObservationCreate
 from src.ai import workspace as ws
 from src.ai.assistant import configured
-from src.database import get_db_connection, get_field
-from src.jobs import create_job, get_job_row, request_cancel
-from src.monitoring import records, season, digest
-from src.projects import get_attachment, get_project_member
+from src.persistence.database import get_db_connection, get_field
+from src.jobs.queue import create_job, get_job_row, request_cancel
+from src.evidence.monitoring import records, season, digest
+from src.projects.repository import get_attachment, get_project_member
 
 router = APIRouter(prefix="/projects/{project_id}/ai", tags=["AI workspace"])
 
@@ -129,7 +129,7 @@ def train(project_id: str, body: Train, user=Depends(get_current_user)):
     corpus = ws.frozen_corpus(user["org_id"], project_id)
     if len(corpus["examples"]) > 2000:
         raise ValueError("This training worker supports at most 2,000 eligible field-seasons per project")
-    from src.ai.crop_benchmark import make_splits
+    from src.ai.ml.crop_benchmark import make_splits
     if len(corpus["examples"]) < 4 or len({r["crop"] for r in corpus["examples"]}) < 2:
         raise ValueError("Need four eligible field-seasons across two crops, with accepted independent labels")
     make_splits(corpus["examples"], body.split)

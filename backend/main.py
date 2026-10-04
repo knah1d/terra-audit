@@ -20,8 +20,8 @@ from pydantic import ValidationError as PydanticValidationError
 # registry.FIELD_TYPES stays empty and build_methodology()/build_detector()
 # raise KeyError for every request.
 import src.field_types  # noqa: F401
-from src.database import initialize_database
-from src.issuance import NonIssuableResultError
+from src.persistence.database import initialize_database
+from src.carbon.issuance import NonIssuableResultError
 
 from backend.config import ALLOWED_ORIGIN_REGEX
 from backend.routers import (
@@ -33,11 +33,11 @@ from backend.routers import (
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # src.database no longer initializes itself on import, so this is the
+    # src.persistence.database no longer initializes itself on import, so this is the
     # API's real schema-creation point (idempotent via its own guard).
     initialize_database()
 
-    from src.data_engine import SpatialDataEngine
+    from src.signals.earth_engine import SpatialDataEngine
     try:
         app.state.spatial_engine = SpatialDataEngine()
     except RuntimeError as exc:
@@ -102,7 +102,7 @@ async def _value_error_handler(request: Request, exc: ValueError):
 
 @app.exception_handler(NonIssuableResultError)
 async def _non_issuable_handler(request: Request, exc: NonIssuableResultError):
-    """Backstop for the issuance gate (src/issuance.py). Routers check
+    """Backstop for the issuance gate (src/carbon/issuance.py). Routers check
     result_is_issuable() first to return the methodology's own reason, so
     reaching here means a caller tried to persist a blocked result without
     checking — a 422, never a 500."""

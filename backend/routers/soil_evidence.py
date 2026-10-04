@@ -1,5 +1,5 @@
 """Traceable soil evidence — sampling plans, strata, and geolocated
-samples. See src/soil_evidence.py's module docstring for how this
+samples. See src/evidence/soil.py's module docstring for how this
 relates to (and deliberately does not replace) the existing aggregate
 soc_measurements the calculation engine actually reads.
 """
@@ -9,7 +9,7 @@ from backend.deps import get_current_user, get_owned_field, require_writer
 from backend.schemas.soil_evidence import (
     CustodyEventCreate, LabResultCreate, SamplingPlanCreate, SampleCreate, SocEvidenceReviewCreate, StratumCreate,
 )
-from src import soil_evidence
+from src.evidence import soil as soil_evidence
 
 router = APIRouter(tags=["soil-evidence"])
 _alm_field = get_owned_field(expect_type="cropland_alm_vm0042")
@@ -160,7 +160,7 @@ def get_aggregate_comparison(field_id: str, user=Depends(get_current_user), fiel
     """Cross-check only — compares granular sample-derived aggregates
     against the manually entered soc_measurements the engine actually
     used. Never a substitute input for a calculation."""
-    from src.database import get_soc_measurements
+    from src.persistence.database import get_soc_measurements
     org_id = user["org_id"]
     engine_input = {f"{s}_{t}": v for (s, t), v in get_soc_measurements(org_id, field_id).items()}
     from_samples = {f"{s}_{t}": v for (s, t), v in soil_evidence.aggregate_from_samples(org_id, field_id).items()}

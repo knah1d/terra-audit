@@ -4,8 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from backend.deps import get_current_user, get_owned_field, get_spatial_engine
 from backend.job_handlers import _run_signal_pipeline
 from backend.schemas.signal import JobStatusOut, SignalRunAccepted, SignalResult, SignalRunRequest
-from src.database import check_cache, get_job, get_latest_signal_result
-from src.signal_jobs import active_jobs, create_or_reuse, matching_active_job
+from src.persistence.database import check_cache, get_job, get_latest_signal_result
+from src.jobs.signals import active_jobs, create_or_reuse, matching_active_job
 
 router = APIRouter(tags=["signal-analytics"])
 
@@ -68,7 +68,7 @@ def get_active_signal_runs(field_id: str, user=Depends(get_current_user),
 @router.post("/fields/{field_id}/signal-runs/{job_id}/cancel")
 def cancel_signal_run(field_id: str, job_id: str, user: dict = Depends(get_current_user),
                        field: dict = Depends(get_owned_field(require_sar=True))):
-    from src.jobs import get_job_row, request_cancel
+    from src.jobs.queue import get_job_row, request_cancel
     job = get_job_row(user["org_id"], job_id)
     if job is None or job["job_type"] != "signal_run" or job["payload"].get("field_id") != field_id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Job not found")

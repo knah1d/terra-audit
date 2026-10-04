@@ -32,8 +32,8 @@ def sha256(path):
 
 
 def backup(output):
-    from src.database import DB_PATH, get_db_connection
-    from src.storage import get_storage
+    from src.persistence.database import DB_PATH, get_db_connection
+    from src.persistence.storage import get_storage
     output.mkdir(parents=True, exist_ok=False, mode=0o700)
     os.chmod(output, 0o700)
     (output / "INCOMPLETE").write_text("Only a backup with manifest.json and no INCOMPLETE marker is complete.\n")

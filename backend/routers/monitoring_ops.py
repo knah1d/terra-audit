@@ -6,13 +6,13 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from backend.config import MAX_BULK_MONITORING_ITEMS
 from backend.deps import get_current_user, require_admin, require_writer
 from backend.schemas.monitoring_ops import BulkMonitoringRequest, IssueDecision, IssueResolve, RetryFailedRequest
-from src import jobs as jobs_db
-from src import monitoring
-from src import monitoring_ops
-from src import projects as projects_db
+from src.jobs import queue as jobs_db
+from src.evidence import monitoring
+from src.evidence import operations as monitoring_ops
+from src.projects import repository as projects_db
 from backend.access import require_project_access
-from src.database import get_field
-from src.processing import MULTICROP_VERSION
+from src.persistence.database import get_field
+from src.signals.processing import MULTICROP_VERSION
 
 router = APIRouter(tags=["monitoring-ops"])
 
@@ -117,7 +117,7 @@ def retry_failed(batch_id: str, body: RetryFailedRequest, user=Depends(require_w
             new_job_ids.append(jobs_db.create_job(org_id, child["job_type"], child["payload"], batch_id=batch_id))
     if new_job_ids:
         from sqlalchemy import text
-        from src.database import get_db_connection
+        from src.persistence.database import get_db_connection
         with get_db_connection() as conn:
             conn.execute(text("UPDATE job_batches SET status = 'running' WHERE org_id = :o AND batch_id = :b"),
                          {"o": org_id, "b": batch_id})

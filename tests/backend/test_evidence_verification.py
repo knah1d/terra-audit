@@ -4,7 +4,7 @@ specific, immutable, tenant/field-scoped committed verification id — never
 to "whatever the field's latest mutable state happens to be right now."
 """
 
-from src.database import create_job, mark_job_done
+from src.persistence.database import create_job, mark_job_done
 
 
 def _seed_signal_run(org_id: str, field_id: str, **overrides) -> dict:
@@ -66,7 +66,7 @@ def test_verification_export_json_round_trips_committed_inputs(client, alm_field
 
     r = client.get(f"/fields/{alm_field}/verifications/{vid}/evidence/json", headers=auth_headers["admin"])
     assert r.status_code == 200
-    # generate_audit_json_alm (src/report_generator.py) nests the committed
+    # generate_audit_json_alm (src/reporting/reports.py) nests the committed
     # result under "carbon_calculation", not "credits".
     assert r.json()["carbon_calculation"]["final_issuance"] == committed["final_issuance"]
 

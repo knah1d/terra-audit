@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import text
 from backend.deps import require_admin
 from backend.config import JWT_SECRET, _DEV_ONLY_JWT_SECRET, EMAIL_CONFIGURED
-from src.database import get_db_connection, is_sqlite
+from src.persistence.database import get_db_connection, is_sqlite
 from src.ai.assistant import configured
 
 router = APIRouter(tags=["product operations"])

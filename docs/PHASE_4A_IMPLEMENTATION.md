@@ -17,7 +17,7 @@ already exist and are reused.
 
 ## Step 3: correction-aware retrieval — implemented
 
-`src/methodology_corrections.py` contains one manifest entry for each of the
+`src/methodology/corrections.py` contains one manifest entry for each of the
 12 VM0042 items and three VT0014 items. PDF pages, target sections, original
 equation numbers and summaries are curated from the two local correction PDFs.
 All entries start as draft. Summaries are metadata, not verbatim PDF quotations.

@@ -5,8 +5,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from backend.deps import get_current_user, require_writer
 from backend.schemas.farms import FarmCreate, FarmOut, FarmUpdate
 from backend.schemas.projects import FieldMembershipAssign, FieldMembershipEnd, FieldMembershipOut
-from src.database import get_field
-from src import projects as projects_db
+from src.persistence.database import get_field
+from src.projects import repository as projects_db
 
 router = APIRouter(tags=["farms"])
 

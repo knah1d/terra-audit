@@ -30,7 +30,7 @@
 
 ## Implemented analytics changes
 
-- New `src/signal_jobs.py` centralizes request identities, active-job retrieval,
+- New `src/jobs/signals.py` centralizes request identities, active-job retrieval,
   atomic active-job reuse and lease-scoped progress publication.
 - Additive `active_request_key` and `progress_json` columns are created by the
   existing startup initializer on SQLite and Postgres. A partial unique index

@@ -37,7 +37,7 @@ docs/                   Product, methodology, and operations documentation
 ```
 
 Production uses Vercel for the frontend and Render for the backend.
-See [architecture and cleanup roadmap](docs/ARCHITECTURE.md).
+See [architecture and package guide](docs/ARCHITECTURE.md).
 
 ## Setup
 
@@ -64,7 +64,7 @@ FRONTEND_PUBLIC_URL=https://your-app.vercel.app  # Render backend: account links
 ```
 
 Optional: `DATABASE_URL` (e.g. `postgresql+psycopg2://user:pass@host:5432/dbname`)
-points `src/database.py` at Postgres instead of the default local SQLite
+points `src/persistence/database.py` at Postgres instead of the default local SQLite
 file (`data/project_store.db`). See `backend/README.md` for Brevo/OTP
 registration-email settings.
 
@@ -104,16 +104,16 @@ npm run build
 - **Pluggable field types** — `src/field_types/registry.py` maps a
   `field_type` key to a detector + methodology engine + `uses_sar` flag.
   `field_type` is immutable after a field is registered.
-- **Carbon engines** — `src/carbon_calculator.py` (VM0051, rice AWD) and
-  `src/carbon_calculator_alm.py` (VM0042, cropland ALM) — see their module
+- **Carbon engines** — `src/carbon/rice.py` (VM0051, rice AWD) and
+  `src/carbon/alm.py` (VM0042, cropland ALM) — see their module
   docstrings for exact scope/exclusions before changing an emission factor.
-- **SAR pipeline** — `src/data_engine.py` (Earth Engine query) →
-  `src/threshold_gate.py` (rule-based AWD/phenology detection) →
+- **SAR pipeline** — `src/signals/earth_engine.py` (Earth Engine query) →
+  `src/signals/threshold_gate.py` (rule-based AWD/phenology detection) →
   optionally `src/ai/` (Random Forest/XGBoost trained to reproduce the
   Threshold Gate's own labels — not an independent accuracy check).
-- **Database** — `src/database.py`, SQLAlchemy Core, multi-tenant
+- **Database** — `src/persistence/database.py`, SQLAlchemy Core, multi-tenant
   (`org_id` is the first parameter of every public function).
-- **Reports/exports** — `src/report_generator.py` (PDF/JSON/CSV evidence
+- **Reports/exports** — `src/reporting/reports.py` (PDF/JSON/CSV evidence
   packages), exposed over the API at `GET /fields/{id}/export/{pdf,json,csv}`.
 - Full details, key design constraints, and file-by-file architecture
   notes live in `CLAUDE.md`.

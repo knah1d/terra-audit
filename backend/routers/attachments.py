@@ -1,5 +1,5 @@
 """Document/photo attachments linked to a field, crop season, observation,
-or practice event. Files are stored through src.storage's abstraction
+or practice event. Files are stored through src.persistence.storage's abstraction
 (local filesystem today); only metadata lives in the `attachments` table.
 Every request is scoped to the caller's org via the field the attachment
 is linked to — a season/observation/practice_event id is additionally
@@ -18,10 +18,10 @@ from fastapi.responses import Response
 from backend.config import ALLOWED_ATTACHMENT_CONTENT_TYPES, MAX_ATTACHMENT_SIZE_BYTES
 from backend.deps import get_current_user, require_writer
 from backend.schemas.attachments import AttachmentOut
-from src import monitoring
-from src import projects as projects_db
-from src.database import get_field, get_db_connection
-from src.storage import get_storage, make_storage_key, sanitize_filename
+from src.evidence import monitoring
+from src.projects import repository as projects_db
+from src.persistence.database import get_field, get_db_connection
+from src.persistence.storage import get_storage, make_storage_key, sanitize_filename
 
 router = APIRouter(tags=["attachments"])
 
@@ -41,13 +41,13 @@ def _validate_target(org_id: str, field_id: str, target_type: str, target_id: st
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Crop season not found on this field")
         return
     if target_type == "soil_sampling_plan":
-        from src import soil_evidence
+        from src.evidence import soil as soil_evidence
         plan = soil_evidence.get_plan(org_id, target_id)
         if plan is None or plan["field_id"] != field_id:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Soil sampling plan not found on this field")
         return
     if target_type == "soil_sample":
-        from src import soil_evidence
+        from src.evidence import soil as soil_evidence
         if not any(s["sample_id"] == target_id for s in soil_evidence.field_samples(org_id, field_id)):
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Soil sample not found on this field")
         return
@@ -112,7 +112,7 @@ def delete_attachment(attachment_id: str, user=Depends(require_writer)):
     attachment = projects_db.get_attachment(user["org_id"], attachment_id)
     if attachment is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Attachment not found")
-    from src.calculations import referenced_attachment_ids
+    from src.carbon.calculations import referenced_attachment_ids
     with get_db_connection() as conn:
         rows = conn.execute(text("SELECT payload FROM ai_records WHERE org_id=:o AND kind='document'"),
                             {"o": user["org_id"]}).scalars().all()

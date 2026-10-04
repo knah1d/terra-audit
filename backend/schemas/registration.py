@@ -3,7 +3,7 @@ from pydantic import BaseModel
 
 class RegisterRequest(BaseModel):
     # Plain str fields, matching LoginRequest's convention (no EmailStr —
-    # avoids the extra email-validator dependency; src.auth doesn't
+    # avoids the extra email-validator dependency; src.accounts.auth doesn't
     # format-validate emails either).
     org_name: str
     email: str

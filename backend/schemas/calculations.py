@@ -62,9 +62,9 @@ class DeterminationRequest(BaseModel):
     hashed server-side into an evidence fingerprint) — a determination
     outside this exact scope, or recorded against evidence that has
     since changed, is never honored (see
-    src.calculations.latest_determinations). Restricted, at the write
+    src.carbon.calculations.latest_determinations). Restricted, at the write
     path, to requirements the methodology registry marks reviewable/
-    expert_required — see src.calculations.record_determination."""
+    expert_required — see src.carbon.calculations.record_determination."""
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     project_id: str | None = None
     accounting_pathway: Literal["vm0051_rice_awd", "vm0042_alm"]

@@ -4,7 +4,7 @@ from backend.config import JWT_EXPIRE_MINUTES, JWT_SECRET
 from backend.deps import get_current_user
 from backend.schemas.auth import LoginRequest, TokenResponse, UserOut
 from backend.security import authenticate, create_access_token
-from src.auth import touch_last_login
+from src.accounts.auth import touch_last_login
 
 router = APIRouter(tags=["auth"])
 
@@ -14,7 +14,7 @@ def login(body: LoginRequest):
     user = authenticate(body.email, body.password)
     if user is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid email or password")
-    # src.auth.touch_last_login is now public (it was private, so this
+    # src.accounts.auth.touch_last_login is now public (it was private, so this
     # router kept its own inline copy of the same UPDATE). Both clients'
     # login paths share the one implementation.
     touch_last_login(user["user_id"])

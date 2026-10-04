@@ -45,7 +45,7 @@ class SeasonCreate(BaseModel):
     # this span" (e.g. an unavailable year of farmer history) — distinct
     # from 'fallow' (a real, known agronomic fallow). Both make a gap in
     # the historical look-back window VISIBLE and reviewable instead of
-    # silently absent; see src.readiness._historical_lookback_check.
+    # silently absent; see src.methodology.readiness._historical_lookback_check.
     missing_period_reason: str = Field(default="", max_length=500)
 
     @field_validator("crops")
@@ -122,7 +122,7 @@ class PracticeEventCreate(BaseModel):
     (farmer report / measurement / expert / document, independently
     reviewed); a practice event is the org's own operational record of
     what was done and when, with quantities/units as typed fields
-    (mirrors src.database.ALM_PRACTICE_COLUMNS's unit-in-name convention)
+    (mirrors src.persistence.database.ALM_PRACTICE_COLUMNS's unit-in-name convention)
     rather than one free-text `value` string."""
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True, allow_inf_nan=False)
     kind: Literal["planting", "harvest", "irrigation", "fertilizer_application",

@@ -1,7 +1,7 @@
 """AI queue handlers with live authorization and cancellation checkpoints."""
 from src.ai import workspace as ws
-from src.jobs import InvalidJobRequest, JobCancelled
-from src.monitoring import season
+from src.jobs.queue import InvalidJobRequest, JobCancelled
+from src.evidence.monitoring import season
 
 
 def handle_workspace(job, ctx):

@@ -10,7 +10,7 @@ so a separate login step is pure friction).
 
 Deliberate trade-off: request-otp returns a specific 409 when the email
 already belongs to a real user, rather than a generic response designed
-to resist email enumeration. This matches src.auth.create_org_user's
+to resist email enumeration. This matches src.accounts.auth.create_org_user's
 existing behavior for the admin-invite flow (a specific ValueError on
 duplicate email) — consistency with that precedent outweighs an
 enumeration concern this B2B app doesn't otherwise defend against
@@ -39,8 +39,8 @@ from backend.email_util import EmailSendError, send_otp_email
 from backend.schemas.auth import TokenResponse
 from backend.schemas.registration import RegisterOtpSentResponse, RegisterRequest, VerifyOtpRequest
 from backend.security import create_access_token
-from src.auth import get_user_by_email, hash_password
-from src.database import (
+from src.accounts.auth import get_user_by_email, hash_password
+from src.persistence.database import (
     get_pending_registration,
     record_otp_attempt_failure,
     upsert_pending_registration,
@@ -51,7 +51,7 @@ router = APIRouter(tags=["registration"])
 
 # Per-IP rate limiting on request-otp: a module-level in-process sliding
 # window, the same "acceptable single-process state" posture this
-# codebase already takes for src.database's _ENGINE/_DB_INITIALIZED
+# codebase already takes for src.persistence.database's _ENGINE/_DB_INITIALIZED
 # globals and backend.main's app.state.spatial_engine. A multi-worker or
 # multi-instance deployment would need this moved to the DB or a shared
 # cache — flagged here, not solved, since this app runs a single uvicorn

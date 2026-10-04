@@ -1,6 +1,6 @@
 """
 JWT auth for the FastAPI backend — .claude/plans/misty-growing-yao.md
-Part A2. Wraps src.auth's existing bcrypt/DB primitives; does not fork or
+Part A2. Wraps src.accounts.auth's existing bcrypt/DB primitives; does not fork or
 duplicate them. The 4-field JWT payload (user_id/org_id/email/role) is
 exactly what st.session_state["auth_user"] already carries for the
 Streamlit app — same identity model, stateless transport.
@@ -10,14 +10,14 @@ import datetime
 
 import jwt
 
-from src.auth import get_user_by_email, verify_password
-from src.account_access import token_version
+from src.accounts.auth import get_user_by_email, verify_password
+from src.accounts.account_access import token_version
 from backend.config import JWT_ALGORITHM
 
 
 def authenticate(email: str, password: str) -> dict | None:
     """Returns the user dict on success, None on bad credentials — mirrors
-    the check inside src.auth.login_form() exactly, minus the Streamlit
+    the check inside src.accounts.auth.login_form() exactly, minus the Streamlit
     session_state write."""
     user = get_user_by_email(email.strip().lower())
     if user and verify_password(password, user["password_hash"]):

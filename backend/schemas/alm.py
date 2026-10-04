@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 
-# Matches src.database.ALM_PRACTICE_COLUMNS exactly — declared as a plain
+# Matches src.persistence.database.ALM_PRACTICE_COLUMNS exactly — declared as a plain
 # dict[str, Any]-shaped model rather than importing ALM_PRACTICE_COLUMNS to
 # generate fields dynamically, since these are stable, documented VM0042
 # practice-schedule fields, not something expected to grow the way engine

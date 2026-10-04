@@ -6,7 +6,7 @@ ever accidentally narrowed, or a router accidentally transforms a value,
 this catches it immediately.
 """
 
-from src.carbon_calculator import CarbonAssetEngine
+from src.carbon.rice import CarbonAssetEngine
 
 
 def test_rice_preview_matches_direct_engine_call(client, rice_field, auth_headers):
@@ -54,8 +54,8 @@ def test_rice_preview_does_not_persist(client, rice_field, auth_headers):
 
 
 def test_alm_preview_matches_direct_engine_call(client, alm_field, auth_headers):
-    from src.carbon_calculator_alm import AlmCarbonEngine
-    from src.database import (
+    from src.carbon.alm import AlmCarbonEngine
+    from src.persistence.database import (
         get_alm_cumulative_delta, get_alm_livestock_schedule,
         get_alm_practice_schedule, get_soc_measurements,
     )
