@@ -60,9 +60,9 @@ def submit_signal_run(
 @router.post("/fields/{field_id}/signal-runs/{job_id}/cancel")
 def cancel_signal_run(field_id: str, job_id: str, user: dict = Depends(get_current_user),
                        field: dict = Depends(get_owned_field(require_sar=True))):
-    from src.jobs import request_cancel
-    job = get_job(user["org_id"], job_id)
-    if job is None:
+    from src.jobs import get_job_row, request_cancel
+    job = get_job_row(user["org_id"], job_id)
+    if job is None or job["job_type"] != "signal_run" or job["payload"].get("field_id") != field_id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Job not found")
     request_cancel(user["org_id"], job_id)
     return {"ok": True}
@@ -86,7 +86,7 @@ def get_latest_signal_run(
 @router.get("/signal-runs/{job_id}", response_model=JobStatusOut)
 def get_signal_run(job_id: str, user: dict = Depends(get_current_user)):
     job = get_job(user["org_id"], job_id)
-    if job is None:
+    if job is None or job["job_type"] != "signal_run":
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Job not found")
     return JobStatusOut(**{**job, "created_at": str(job["created_at"]),
                            "finished_at": str(job["finished_at"]) if job["finished_at"] else None})

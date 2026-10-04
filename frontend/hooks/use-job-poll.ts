@@ -21,7 +21,8 @@ export function useJobPoll(path: string | null) {
     enabled: path !== null,
     refetchInterval: (query) => {
       const status = query.state.data?.status;
-      return status === "done" || status === "error" ? false : 1500;
+      if (query.state.status === "error") return false;
+      return status === "done" || status === "error" || status === "cancelled" ? false : 3000;
     },
   });
 }

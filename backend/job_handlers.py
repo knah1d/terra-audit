@@ -80,6 +80,8 @@ def _run_signal_pipeline(org_id, field_id, district, area_ha, df_processed, req,
 
 def handle_signal_run(job: dict, ctx) -> dict:
     org_id, payload = job["org_id"], job["payload"]
+    if ctx.engine is None:
+        raise RuntimeError("Earth Engine is not initialized on the worker. Configure the worker's Earth Engine credentials and restart it.")
     field_id = payload["field_id"]
     field = get_field(org_id, field_id)
     if field is None:

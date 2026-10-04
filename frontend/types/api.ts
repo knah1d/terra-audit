@@ -119,7 +119,7 @@ export interface SignalResult {
 export interface JobStatusOut {
   job_id: string;
   job_type: string;
-  status: "pending" | "running" | "done" | "error";
+  status: "pending" | "running" | "done" | "error" | "cancel_requested" | "cancelled";
   result: Record<string, unknown> | null;
   error: string | null;
   created_at: string | null;

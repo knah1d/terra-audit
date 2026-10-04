@@ -12,7 +12,7 @@ import { FieldLabel, Select, TextInput } from "@/components/ui/Field";
 import { IconTile } from "@/components/ui/IconTile";
 import { Switch } from "@/components/ui/Switch";
 import { useJobPoll } from "@/hooks/use-job-poll";
-import { isSignalRunAccepted, useLatestSignalRun, useRunSignalAnalysis } from "@/hooks/use-signal";
+import { isSignalRunAccepted, useCancelSignalRun, useLatestSignalRun, useRunSignalAnalysis } from "@/hooks/use-signal";
 import type { SignalDetector, SignalResult } from "@/types/api";
 
 const SEASON_PRESETS: Record<string, { start: string; end: string } | null> = {
@@ -40,6 +40,7 @@ export default function SignalAnalyticsPage() {
   const [result, setResult] = useState<SignalResult | null>(null);
 
   const run = useRunSignalAnalysis(field.field_id);
+  const cancel = useCancelSignalRun(field.field_id);
   const jobPoll = useJobPoll(jobId ? `/signal-runs/${jobId}` : null);
   // Previously completed run for this field, if any — shown on first
   // visit so a field you already analyzed doesn't come up blank; a fresh
@@ -78,7 +79,10 @@ export default function SignalAnalyticsPage() {
     }
   }
 
-  const isRunning = run.isPending || (jobId !== null && jobPoll.data?.status !== "done" && jobPoll.data?.status !== "error");
+  const jobStatus = jobId ? jobPoll.data?.status : null;
+  const jobActive = jobId !== null && !["done", "error", "cancelled"].includes(jobStatus ?? "");
+  const isRunning = run.isPending || jobActive;
+  const processing = jobStatus === "running" || jobStatus === "cancel_requested";
 
   const awdCount = effectiveResult?.total_awd ?? 0;
   const detectorLabel = useMemo(
@@ -137,14 +141,23 @@ export default function SignalAnalyticsPage() {
 
           <Switch checked={forceRefresh} onChange={setForceRefresh} label="Bypass local cache (query live GEE)" />
 
-          <Button icon={Play} onClick={handleRun} loading={isRunning} disabled={rangeInvalid}>
-            Run Analytics Engine
+          <Button icon={Play} onClick={handleRun} loading={run.isPending || (processing && !jobPoll.isError)} disabled={rangeInvalid || jobActive}>
+            {jobStatus === "pending" ? "Analysis queued" : "Run Analytics Engine"}
           </Button>
+          {jobActive && <Button variant="secondary" loading={cancel.isPending} disabled={jobStatus === "cancel_requested"} onClick={() => {
+            if (jobId) cancel.mutate(jobId, { onSuccess: () => { void jobPoll.refetch(); } });
+          }}>Cancel analysis</Button>}
         </div>
 
         <div className="flex flex-col gap-4">
-          {isRunning && <Alert tone="info" title="Analysis in progress">Results will update when processing finishes. Your selected season and detector are preserved.</Alert>}
+          {run.isPending && <Alert tone="info" title="Submitting analysis">Checking cached observations and preparing the request.</Alert>}
+          {jobStatus === "pending" && <Alert tone="warning" title="Analysis queued — waiting for a worker">Processing has not started. Your worker must accept satellite analytics jobs; an AI-explanation-only worker cannot process this request. Check Worker &amp; queue, and keep your worker computer awake. Your selected season and detector are preserved.</Alert>}
+          {jobStatus === "running" && <Alert tone="info" title="Analysis in progress">The worker is processing satellite observations. Results will update when processing finishes.</Alert>}
+          {jobStatus === "cancel_requested" && <Alert tone="info" title="Cancellation requested">The worker will stop at its next cancellation checkpoint.</Alert>}
+          {jobStatus === "cancelled" && <Alert tone="info" title="Analysis cancelled">You can submit a new analysis when ready.</Alert>}
           {jobPoll.isError && <Alert tone="danger" title="Unable to check analysis status">{jobPoll.error.message}</Alert>}
+          {jobPoll.isError && jobActive && <Button variant="secondary" onClick={() => void jobPoll.refetch()}>Retry status check</Button>}
+          {cancel.isError && <Alert tone="danger" title="Unable to cancel analysis">{cancel.error.message}</Alert>}
           {run.isError && <Alert tone="danger" title="Run failed">{run.error.message}</Alert>}
           {jobError && <Alert tone="danger" title="Job failed">{jobError}</Alert>}
 

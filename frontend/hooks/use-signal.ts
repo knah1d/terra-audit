@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, ApiError } from "@/lib/api";
 import type { SignalResult, SignalRunAccepted, SignalRunRequest } from "@/types/api";
 
 /**
@@ -18,8 +18,21 @@ import type { SignalResult, SignalRunAccepted, SignalRunRequest } from "@/types/
 export function useLatestSignalRun(fieldId: string) {
   return useQuery({
     queryKey: ["signal-run", "latest", fieldId],
-    queryFn: () => apiFetch<SignalResult>(`/fields/${fieldId}/signal-runs/latest`),
+    queryFn: async () => {
+      try {
+        return await apiFetch<SignalResult>(`/fields/${fieldId}/signal-runs/latest`);
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 404) return null;
+        throw error;
+      }
+    },
     retry: false,
+  });
+}
+
+export function useCancelSignalRun(fieldId: string) {
+  return useMutation({
+    mutationFn: (jobId: string) => apiFetch(`/fields/${fieldId}/signal-runs/${jobId}/cancel`, { method: "POST" }),
   });
 }
 

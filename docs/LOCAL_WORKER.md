@@ -25,3 +25,22 @@ the deployed app's Worker & queue page, then request an explanation.
 A real self-hosted provider requires separate model configuration; fake mode
 is solely a pipeline check. This document does not claim a worker has started
 or that the local database matches the deployed database.
+
+## Satellite analytics and methodology indexing
+
+An explanation-only worker does not process `signal_run` jobs. New fields have
+no cached satellite observations, so their first analysis waits for a worker
+that accepts that job type. A missing latest-result response is expected until
+an analysis completes.
+
+Stop your existing worker with Ctrl+C, then restart it using your current `.env`
+provider settings:
+
+```bash
+python -m backend.worker --job-types ai_explain signal_run methodology_ingest
+```
+
+Satellite processing also requires working Earth Engine credentials on the
+worker computer. Existing pending signal jobs become eligible after this
+restart; do not submit duplicate runs. The analytics page distinguishes queued,
+running, cancellation requested and cancelled states, and offers cancellation.
