@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--provider", choices=["self_hosted", "openai", "fake"], required=True)
+    parser.add_argument("--provider", choices=["self_hosted", "groq", "openai", "fake"], required=True)
     parser.add_argument("--cases", type=Path, default=Path("tests/ai_eval/cases"))
     parser.add_argument("--output", type=Path, default=Path("tests/ai_eval/results"))
     args = parser.parse_args()

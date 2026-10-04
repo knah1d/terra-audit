@@ -127,8 +127,8 @@ def provider_allowed(org_id, provider):
 
 
 def set_provider_allowed(org_id, provider, allowed, actor):
-    if provider != "openai":
-        raise ValueError("Only OpenAI requires external-provider opt-in")
+    if provider not in {"openai", "groq"}:
+        raise ValueError("Only OpenAI and Groq require external-provider opt-in")
     with get_db_connection() as conn:
         conn.execute(text("""INSERT INTO ai_provider_permissions(org_id,provider,allowed,updated_by,updated_at)
             VALUES (:o,:p,:a,:u,:t) ON CONFLICT(org_id,provider) DO UPDATE SET

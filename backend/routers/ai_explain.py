@@ -47,15 +47,17 @@ def request_explanation(project_id: str, body: ExplainRequest, user=Depends(get_
     saved = cached(user["org_id"], project_id, packet)
     if saved:
         return {"explanation": saved["payload"], "record_id": saved["id"]}
-    if packet.get("call_model", True) and provider_name() == "openai" and not ws.provider_allowed(user["org_id"], "openai"):
-        raise HTTPException(403, "An organization administrator must enable OpenAI external-provider access")
-    if packet.get("call_model", True) and not configured():
-        raise HTTPException(503, "Configure AI_PROVIDER=self_hosted, SELF_HOSTED_BASE_URL and SELF_HOSTED_MODEL, or AI_PROVIDER=fake")
+    name = provider_name()
+    if packet.get("call_model", True) and name in {"openai", "groq"} and not ws.provider_allowed(user["org_id"], name):
+        raise HTTPException(403, f"An organization administrator must enable {name} external-provider access")
+    if packet.get("call_model", True) and not configured(for_generation=False):
+        raise HTTPException(503, "Configure the selected AI_PROVIDER and model on the API and worker; Groq additionally needs GROQ_API_KEY on the worker")
     payload = {"project_id": project_id, "requested_by": user["user_id"], "request": request,
-               "context_sha256": packet["context_sha256"], "evidence_fingerprint": packet["evidence_fingerprint"]}
+               "context_sha256": packet["context_sha256"], "evidence_fingerprint": packet["evidence_fingerprint"],
+               "generation_signature": packet["generation_signature"]}
     # Include requester/project identity: a revoked user's pending request must
     # never be shared as the executable job for another reader.
-    key = f"{project_id}:{user['user_id']}:{body.action}:{body.field_id}:{packet['context_sha256']}"
+    key = f"{project_id}:{user['user_id']}:{body.action}:{body.field_id}:{packet['context_sha256']}:{packet['generation_signature']}"
     # Terminal failures may be retried explicitly; successful/in-flight jobs
     # retain their stable key and cache behavior.
     from sqlalchemy import text
@@ -102,15 +104,16 @@ def explanation_history(project_id: str, field_id: str | None = None, calculatio
 class ProviderPermission(BaseModel):
     model_config = ConfigDict(extra="forbid")
     allowed: bool
+    provider: Literal["openai", "groq"] = "openai"
 
 
 @router.get("/provider-permission")
-def provider_permission(project_id: str, user=Depends(get_current_user)):
+def provider_permission(project_id: str, provider: Literal["openai", "groq"] = "openai", user=Depends(get_current_user)):
     access(user, project_id)
-    return {"provider": "openai", "allowed": ws.provider_allowed(user["org_id"], "openai")}
+    return {"provider": provider, "allowed": ws.provider_allowed(user["org_id"], provider)}
 
 
 @router.put("/provider-permission")
 def update_provider_permission(project_id: str, body: ProviderPermission, user=Depends(require_admin)):
     access(user, project_id)
-    return ws.set_provider_allowed(user["org_id"], "openai", body.allowed, user["user_id"])
+    return ws.set_provider_allowed(user["org_id"], body.provider, body.allowed, user["user_id"])

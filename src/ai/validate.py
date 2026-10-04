@@ -38,6 +38,7 @@ class Explanation(_Strict):
 
 
 RESPONSE_SCHEMA = Explanation.model_json_schema()
+EXPLANATION_PROMPT_VERSION = "sentence-explanations-v1"
 FORBIDDEN_CLAIMS = (
     r"\b(?:is|are)\s+(?:fully\s+)?compliant\b", r"\bapproved\b",
     r"\beligible\s+for\s+issuance\b", r"\bcertified\b",

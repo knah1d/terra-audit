@@ -6,6 +6,8 @@ AI_PROVIDER selects the backend:
     SELF_HOSTED_MODEL, with JSON-schema-constrained output.
   - "openai": the OpenAI Responses API (OPENAI_API_KEY/OPENAI_MODEL).
     Sends packets to a third party, so it is an explicit opt-in.
+  - "groq": strict-schema Chat Completions at Groq (GROQ_API_KEY/GROQ_MODEL).
+    Also requires organization opt-in; API enqueue needs only GROQ_MODEL.
   - "fake": no model; returns the smallest schema-valid object. Lets the
     whole pipeline (packets, validation, queue, UI) run without a model.
 If AI_PROVIDER is unset, "self_hosted" is used when SELF_HOSTED_BASE_URL
@@ -16,6 +18,7 @@ throttling is applied once, here, for every real provider call.
 """
 import json
 import os
+import hashlib
 
 import httpx
 
@@ -27,7 +30,7 @@ def provider_name() -> str:
     return "self_hosted" if os.environ.get("SELF_HOSTED_BASE_URL") else "openai"
 
 
-def configured() -> bool:
+def configured(*, for_generation=True) -> bool:
     name = provider_name()
     if name == "fake":
         return True
@@ -35,7 +38,60 @@ def configured() -> bool:
         return bool(os.environ.get("SELF_HOSTED_BASE_URL") and os.environ.get("SELF_HOSTED_MODEL"))
     if name == "openai":
         return bool(os.environ.get("OPENAI_API_KEY") and os.environ.get("OPENAI_MODEL"))
+    if name == "groq":
+        return bool(os.environ.get("GROQ_MODEL") and
+                    (not for_generation or os.environ.get("GROQ_API_KEY")))
     return False
+
+
+def explanation_signature():
+    """Non-secret identity shared by the API and worker; invalidates fake caches."""
+    from src.ai.validate import RESPONSE_SCHEMA, EXPLANATION_PROMPT_VERSION
+    name = provider_name()
+    prefix = {"groq": "GROQ", "self_hosted": "SELF_HOSTED", "openai": "OPENAI"}.get(name)
+    identity = {"provider": name, "model": os.environ.get(f"{prefix}_MODEL", "") if prefix else name,
+                "endpoint": os.environ.get(f"{prefix}_BASE_URL", "") if prefix else "",
+                "prompt_version": EXPLANATION_PROMPT_VERSION, "schema": RESPONSE_SCHEMA}
+    if name == "groq":
+        identity["endpoint"] = os.environ.get("GROQ_BASE_URL", "https://api.groq.com/openai/v1").rstrip("/")
+    return hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
+
+
+def _groq(instructions, data, schema, org_id, media, vision):
+    if media or vision:
+        raise ValueError("Groq explanations are text-only; visual OCR remains a separate OpenAI feature")
+    base = os.environ.get("GROQ_BASE_URL", "https://api.groq.com/openai/v1").rstrip("/")
+    if base != "https://api.groq.com/openai/v1":
+        raise ValueError("GROQ_BASE_URL must be https://api.groq.com/openai/v1")
+    model = os.environ["GROQ_MODEL"]
+    _throttle(org_id)
+    try:
+        with httpx.Client(timeout=float(os.environ.get("GROQ_TIMEOUT_SECONDS", "120"))) as client:
+            response = client.post(base + "/chat/completions", headers={
+                "Authorization": f"Bearer {os.environ['GROQ_API_KEY']}"}, json={
+                "model": model, "temperature": 0,
+                "max_completion_tokens": int(os.environ.get("GROQ_MAX_TOKENS", "8000")),
+                "messages": [{"role": "system", "content": instructions},
+                             {"role": "user", "content": json.dumps(data, default=str, allow_nan=False)}],
+                "response_format": {"type": "json_schema", "json_schema": {
+                    "name": "evidence_response", "strict": True, "schema": schema}},
+            })
+        if response.status_code == 429:
+            raise ValueError("Groq rate limit reached; wait and request a new explanation")
+        if response.status_code != 200:
+            raise ValueError(f"Groq request failed (HTTP {response.status_code}); check API key, model and schema configuration")
+        body = response.json()
+        choice = (body.get("choices") or [{}])[0]
+        message = choice.get("message") or {}
+        if message.get("refusal"):
+            raise ValueError("Groq declined this explanation request")
+        if choice.get("finish_reason") != "stop":
+            raise ValueError("Groq response was incomplete; shorten the request or increase GROQ_MAX_TOKENS")
+        parsed = _parse_object(message.get("content") or "")
+    except (httpx.HTTPError, json.JSONDecodeError, KeyError, TypeError) as exc:
+        raise ValueError("Groq is unavailable or returned an invalid response") from exc
+    return parsed, {"provider": "groq", "model": body.get("model", model),
+                    "response_id": body.get("id"), "usage": body.get("usage"), "store": False}
 
 
 def _throttle(org_id: str) -> None:
@@ -195,20 +251,21 @@ def _fake_explanation(packet):
     return result
 
 
-_PROVIDERS = {"openai": _openai, "self_hosted": _self_hosted, "fake": _fake}
+_PROVIDERS = {"openai": _openai, "groq": _groq, "self_hosted": _self_hosted, "fake": _fake}
 
 
 def generate(instructions, data, schema, *, org_id, media=None, vision=False):
     name = provider_name()
     if name not in _PROVIDERS:
-        raise ValueError(f"Unknown AI_PROVIDER {name!r}; use self_hosted, openai, or fake")
-    if name == "openai":
+        raise ValueError(f"Unknown AI_PROVIDER {name!r}; use self_hosted, groq, openai, or fake")
+    if name in {"openai", "groq"}:
         from src.ai.workspace import provider_allowed
         if not provider_allowed(org_id, name):
-            raise ValueError("OpenAI is not allowed for this organization; an administrator must explicitly enable external-provider access")
+            raise ValueError(f"{name} is not allowed for this organization; an administrator must explicitly enable external-provider access")
     if not configured():
         raise ValueError({
             "self_hosted": "Configure SELF_HOSTED_BASE_URL and SELF_HOSTED_MODEL on the API and worker",
             "openai": "Configure OPENAI_API_KEY and OPENAI_MODEL on the API and worker to enable the assistant",
+            "groq": "Configure GROQ_API_KEY and GROQ_MODEL on the worker",
         }.get(name, "AI provider is not configured"))
     return _PROVIDERS[name](instructions, data, schema, org_id, media, vision)

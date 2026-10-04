@@ -56,6 +56,8 @@ def handle_explanation(job, ctx):
         if ctx.cancel_requested():
             raise JobCancelled("AI explanation cancelled before publication")
         packet = packet_for(org, project, payload["requested_by"], payload["request"])
+        if payload.get("generation_signature") != packet["generation_signature"]:
+            raise ValueError("AI provider configuration changed; request a new explanation")
         if (packet["context_sha256"] != payload["context_sha256"] or
                 packet["evidence_fingerprint"] != payload["evidence_fingerprint"]):
             raise ValueError("Evidence changed; request a new explanation")
@@ -72,6 +74,7 @@ def handle_explanation(job, ctx):
         output = generate_explanation(packet, org)
         checkpoint()
         output.update(action=packet["action"], field_id=packet["field_id"],
+                      generation_signature=packet["generation_signature"],
                       evidence_fingerprint=packet["evidence_fingerprint"],
                       requested_by=payload["requested_by"],
                       calculation_id=payload["request"].get("calculation_id"),
