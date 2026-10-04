@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "next-themes";
 import { createContext, useContext, useState } from "react";
 import { ToastProvider } from "@/components/ui/Toast";
+import { AppearanceProvider } from "@/components/ui/AppearanceProvider";
 import type { SessionClaims } from "@/lib/session";
 
 const SessionContext = createContext<SessionClaims | null>(null);
@@ -39,7 +40,9 @@ function AccountProviders({ session, children }: {
   );
 
   return (
-    <ThemeProvider attribute="data-theme" defaultTheme="system" enableSystem>
+    <ThemeProvider attribute="data-theme" defaultTheme="system" enableSystem disableTransitionOnChange
+      storageKey={session ? `terra-audit:theme:${session.org_id}:${session.user_id}` : "terra-audit:theme:anonymous"}>
+      <AppearanceProvider authenticated={Boolean(session)}>
       <SessionContext.Provider value={session}>
         <QueryClientProvider client={queryClient}>
           {/* Mounted once at the root so a toast fired right before a
@@ -48,6 +51,7 @@ function AccountProviders({ session, children }: {
           <ToastProvider>{children}</ToastProvider>
         </QueryClientProvider>
       </SessionContext.Provider>
+      </AppearanceProvider>
     </ThemeProvider>
   );
 }

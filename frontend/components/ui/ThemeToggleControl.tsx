@@ -2,6 +2,7 @@
 
 import { Monitor, Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
+import { useAppearance } from "./AppearanceProvider";
 import { resetLiquidPointer, trackLiquidPointer } from "@/components/ui/liquid-pointer";
 
 const OPTIONS = [
@@ -11,8 +12,8 @@ const OPTIONS = [
 ] as const;
 
 /**
- * Theme control — overrides the system preference for the session via
- * next-themes (persisted to localStorage).
+ * Theme control — next-themes resolves System locally; AppearanceProvider
+ * persists deliberate selections to the authenticated account.
  *
  * No `mounted` guard here on purpose: this is only ever reached through
  * the ssr:false dynamic wrapper in ThemeToggle.tsx, so by the time it
@@ -21,17 +22,20 @@ const OPTIONS = [
  * and was solving a problem the wrapper solves more cleanly.
  */
 export default function ThemeToggleControl() {
-  const { theme, setTheme } = useTheme();
+  const { theme } = useTheme();
+  const { select, error, saving, retry } = useAppearance();
 
   return (
-    <div className="inline-flex gap-0.5 rounded-full glass-control p-0.5 shadow-xs">
+    <div>
+    <div role="group" aria-label="Appearance" aria-busy={saving} className="inline-flex gap-0.5 rounded-full glass-control p-0.5 shadow-xs">
       {OPTIONS.map(({ value, label, icon: Icon }) => (
         <button
           key={value}
           type="button"
           aria-label={label}
           aria-pressed={theme === value}
-          onClick={() => setTheme(value)}
+          onClick={() => select(value)}
+          title={`${label} appearance`}
           onPointerEnter={trackLiquidPointer}
           onPointerMove={trackLiquidPointer}
           onPointerLeave={resetLiquidPointer}
@@ -50,6 +54,10 @@ export default function ThemeToggleControl() {
           />
         </button>
       ))}
+    </div>
+    {error && <p role="status" className="mt-2 max-w-56 text-xs text-text-secondary">
+      {error} <button type="button" onClick={retry} className="underline">Retry</button>
+    </p>}
     </div>
   );
 }

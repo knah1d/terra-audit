@@ -2,7 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from backend.config import JWT_EXPIRE_MINUTES, JWT_SECRET
 from backend.deps import get_current_user
-from backend.schemas.auth import LoginRequest, TokenResponse, UserOut
+from backend.schemas.auth import LoginRequest, TokenResponse, UserOut, UserPreferences
+from src.user_preferences import preferences
 from backend.security import authenticate, create_access_token
 from src.auth import touch_last_login
 
@@ -33,3 +34,19 @@ def logout():
     endpoint exists only so the frontend has one consistent call to make
     rather than special-casing 'no logout request for JWT.'"""
     return None
+
+
+@router.get("/auth/me/preferences", response_model=UserPreferences)
+def get_preferences(user: dict = Depends(get_current_user)):
+    try:
+        return preferences(user)
+    except PermissionError as exc:
+        raise HTTPException(403, str(exc)) from exc
+
+
+@router.put("/auth/me/preferences", response_model=UserPreferences)
+def update_preferences(body: UserPreferences, user: dict = Depends(get_current_user)):
+    try:
+        return preferences(user, body.theme_preference)
+    except PermissionError as exc:
+        raise HTTPException(403, str(exc)) from exc
