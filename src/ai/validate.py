@@ -38,7 +38,7 @@ class Explanation(_Strict):
 
 
 RESPONSE_SCHEMA = Explanation.model_json_schema()
-EXPLANATION_PROMPT_VERSION = "server-evidence-actions-v3"
+EXPLANATION_PROMPT_VERSION = "server-evidence-actions-v4"
 FORBIDDEN_CLAIMS = (
     r"\b(?:is|are)\s+(?:fully\s+)?compliant\b", r"\bapproved\b",
     r"\beligible\s+for\s+issuance\b", r"\bcertified\b",
@@ -243,6 +243,16 @@ def generate_explanation(packet, org_id, *, generate_fn=None):
                       provider={"provider": "deterministic", "model": None}, retry_count=0)
         return result
     call = generate_fn or generate
+    # Constrain uncited limitations at generation as well as validation. The
+    # model cannot add a plausible-sounding missing-data claim in this field.
+    from copy import deepcopy
+    response_schema = deepcopy(RESPONSE_SCHEMA)
+    supplied_limitations = sorted(set(packet.get("limitations", [])))
+    if supplied_limitations:
+        response_schema["properties"]["limitations"]["items"] = {
+            "type": "string", "enum": supplied_limitations}
+    else:
+        response_schema["properties"]["limitations"]["maxItems"] = 0
     prompt = (
         "Explain only supplied deterministic facts. Return the response schema. Every factual claim, "
         "missing-evidence explanation and conflict needs supplied sentence_ids. Never supply quotes, "
@@ -268,7 +278,7 @@ def generate_explanation(packet, org_id, *, generate_fn=None):
         data = {"packet": packet, "validation_rejections": failures}
         try:
             with timings.measure(f"provider_attempt_{attempt + 1}"):
-                response, provider = call(prompt, data, RESPONSE_SCHEMA, org_id=org_id)
+                response, provider = call(prompt, data, response_schema, org_id=org_id)
         except ValueError as exc:
             if "invalid response" not in str(exc).lower() and "invalid structured response" not in str(exc).lower():
                 raise
