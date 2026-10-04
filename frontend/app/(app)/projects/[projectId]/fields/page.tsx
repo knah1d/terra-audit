@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { useProjectContext } from "@/components/projects/ProjectContext";
 import { Badge } from "@/components/ui/Badge";
@@ -16,6 +17,7 @@ export default function ProjectFieldsPage() {
   const assign = useAssignFieldToProject(project.project_id);
   const endMembership = useEndFieldMembership(project.project_id);
   const [fieldId, setFieldId] = useState("");
+  const [effectiveDate, setEffectiveDate] = useState("");
   const [error, setError] = useState("");
 
   const openMemberships = (memberships.data ?? []).filter((m) => m.removed_at === null);
@@ -34,13 +36,14 @@ export default function ProjectFieldsPage() {
         <form className="flex flex-wrap gap-2" onSubmit={(e) => {
           e.preventDefault();
           setError("");
-          assign.mutateAsync({ field_id: fieldId }).then(() => setFieldId(""))
+          assign.mutateAsync({ field_id: fieldId, effective_start_date: effectiveDate }).then(() => setFieldId(""))
             .catch((err) => setError(err instanceof Error ? err.message : "Failed to assign field"));
         }}>
-          <Select value={fieldId} onChange={(e) => setFieldId(e.target.value)} required className="max-w-xs">
+          <Select aria-label="Field to assign" value={fieldId} onChange={(e) => setFieldId(e.target.value)} required className="max-w-xs">
             <option value="">Choose a field…</option>
             {assignable.map((f) => <option key={f.field_id} value={f.field_id}>{f.name} ({f.field_id})</option>)}
           </Select>
+          <label className="ui-label">Effective start date<TextInput type="date" required value={effectiveDate} onChange={e => setEffectiveDate(e.target.value)} /></label>
           <Button type="submit" loading={assign.isPending}>Assign to project</Button>
         </form>
       </Card>
@@ -51,7 +54,7 @@ export default function ProjectFieldsPage() {
           <div className="space-y-2">
             {openMemberships.map((m) => (
               <EndMembershipRow key={m.membership_id} membershipId={m.membership_id} fieldId={m.field_id}
-                                 start={m.effective_start_date} onEnd={endMembership} />
+                                 name={fields.data?.find(f => f.field_id === m.field_id)?.name ?? m.field_id} start={m.effective_start_date} onEnd={endMembership} />
             ))}
           </div>
         )}
@@ -60,16 +63,17 @@ export default function ProjectFieldsPage() {
   );
 }
 
-function EndMembershipRow({ membershipId, fieldId, start, onEnd }: {
-  membershipId: string; fieldId: string; start: string;
+function EndMembershipRow({ membershipId, fieldId, name, start, onEnd }: {
+  membershipId: string; fieldId: string; name: string; start: string;
   onEnd: ReturnType<typeof useEndFieldMembership>;
 }) {
   const [reason, setReason] = useState("");
   const [open, setOpen] = useState(false);
+  const [error, setError] = useState("");
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border py-2 text-sm first:border-t-0">
       <div>
-        <span className="font-mono">{fieldId}</span>
+        <Link className="underline" href={`/fields/${fieldId}/enrollment`}>{name}</Link> <span className="ui-meta">{fieldId}</span>
         <Badge tone="neutral" className="ml-2">since {start}</Badge>
       </div>
       {!open ? (
@@ -77,10 +81,13 @@ function EndMembershipRow({ membershipId, fieldId, start, onEnd }: {
       ) : (
         <form className="flex gap-2" onSubmit={(e) => {
           e.preventDefault();
-          onEnd.mutateAsync({ membershipId, reason }).then(() => setOpen(false));
+          setError("");
+          onEnd.mutateAsync({ membershipId, reason }).then(() => setOpen(false)).catch(e => setError(e instanceof Error ? e.message : "Could not end membership"));
         }}>
-          <TextInput value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason" required className="max-w-xs" />
+          <TextInput aria-label="Reason for ending membership" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason" required className="max-w-xs" />
           <Button type="submit" variant="danger" size="sm" loading={onEnd.isPending}>Confirm</Button>
+          <Button type="button" variant="secondary" size="sm" onClick={() => setOpen(false)}>Cancel</Button>
+          {error && <p role="alert">{error}</p>}
         </form>
       )}
     </div>

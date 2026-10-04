@@ -61,13 +61,13 @@ export default function LoginPage() {
           <p className="mb-6 text-sm text-text-secondary">Use your organization&apos;s credentials to continue.</p>
           <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
             <div>
-              <FieldLabel>Email</FieldLabel>
-              <TextInput type="email" autoComplete="email" {...register("email")} />
+              <FieldLabel htmlFor="field-1">Email</FieldLabel>
+              <TextInput id="field-1" type="email" autoComplete="email" {...register("email")} />
               <ErrorText>{errors.email?.message}</ErrorText>
             </div>
             <div>
-              <FieldLabel>Password</FieldLabel>
-              <PasswordInput autoComplete="current-password" {...register("password")} />
+              <FieldLabel htmlFor="field-2">Password</FieldLabel>
+              <PasswordInput id="field-2" autoComplete="current-password" {...register("password")} />
               <ErrorText>{errors.password?.message}</ErrorText>
             </div>
             {serverError && <Alert tone="danger">{serverError}</Alert>}

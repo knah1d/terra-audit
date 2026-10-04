@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 
 import { useState } from "react";
 import { useFieldContext } from "@/components/fields/FieldContext";
@@ -74,6 +75,7 @@ export default function EnrollmentPage() {
                 ))}
               </div>
             )}
+            {enrollment.data.declared_crops.some(c => !c.recognized || (field.field_type === "rice_awd" ? !c.vm0051_eligible : !c.alm_eligible)) && <p role="status" className="mt-3 text-warning-700">Some declared crops are outside this pathway's usual taxonomy scope. Confirm actual applicability with a reviewer before preparing an issuance claim. The field's registered methodology is unchanged.</p>}
             <p className="ui-meta mt-2">
               These are indicative signals only — never a full applicability determination by themselves.
             </p>
@@ -99,7 +101,7 @@ export default function EnrollmentPage() {
           <Card>
             <h3 className="ui-subsection-title mb-2">Missing evidence</h3>
             {!enrollment.data.missing_evidence.length ? (
-              <p className="text-sm text-success-700">No basic evidence gaps flagged.</p>
+              <p className="ui-secondary">No basic evidence gaps flagged. This does not establish pathway applicability. <Link className="underline text-brand-700" href={`/fields/${field.field_id}/calculations`}>Run the full readiness checklist</Link>.</p>
             ) : (
               <ul className="list-disc space-y-1 pl-5 text-sm">
                 {enrollment.data.missing_evidence.map((m, i) => <li key={i}>{m}</li>)}

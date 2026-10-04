@@ -59,7 +59,7 @@
   --focus-ring-offset: 2px;
 
   /* Menu surface for custom dropdowns — translucent glass per theme. */
-  --menu-bg: rgba(255, 255, 255, 0.72);
+  --menu-bg: rgba(250, 254, 252, 0.94);
   --date-menu-bg: rgba(255, 255, 255, 0.94);
   --menu-border: rgba(10, 10, 10, 0.08);
   --menu-text: #0a0a0a;
@@ -69,7 +69,9 @@
   --menu-check: #1f7f4e;
 
   /* Solid card surface + neutral border. */
-  --card-bg: var(--glass-bg);
+  --card-bg: rgba(248, 253, 250, 0.76);
+  --dialog-bg: rgba(245, 252, 249, 0.94);
+  --control-bg: rgba(255, 255, 255, 0.88);
   --card-border: var(--border-subtle);
 
   --text-primary: #0a0a0a;
@@ -232,7 +234,7 @@
   --border-default: rgba(180, 214, 196, 0.2);
   --border-focus: var(--pine-300);
 
-  --menu-bg: rgba(13, 24, 19, 0.72);
+  --menu-bg: rgba(13, 24, 19, 0.94);
   --date-menu-bg: rgba(13, 24, 19, 0.94);
   --menu-border: rgba(180, 214, 196, 0.14);
   --menu-text: #e8f1ec;
@@ -261,6 +263,9 @@
   --info-600: #38bdf8;
   --info-700: #7dd3fc;
 
+  --card-bg: rgba(18, 35, 28, 0.80);
+  --dialog-bg: rgba(16, 31, 25, 0.96);
+  --control-bg: rgba(12, 25, 19, 0.90);
   --glass-bg: rgba(20, 42, 35, 0.46);
   --glass-bg-strong: rgba(20, 39, 33, 0.78);
   --glass-rim: rgba(255, 255, 255, 0.1);
@@ -441,7 +446,7 @@ body {
 
 /* Content panels share the glass material; nested surfaces use tint only. */
 .surface-card {
-  background: var(--glass-bg);
+  background: var(--card-bg);
   backdrop-filter: blur(24px) saturate(140%);
   -webkit-backdrop-filter: blur(24px) saturate(140%);
   border: 1px solid var(--glass-hairline);
@@ -755,7 +760,7 @@ a, button, input, select, textarea { -webkit-tap-highlight-color: transparent; }
     padding: 0 var(--control-px);
     border: 1px solid var(--border-default);
     border-radius: var(--control-r);
-    background: color-mix(in srgb, var(--surface) 72%, transparent);
+    background: var(--control-bg);
     color: var(--text-primary);
     font-size: var(--control-fs);
     line-height: 20px;
@@ -892,10 +897,10 @@ a, button, input, select, textarea { -webkit-tap-highlight-color: transparent; }
   @media (min-width: 768px) { .ui-page-title { font-size: 32px; line-height: 40px; } }
   .ui-section-title { font-size: 18px; line-height: 26px; font-weight: 600; color: var(--text-heading); }
   .ui-subsection-title { font-size: 16px; line-height: 24px; font-weight: 600; color: var(--text-primary); }
-  .ui-body { font-size: 14px; line-height: 22px; color: var(--text-primary); }
-  .ui-secondary { font-size: 14px; line-height: 20px; color: var(--text-secondary); }
+  .ui-body { font-size: 14px; line-height: 22px; font-weight: 400; color: var(--text-primary); }
+  .ui-secondary { font-size: 14px; line-height: 22px; font-weight: 400; color: var(--text-secondary); }
   .ui-label { font-size: 14px; line-height: 20px; font-weight: 500; color: var(--text-primary); }
-  .ui-meta { font-size: 12px; line-height: 16px; color: var(--text-tertiary); }
+  .ui-meta { font-size: 13px; line-height: 18px; font-weight: 400; color: var(--text-tertiary); }
   .ui-badge {
     display: inline-flex; align-items: center; gap: var(--space-1);
     padding: 2px var(--space-2); border: 1px solid; border-radius: 9999px;
@@ -911,4 +916,10 @@ a, button, input, select, textarea { -webkit-tap-highlight-color: transparent; }
   .ui-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-3); }
   .ui-filters > * { min-width: 0; flex: 1 1 180px; }
   @media (min-width: 640px) { .ui-filters > * { flex: 0 1 240px; } }
+}
+
+/* Overlays need a stable reading surface above the page behind them. */
+.sheet-panel, .recharts-default-tooltip { background: var(--dialog-bg) !important; }
+@media (prefers-reduced-transparency: reduce) {
+  .sheet-panel, .recharts-default-tooltip { background: var(--surface) !important; }
 }

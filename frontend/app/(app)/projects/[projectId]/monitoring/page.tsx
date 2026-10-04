@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { useMemo, useState } from "react";
 import { useProjectContext } from "@/components/projects/ProjectContext";
 import { Badge } from "@/components/ui/Badge";
@@ -61,8 +63,8 @@ export default function ProjectMonitoringPage() {
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h3 className="ui-subsection-title">Field-seasons</h3>
           <div className="flex gap-2">
-            <TextInput placeholder="Filter by crop" value={cropFilter} onChange={(e) => setCropFilter(e.target.value)} className="max-w-[160px]" />
-            <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="max-w-[180px]">
+            <TextInput aria-label="Filter by crop" placeholder="Filter by crop" value={cropFilter} onChange={(e) => setCropFilter(e.target.value)} className="max-w-[160px]" />
+            <Select aria-label="Monitoring status" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="max-w-[180px]">
               <option value="">All statuses</option>
               <option value="ready_for_exploration">Ready</option>
               <option value="insufficient_evidence">Insufficient evidence</option>
@@ -70,14 +72,14 @@ export default function ProjectMonitoringPage() {
             </Select>
           </div>
         </div>
-        {!filtered.length ? (
+        {dashboard.isLoading ? <Skeleton className="h-24" /> : !filtered.length ? (
           <EmptyState icon={MapPinned} title="No field-seasons match" description="Assign fields to this project and add crop seasons to see them here." />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[760px] text-sm [&_td]:px-2 [&_th]:px-2">
               <thead>
                 <tr className="ui-meta text-left">
-                  <th className="py-1"><input type="checkbox"
+                  <th className="py-1"><input type="checkbox" aria-label="Select all field seasons"
                     checked={selected.size > 0 && filtered.every((r) => selected.has(`${r.field_id}:${r.season_id}`))}
                     onChange={(e) => setSelected(e.target.checked ? new Set(filtered.map((r) => `${r.field_id}:${r.season_id}`)) : new Set())} /></th>
                   <th className="py-1">Field</th><th>Season</th><th>Crops</th><th>Latest status</th><th>Source</th><th>Last run</th><th>Issues</th>
@@ -88,9 +90,9 @@ export default function ProjectMonitoringPage() {
                   const key = `${r.field_id}:${r.season_id}`;
                   return (
                     <tr key={key} className="border-t border-border">
-                      <td className="py-1.5"><input type="checkbox" checked={selected.has(key)} onChange={() => toggle(key)} /></td>
-                      <td>{r.field_name} <span className="font-mono text-xs text-text-tertiary">{r.field_id}</span></td>
-                      <td>{r.season_name}</td>
+                      <td className="py-1.5"><input type="checkbox" aria-label={`Select ${r.field_name}, ${r.season_name}`} checked={selected.has(key)} onChange={() => toggle(key)} /></td>
+                      <td><Link className="underline" href={`/fields/${r.field_id}/crop-seasons?season=${r.season_id}`}>{r.field_name}</Link> <span className="font-mono text-xs text-text-tertiary">{r.field_id}</span></td>
+                      <td><Link className="underline" href={`/fields/${r.field_id}/crop-seasons?season=${r.season_id}`}>{r.season_name}</Link></td>
                       <td>{r.crops.join(", ")}</td>
                       <td>{r.latest_run_status ? (
                         <Badge tone={r.latest_run_status === "ready_for_exploration" ? "success" : "warning"}>
@@ -188,7 +190,7 @@ function IssuesCard({ projectId }: { projectId: string }) {
     <Card>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h3 className="ui-subsection-title">Data-quality issues</h3>
-        <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="max-w-xs">
+        <Select aria-label="Monitoring status" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="max-w-xs">
           <option value="open">Open</option><option value="acknowledged">Acknowledged</option>
           <option value="resolved">Resolved</option><option value="">All</option>
         </Select>

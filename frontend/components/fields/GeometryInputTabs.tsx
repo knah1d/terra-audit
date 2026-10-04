@@ -63,8 +63,8 @@ export function GeometryInputTabs({ onGeometry }: { onGeometry: (feature: GeoJSO
 
       {mode === "upload" && (
         <div>
-          <FieldLabel>Upload a .geojson, .json, or .kml file</FieldLabel>
-          <input
+          <FieldLabel htmlFor="field-1">Upload a .geojson, .json, or .kml file</FieldLabel>
+          <input id="field-1"
             ref={fileInputRef}
             type="file"
             accept=".geojson,.json,.kml"
@@ -76,8 +76,8 @@ export function GeometryInputTabs({ onGeometry }: { onGeometry: (feature: GeoJSO
 
       {mode === "paste" && (
         <div>
-          <FieldLabel>Paste GPS coordinates (one &quot;lat, lon&quot; pair per line, ≥3 required)</FieldLabel>
-          <TextArea
+          <FieldLabel htmlFor="field-2">Paste GPS coordinates (one &quot;lat, lon&quot; pair per line, ≥3 required)</FieldLabel>
+          <TextArea id="field-2"
             value={pasteText}
             onChange={(e) => setPasteText(e.target.value)}
             rows={6}

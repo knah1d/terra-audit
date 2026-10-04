@@ -1,7 +1,7 @@
 "use client";
 
 import { Eye, EyeOff } from "lucide-react";
-import { forwardRef, InputHTMLAttributes, TextareaHTMLAttributes, useState } from "react";
+import { forwardRef, InputHTMLAttributes, LabelHTMLAttributes, TextareaHTMLAttributes, useState } from "react";
 import { DatePicker } from "./DatePicker";
 
 export { Select } from "./Select";
@@ -9,11 +9,9 @@ export { Select } from "./Select";
 export function FieldLabel({
   children,
   className = "",
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return <label className={`ui-label mb-2 block ${className}`}>{children}</label>;
+  ...props
+}: LabelHTMLAttributes<HTMLLabelElement>) {
+  return <label {...props} className={`ui-label mb-2 block ${className}`}>{children}</label>;
 }
 
 // Shared control chrome (44px, 8px radius, 14px text, subtle 2px keyboard
@@ -41,7 +39,6 @@ export function PasswordInput(props: InputHTMLAttributes<HTMLInputElement>) {
       <button
         type="button"
         onClick={() => setVisible((v) => !v)}
-        tabIndex={-1}
         aria-label={visible ? "Hide password" : "Show password"}
         className="absolute inset-y-0 right-0 flex w-11 items-center rounded-r-lg justify-center text-text-tertiary transition-colors hover:text-text-secondary"
       >
@@ -52,7 +49,7 @@ export function PasswordInput(props: InputHTMLAttributes<HTMLInputElement>) {
 }
 
 export function TextArea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea {...props} className={`${FIELD_BASE} ui-textarea font-mono ${props.className ?? ""}`} />;
+  return <textarea {...props} className={`${FIELD_BASE} ui-textarea ${props.className ?? ""}`} />;
 }
 
 export function ErrorText({ children }: { children?: string }) {

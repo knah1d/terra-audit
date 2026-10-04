@@ -109,25 +109,25 @@ export function LedgerAlmForm({ fieldId, defaultArea }: { fieldId: string; defau
     if (cr.production_decline_leakage_blocked) return;
     await commit.mutateAsync({ body: values, idempotencyKey: crypto.randomUUID() });
     setCommitted(true);
-    show("Carbon credits saved to history", "success");
+    show("Calculated estimate saved to legacy history", "success");
   }
 
   return (
     <div className="flex flex-col gap-6">
       <form onSubmit={handleSubmit(onPreview)} className="grid grid-cols-3 gap-4">
         <div>
-          <FieldLabel>Field Area (ha)</FieldLabel>
-          <TextInput type="number" step="0.01" {...register("area_ha")} />
+          <FieldLabel htmlFor="field-1">Field Area (ha)</FieldLabel>
+          <TextInput id="field-1" type="number" step="0.01" {...register("area_ha")} />
           <ErrorText>{errors.area_ha?.message}</ErrorText>
         </div>
         <div>
-          <FieldLabel>Verification Years</FieldLabel>
-          <TextInput type="number" step="0.5" {...register("verification_years")} />
+          <FieldLabel htmlFor="field-2">Verification Years</FieldLabel>
+          <TextInput id="field-2" type="number" step="0.5" {...register("verification_years")} />
           <ErrorText>{errors.verification_years?.message}</ErrorText>
         </div>
         <div>
-          <FieldLabel>Non-Permanence Risk (%)</FieldLabel>
-          <TextInput type="number" step="1" {...register("non_permanence_risk_pct")} />
+          <FieldLabel htmlFor="field-3">Non-Permanence Risk (%)</FieldLabel>
+          <TextInput id="field-3" type="number" step="1" {...register("non_permanence_risk_pct")} />
           <ErrorText>{errors.non_permanence_risk_pct?.message}</ErrorText>
         </div>
 

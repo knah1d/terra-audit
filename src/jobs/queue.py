@@ -564,8 +564,17 @@ def _utc_timestamp(value):
 def list_workers() -> list[dict]:
     with get_db_connection() as conn:
         rows = conn.execute(text("SELECT * FROM workers ORDER BY started_at DESC LIMIT 50")).mappings().fetchall()
-    return [{**r, **{key: _utc_timestamp(r[key]) for key in
-                    ("started_at", "last_heartbeat_at", "stopped_at")}} for r in rows]
+    workers = []
+    now = datetime.now(timezone.utc)
+    for row in rows:
+        worker = {**row, **{key: _utc_timestamp(row[key]) for key in
+                           ("started_at", "last_heartbeat_at", "stopped_at")}}
+        stamp = worker["last_heartbeat_at"]
+        age = max(0, (now - datetime.fromisoformat(stamp)).total_seconds()) if stamp else None
+        worker["heartbeat_age_seconds"] = age
+        worker["health"] = "stopped" if worker["stopped_at"] else "alive" if age is not None and age <= 120 else "stale"
+        workers.append(worker)
+    return workers
 
 
 def queue_status() -> dict:
@@ -588,3 +597,18 @@ def queue_status() -> dict:
         "oldest_pending_since": _utc_timestamp(oldest_pending),
         "workers": list_workers(),
     }
+
+
+def recent_org_jobs(org_id: str) -> list[dict]:
+    """Limited recovery metadata; never expose raw job inputs or another tenant."""
+    with get_db_connection() as conn:
+        rows = conn.execute(text("SELECT job_id, job_type, status, error, created_at, finished_at, payload_json FROM background_jobs WHERE org_id=:org ORDER BY created_at DESC LIMIT 30"), {"org": org_id}).mappings().all()
+    jobs = []
+    for row in rows:
+        payload = json.loads(row["payload_json"] or "{}")
+        request = payload.get("request") or payload
+        jobs.append({"job_id": row["job_id"], "job_type": row["job_type"], "status": row["status"],
+                     "error": row["error"], "created_at": _utc_timestamp(row["created_at"]),
+                     "finished_at": _utc_timestamp(row["finished_at"]),
+                     "field_id": request.get("field_id"), "project_id": payload.get("project_id")})
+    return jobs

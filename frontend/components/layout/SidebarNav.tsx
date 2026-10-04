@@ -1,6 +1,6 @@
 "use client";
 
-import { Activity, BrainCircuit, ClipboardCheck, FolderKanban, LayoutGrid, Plus, Rows3, Users } from "lucide-react";
+import { Activity, BrainCircuit, ClipboardCheck, FolderKanban, LayoutGrid, Plus, Rows3, Users, CircleUserRound } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LogoutButton } from "@/components/auth/LogoutButton";
@@ -65,20 +65,24 @@ export function SidebarNav({ session, collapsed = false }: { session: SessionCla
       {/* Its own tinted card — a "control center" corner rather than
        * profile info + a toggle just sitting loose above the logout
        * button. */}
-      <div className={`${collapsed ? "hidden" : "flex"} mt-auto flex-col gap-3 rounded-lg glass-control p-3`}>
+      {collapsed ? <details className="relative mt-auto">
+        <summary aria-label="Account and appearance" className="glass-control flex size-11 list-none items-center justify-center rounded-lg"><CircleUserRound className="size-5" /></summary>
+        <div className="glass-chrome-strong absolute bottom-0 left-full ml-3 flex w-64 flex-col gap-3 rounded-xl p-4">
+          <p className="truncate ui-label">{session?.email}</p>
+          <ThemeToggle />
+          <LogoutButton />
+        </div>
+      </details> : <div className="mt-auto flex flex-col gap-3 rounded-lg glass-control p-3">
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
-            {session && (
-              <>
-                <p className="truncate text-sm font-medium text-text-primary">{session.email}</p>
-                <p className="ui-meta capitalize">{session.role}</p>
-              </>
-            )}
+            <p className="truncate text-sm font-medium text-text-primary">{session?.email}</p>
+            <p className="ui-meta capitalize">{session?.role}</p>
           </div>
           <ThemeToggle />
         </div>
         <LogoutButton />
-      </div>
+      </div>}
+
     </>
   );
 }

@@ -13,7 +13,7 @@ import { IconTile } from "@/components/ui/IconTile";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { usePortfolio } from "@/hooks/use-portfolio";
-import { formatNumber } from "@/lib/format";
+import { formatNumber, formatQueueTimestamp } from "@/lib/format";
 
 const FIELD_TYPE_LABELS: Record<string, string> = {
   rice_awd: "Rice — AWD (VM0051)",
@@ -33,7 +33,7 @@ export default function PortfolioPage() {
   const columns: { key: PortfolioSortKey; label: string }[] = [
     { key: "name", label: "Field" }, { key: "district", label: "District" },
     { key: "field_type", label: "Type" }, { key: "area_ha", label: "Area (ha)" },
-    { key: "final_issuance", label: "Latest Credits (tCO2e)" }, { key: "calculated_at", label: "Last Calculated" },
+    { key: "final_issuance", label: "Legacy estimate (tCO2e)" }, { key: "calculated_at", label: "Last Calculated" },
   ];
   const registeredFields = entries?.length ?? 0;
   const totalArea = entries?.reduce((sum, e) => sum + (e.area_ha ?? 0), 0) ?? 0;
@@ -46,7 +46,7 @@ export default function PortfolioPage() {
 
   return (
     <div className="ui-container">
-      <PageHeader title="Portfolio" subtitle="Aggregated carbon-credit position across every registered field." />
+      <PageHeader title="Portfolio" subtitle="Legacy calculated estimates across registered fields. These quantities are not a balance of issued credits." />
 
       {error && <Alert tone="danger" title="Unable to load portfolio">{error.message}</Alert>}
       {isLoading && (
@@ -72,8 +72,8 @@ export default function PortfolioPage() {
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <StatCard label="Registered Fields" value={String(registeredFields)} />
             <StatCard label="Total Area" value={`${formatNumber(totalArea, "ha")} ha`} />
-            <StatCard label="Rice AWD Credits" value={`${formatNumber(riceCredits, "tco2e")} tCO2e`} tone="success" />
-            <StatCard label="Cropland ALM Credits" value={`${formatNumber(almCredits, "tco2e")} tCO2e`} tone="success" />
+            <StatCard label="Rice AWD estimates" value={`${formatNumber(riceCredits, "tco2e")} tCO2e`} tone="neutral" />
+            <StatCard label="Cropland ALM estimates" value={`${formatNumber(almCredits, "tco2e")} tCO2e`} tone="neutral" />
           </div>
 
           <div className="ui-card">
@@ -113,7 +113,7 @@ export default function PortfolioPage() {
                     <td className="px-4 py-3 text-right font-mono tabular-nums">
                       {e.final_issuance !== null ? formatNumber(e.final_issuance, "tco2e") : "Not calculated"}
                     </td>
-                    <td className="px-4 py-3 text-text-secondary">{e.calculated_at ?? "—"}</td>
+                    <td className="px-4 py-3 text-text-secondary">{formatQueueTimestamp(e.calculated_at)}</td>
                   </tr>
                 ))}
               </tbody>

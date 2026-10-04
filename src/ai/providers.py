@@ -44,6 +44,22 @@ def configured(*, for_generation=True) -> bool:
     return False
 
 
+def provider_status() -> dict:
+    """Configuration metadata only; never exposes keys or probes the worker."""
+    name = provider_name()
+    prefix = {"groq": "GROQ", "openai": "OPENAI", "self_hosted": "SELF_HOSTED"}.get(name)
+    hints = {
+        "groq": "Set AI_PROVIDER=groq and GROQ_MODEL on API and worker; set GROQ_API_KEY on the worker.",
+        "openai": "Set AI_PROVIDER=openai, OPENAI_MODEL and OPENAI_API_KEY on API and worker.",
+        "self_hosted": "Set AI_PROVIDER=self_hosted, SELF_HOSTED_BASE_URL and SELF_HOSTED_MODEL on API and worker.",
+        "fake": "Fake mode uses no model and makes no provider requests.",
+    }
+    return {"provider": name, "model": os.environ.get(f"{prefix}_MODEL", "") if prefix else name,
+            "enqueue_configured": configured(for_generation=False),
+            "configuration_hint": hints.get(name, "Choose groq, openai, self_hosted or fake as AI_PROVIDER."),
+            "worker_credentials_verified": False}
+
+
 def explanation_signature():
     """Non-secret identity shared by the API and worker; invalidates fake caches."""
     from src.ai.validate import RESPONSE_SCHEMA, EXPLANATION_PROMPT_VERSION

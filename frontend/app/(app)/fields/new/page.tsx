@@ -93,23 +93,23 @@ export default function NewFieldPage() {
         <Card>
           <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
             <div>
-              <FieldLabel>Field ID</FieldLabel>
-              <TextInput {...register("field_id")} />
+              <FieldLabel htmlFor="field-1">Field ID</FieldLabel>
+              <TextInput id="field-1" {...register("field_id")} />
               <ErrorText>{errors.field_id?.message}</ErrorText>
             </div>
             <div>
-              <FieldLabel>Field Name</FieldLabel>
-              <TextInput {...register("name")} />
+              <FieldLabel htmlFor="field-2">Field Name</FieldLabel>
+              <TextInput id="field-2" {...register("name")} />
               <ErrorText>{errors.name?.message}</ErrorText>
             </div>
             <div>
-              <FieldLabel>District</FieldLabel>
-              <TextInput {...register("district")} />
+              <FieldLabel htmlFor="field-3">District</FieldLabel>
+              <TextInput id="field-3" {...register("district")} />
               <ErrorText>{errors.district?.message}</ErrorText>
             </div>
             <div>
-              <FieldLabel>Field Type / Methodology</FieldLabel>
-              <Select {...register("field_type")}>
+              <FieldLabel htmlFor="field-4">Field Type / Methodology</FieldLabel>
+              <Select id="field-4" {...register("field_type")}>
                 {FIELD_TYPE_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
                     {opt.label}

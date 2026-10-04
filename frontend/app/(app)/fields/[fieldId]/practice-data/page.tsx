@@ -61,40 +61,40 @@ function PracticeScenarioForm({
       <h3 className="ui-subsection-title mb-3 capitalize">{scenario} scenario</h3>
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <FieldLabel>Crop type</FieldLabel>
-          <TextInput value={values.crop_type ?? ""} onChange={(e) => set("crop_type", e.target.value)} />
+          <FieldLabel htmlFor={`${scenario}-practice-1`}>Crop type</FieldLabel>
+          <TextInput id={`${scenario}-practice-1`} value={values.crop_type ?? ""} onChange={(e) => set("crop_type", e.target.value)} />
         </div>
         <div>
-          <FieldLabel>Tillage depth (cm)</FieldLabel>
-          <TextInput type="number" value={values.tillage_depth_cm ?? 0} onChange={(e) => set("tillage_depth_cm", Number(e.target.value))} />
+          <FieldLabel htmlFor={`${scenario}-practice-2`}>Tillage depth (cm)</FieldLabel>
+          <TextInput id={`${scenario}-practice-2`} type="number" value={values.tillage_depth_cm ?? 0} onChange={(e) => set("tillage_depth_cm", Number(e.target.value))} />
         </div>
         <div>
-          <FieldLabel>Residue burned (kg/ha)</FieldLabel>
-          <TextInput type="number" value={values.residue_burned_kg_ha ?? 0} onChange={(e) => set("residue_burned_kg_ha", Number(e.target.value))} />
+          <FieldLabel htmlFor={`${scenario}-practice-3`}>Residue burned (kg/ha)</FieldLabel>
+          <TextInput id={`${scenario}-practice-3`} type="number" value={values.residue_burned_kg_ha ?? 0} onChange={(e) => set("residue_burned_kg_ha", Number(e.target.value))} />
         </div>
         <div>
-          <FieldLabel>Synthetic N rate (kg/ha)</FieldLabel>
-          <TextInput type="number" value={values.synthetic_n_rate_kg_ha ?? 0} onChange={(e) => set("synthetic_n_rate_kg_ha", Number(e.target.value))} />
+          <FieldLabel htmlFor={`${scenario}-practice-4`}>Synthetic N rate (kg/ha)</FieldLabel>
+          <TextInput id={`${scenario}-practice-4`} type="number" value={values.synthetic_n_rate_kg_ha ?? 0} onChange={(e) => set("synthetic_n_rate_kg_ha", Number(e.target.value))} />
         </div>
         <div>
-          <FieldLabel>Organic N rate (kg/ha)</FieldLabel>
-          <TextInput type="number" value={values.organic_n_rate_kg_ha ?? 0} onChange={(e) => set("organic_n_rate_kg_ha", Number(e.target.value))} />
+          <FieldLabel htmlFor={`${scenario}-practice-5`}>Organic N rate (kg/ha)</FieldLabel>
+          <TextInput id={`${scenario}-practice-5`} type="number" value={values.organic_n_rate_kg_ha ?? 0} onChange={(e) => set("organic_n_rate_kg_ha", Number(e.target.value))} />
         </div>
         <div>
-          <FieldLabel>Fuel use (L/ha)</FieldLabel>
-          <TextInput type="number" value={values.fuel_use_l_ha ?? 0} onChange={(e) => set("fuel_use_l_ha", Number(e.target.value))} />
+          <FieldLabel htmlFor={`${scenario}-practice-6`}>Fuel use (L/ha)</FieldLabel>
+          <TextInput id={`${scenario}-practice-6`} type="number" value={values.fuel_use_l_ha ?? 0} onChange={(e) => set("fuel_use_l_ha", Number(e.target.value))} />
         </div>
         <div>
-          <FieldLabel>Crop yield (t/ha)</FieldLabel>
-          <TextInput type="number" value={values.crop_yield_t_ha ?? 0} onChange={(e) => set("crop_yield_t_ha", Number(e.target.value))} />
+          <FieldLabel htmlFor={`${scenario}-practice-7`}>Crop yield (t/ha)</FieldLabel>
+          <TextInput id={`${scenario}-practice-7`} type="number" value={values.crop_yield_t_ha ?? 0} onChange={(e) => set("crop_yield_t_ha", Number(e.target.value))} />
         </div>
         <div>
-          <FieldLabel>Limestone applied (t/ha)</FieldLabel>
-          <TextInput type="number" value={values.limestone_applied_t_ha ?? 0} onChange={(e) => set("limestone_applied_t_ha", Number(e.target.value))} />
+          <FieldLabel htmlFor={`${scenario}-practice-8`}>Limestone applied (t/ha)</FieldLabel>
+          <TextInput id={`${scenario}-practice-8`} type="number" value={values.limestone_applied_t_ha ?? 0} onChange={(e) => set("limestone_applied_t_ha", Number(e.target.value))} />
         </div>
         <div>
-          <FieldLabel>Dolomite applied (t/ha)</FieldLabel>
-          <TextInput type="number" value={values.dolomite_applied_t_ha ?? 0} onChange={(e) => set("dolomite_applied_t_ha", Number(e.target.value))} />
+          <FieldLabel htmlFor={`${scenario}-practice-9`}>Dolomite applied (t/ha)</FieldLabel>
+          <TextInput id={`${scenario}-practice-9`} type="number" value={values.dolomite_applied_t_ha ?? 0} onChange={(e) => set("dolomite_applied_t_ha", Number(e.target.value))} />
         </div>
       </div>
       <div className="mt-4 flex flex-wrap gap-x-6 gap-y-3">
@@ -163,8 +163,8 @@ function LivestockScenarioForm({
           {LIVESTOCK_TYPES.map((type) => (
             <div key={type} className="grid grid-cols-[1fr_auto_auto] items-end gap-3">
               <div>
-                <FieldLabel>{LIVESTOCK_TYPE_LABELS[type]}</FieldLabel>
-                <TextInput
+                <FieldLabel htmlFor={`${scenario}-${type}-population`}>{LIVESTOCK_TYPE_LABELS[type]}</FieldLabel>
+                <TextInput id={`${scenario}-${type}-population`}
                   type="number"
                   min={0}
                   max={500}
@@ -173,8 +173,8 @@ function LivestockScenarioForm({
                 />
               </div>
               <div>
-                <FieldLabel>Productivity</FieldLabel>
-                <Select
+                <FieldLabel htmlFor={`${scenario}-${type}-productivity`}>Productivity</FieldLabel>
+                <Select id={`${scenario}-${type}-productivity`}
                   disabled={rows[type].population <= 0}
                   value={rows[type].productivity}
                   onChange={(e) => setRow(type, { productivity: e.target.value as ProductivitySystem })}
@@ -250,8 +250,8 @@ function SocMeasurementsFormBody({
           const count = (texts[l.key] ?? "").split("\n").filter((s) => s.trim() && !Number.isNaN(parseFloat(s))).length;
           return (
             <div key={l.key}>
-              <FieldLabel>{l.label}</FieldLabel>
-              <TextArea
+              <FieldLabel htmlFor={`soc-${l.key}`}>{l.label}</FieldLabel>
+              <TextArea id={`soc-${l.key}`}
                 value={texts[l.key] ?? ""}
                 onChange={(e) => setTexts((t) => ({ ...t, [l.key]: e.target.value }))}
                 rows={4}

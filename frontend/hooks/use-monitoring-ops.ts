@@ -117,10 +117,11 @@ export function useRetryFailed() {
 }
 
 export interface QueueStatus {
+  recent_jobs?: { job_id: string; job_type: string; status: string; error: string | null; created_at: string; field_id: string | null; project_id: string | null }[];
   by_status: Record<string, number>;
   by_type: Array<{ job_type: string; status: string; n: number }>;
   oldest_pending_since: string | null;
-  workers: Array<{ worker_id: string; hostname: string; started_at: string; last_heartbeat_at: string; stopped_at: string | null }>;
+  workers: Array<{ worker_id: string; hostname: string; started_at: string; last_heartbeat_at: string; stopped_at: string | null; health?: "alive" | "stale" | "stopped" }>;
 }
 
 export function useQueueStatus() {

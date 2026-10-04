@@ -19,6 +19,7 @@ export interface DocumentData {
 export interface Workspace {
   records: AIRecord[];
   deployment: { model_id: string | null; revision: number; threshold: number };
+  provider_status?: { provider: string; model: string; configuration_hint: string };
   assistant_configured: boolean; vision_configured: boolean; can_manage: boolean;
   seasons: { field_id: string; field_name: string; season_id: string; name: string; crops: string[] }[];
   attachments: { attachment_id: string; field_id: string; filename: string; content_type: string }[];

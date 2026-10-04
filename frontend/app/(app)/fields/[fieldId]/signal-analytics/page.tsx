@@ -1,5 +1,8 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
+import { apiFetch } from "@/lib/api";
+import { formatDate } from "@/lib/format";
 import { Play, Satellite } from "lucide-react";
 import { useMemo, useState } from "react";
 import { AuditTrailTable } from "@/components/signal/AuditTrailTable";
@@ -45,7 +48,9 @@ const STAGES: Record<string, string> = {
 
 function SignalAnalyticsView() {
   const field = useFieldContext();
-  const [preset, setPreset] = useState<string>(Object.keys(SEASON_PRESETS)[0]);
+  const seasons = useQuery({ queryKey: ["crop-seasons", field.field_id], queryFn: () => apiFetch<{ id: string; season_id: string; payload: { name: string; start_date: string; end_date: string } }[]>(`/fields/${field.field_id}/crop-seasons`) });
+  const currentSeasons = Array.from(new Map((seasons.data ?? []).map(s => [s.season_id || s.id, s])).values());
+  const [preset, setPreset] = useState<string>("Custom Range");
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
   const [detector, setDetector] = useState<SignalDetector>("threshold");
@@ -80,7 +85,8 @@ function SignalAnalyticsView() {
     }
   }
 
-  const window = preset === "Custom Range" ? { start: customStart, end: customEnd } : SEASON_PRESETS[preset]!;
+  const selectedSeason = currentSeasons.find(s => `season:${s.season_id || s.id}` === preset);
+  const window = selectedSeason ? { start: selectedSeason.payload.start_date, end: selectedSeason.payload.end_date } : preset === "Custom Range" ? { start: customStart, end: customEnd } : SEASON_PRESETS[preset] ?? { start: "", end: "" };
   const rangeInvalid = !window.start || !window.end || window.end <= window.start;
 
   // Async path's result lives in the poll query, not local state — no
@@ -134,10 +140,11 @@ function SignalAnalyticsView() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[320px_1fr]">
         <div className="ui-card flex flex-col gap-4">
           <div>
-            <FieldLabel>Season</FieldLabel>
-            <Select value={preset} onChange={(e) => setPreset(e.target.value)}>
+            <FieldLabel htmlFor="field-1">Analysis window</FieldLabel>
+            <Select id="field-1" value={preset} onChange={(e) => setPreset(e.target.value)}>
+              {currentSeasons.map(s => <option key={s.season_id || s.id} value={`season:${s.season_id || s.id}`}>{s.payload.name} · {formatDate(s.payload.start_date)} to {formatDate(s.payload.end_date)}</option>)}
               {Object.keys(SEASON_PRESETS).map((p) => (
-                <option key={p} value={p}>{p}</option>
+                <option key={p} value={p}>{p === "Custom Range" ? p : `Preset: ${p}`}</option>
               ))}
             </Select>
           </div>
@@ -145,12 +152,12 @@ function SignalAnalyticsView() {
           {preset === "Custom Range" && (
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <FieldLabel>Open</FieldLabel>
-                <TextInput type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} />
+                <FieldLabel htmlFor="field-2">Open</FieldLabel>
+                <TextInput id="field-2" type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} />
               </div>
               <div>
-                <FieldLabel>Close</FieldLabel>
-                <TextInput type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} />
+                <FieldLabel htmlFor="field-3">Close</FieldLabel>
+                <TextInput id="field-3" type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} />
               </div>
             </div>
           )}
@@ -159,8 +166,8 @@ function SignalAnalyticsView() {
           )}
 
           <div>
-            <FieldLabel>Detector</FieldLabel>
-            <Select value={detector} onChange={(e) => setDetector(e.target.value as SignalDetector)}>
+            <FieldLabel htmlFor="field-4">Detector</FieldLabel>
+            <Select id="field-4" value={detector} onChange={(e) => setDetector(e.target.value as SignalDetector)}>
               {DETECTOR_OPTIONS.map((d) => (
                 <option key={d.value} value={d.value}>{d.label}</option>
               ))}

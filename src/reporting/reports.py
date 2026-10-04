@@ -246,13 +246,13 @@ def generate_pdf(
 
     if carbon["final_issuance"] == 0.0:
         pdf.banner(
-            "No net credits issued. Either no AWD events detected or N2O correction "
+            "No positive calculated estimate. Either no AWD events detected or N2O correction "
             "fully offsets CH4 reduction after uncertainty deduction.",
             ok=False,
         )
     else:
         pdf.banner(
-            f"VERIFIED: {carbon['final_issuance']:.4f} tCO2e net verified credits"
+            f"CALCULATED ESTIMATE: {carbon['final_issuance']:.4f} tCO2e (not registry-issued credits)"
             " - ready for registry submission.",
             ok=True,
         )
@@ -526,7 +526,7 @@ def generate_pdf_alm(
 
     if carbon["final_issuance"] == 0.0:
         pdf.banner(
-            "No net credits issued after uncertainty and buffer deductions.",
+            "No positive calculated estimate after uncertainty and buffer deductions.",
             ok=False,
         )
     else:

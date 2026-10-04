@@ -2,6 +2,7 @@
 
 import { Bell, ClipboardCheck } from "lucide-react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
@@ -38,7 +39,15 @@ function SubmissionRow({ row }: { row: ReviewSubmissionOut }) {
 
 export default function ReviewsPage() {
   const projects = useProjects();
-  const [projectId, setProjectId] = useState("");
+  const router = useRouter();
+  const search = useSearchParams();
+  const requestedProject = search.get("project") ?? "";
+  const projectId = projects.data?.some(p => p.project_id === requestedProject) ? requestedProject : "";
+  function setProjectId(value: string) {
+    const params = new URLSearchParams(search.toString());
+    if (value) params.set("project", value); else params.delete("project");
+    router.replace(`/reviews${params.size ? `?${params}` : ""}`, { scroll: false });
+  }
   const [statusFilter, setStatusFilter] = useState("");
   const myReviews = useMyReviews();
   const queue = useProjectSubmissions(projectId, { status: statusFilter || undefined });

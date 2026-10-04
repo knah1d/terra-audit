@@ -21,10 +21,7 @@ export function formatQueueTimestamp(value: string | null | undefined): string {
   const normalized = value.trim().replace(" ", "T");
   const date = new Date(/(?:Z|[+-]\d{2}:?\d{2})$/i.test(normalized) ? normalized : `${normalized}Z`);
   if (Number.isNaN(date.getTime())) return "—";
-  return date.toLocaleString(undefined, {
-    year: "numeric", month: "numeric", day: "numeric",
-    hour: "numeric", minute: "2-digit", second: "2-digit", timeZoneName: "short",
-  });
+  return `${formatDate(date)} ${date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false, timeZoneName: "short" })}`;
 }
 
 export function formatNumber(value: number | null | undefined, unit: string = ""): string {
@@ -34,4 +31,15 @@ export function formatNumber(value: number | null | undefined, unit: string = ""
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   });
+}
+
+/** Date-only records are calendar dates; never shift them between timezones. */
+export function formatDate(value: string | Date | null | undefined): string {
+  if (!value) return "—";
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return value.split("-").reverse().join("-");
+  }
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return [date.getDate(), date.getMonth() + 1, date.getFullYear()].map((n, i) => String(n).padStart(i === 2 ? 4 : 2, "0")).join("-");
 }

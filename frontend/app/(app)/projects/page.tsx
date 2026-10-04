@@ -58,6 +58,7 @@ export default function ProjectsPage() {
           <label className="text-sm">Geography<TextInput name="geography" placeholder="e.g. Rajshahi division" maxLength={2000} /></label>
           {error && <p role="alert" className="text-sm text-danger-700">{error}</p>}
           <Button type="submit" loading={create.isPending}>Create project</Button>
+          <Button type="button" variant="secondary" onClick={() => setOpen(false)}>Cancel</Button>
         </form>
       </Sheet>
     </div>

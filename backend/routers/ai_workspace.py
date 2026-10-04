@@ -12,6 +12,7 @@ from backend.deps import get_current_user
 from backend.schemas.monitoring import ObservationCreate
 from src.ai import workspace as ws
 from src.ai.assistant import configured
+from src.ai.providers import provider_status
 from src.persistence.database import get_db_connection, get_field
 from src.jobs.queue import create_job, get_job_row, request_cancel
 from src.evidence.monitoring import records, season, digest
@@ -112,7 +113,7 @@ def overview(project_id: str, user=Depends(get_current_user)):
     from src.ai.document_ocr import vision_configured
     return {"records": all_records, "deployment": ws.deployment(user["org_id"], project_id),
             "vision_configured": vision_configured(),
-            "assistant_configured": configured(), "seasons": options, "attachments": attachments, "jobs": jobs,
+            "assistant_configured": configured(for_generation=False), "provider_status": provider_status(), "seasons": options, "attachments": attachments, "jobs": jobs,
             "can_manage": user["role"] in {"admin", "analyst"} and (user["role"] == "admin" or
                 get_project_member(user["org_id"], project_id, user["user_id"])["project_role"] == "lead")}
 
@@ -128,11 +129,14 @@ def train(project_id: str, body: Train, user=Depends(get_current_user)):
     access(user, project_id, True)
     corpus = ws.frozen_corpus(user["org_id"], project_id)
     if len(corpus["examples"]) > 2000:
-        raise ValueError("This training worker supports at most 2,000 eligible field-seasons per project")
+        raise HTTPException(422, "This training worker supports at most 2,000 eligible field-seasons per project")
     from src.ai.ml.crop_benchmark import make_splits
     if len(corpus["examples"]) < 4 or len({r["crop"] for r in corpus["examples"]}) < 2:
-        raise ValueError("Need four eligible field-seasons across two crops, with accepted independent labels")
-    make_splits(corpus["examples"], body.split)
+        raise HTTPException(422, "Need four eligible field-seasons across two crops, with accepted independent labels")
+    try:
+        make_splits(corpus["examples"], body.split)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
     return submit(user, project_id, "train", {**body.model_dump(), "corpus": corpus})
 
 
@@ -160,8 +164,8 @@ def predict(project_id: str, body: Predict, user=Depends(get_current_user)):
 @router.post("/ask", status_code=202)
 def ask(project_id: str, body: Ask, user=Depends(get_current_user)):
     access(user, project_id, True)
-    if not configured():
-        raise HTTPException(503, "Set OPENAI_API_KEY and OPENAI_MODEL on the API and worker")
+    if not configured(for_generation=False):
+        raise HTTPException(503, provider_status()["configuration_hint"])
     return submit(user, project_id, "answer", body.model_dump())
 
 
@@ -181,8 +185,8 @@ def extract(project_id: str, body: Extract, user=Depends(get_current_user)):
         raise ValueError("Visual mode supports PDF and JPEG/PNG/WebP images")
     if (a["content_type"] in IMAGE_TYPES or body.extraction_mode == "vision") and not vision_configured():
         raise HTTPException(503, "Configure OPENAI_VISION_MODEL to enable visual extraction")
-    if not configured():
-        raise HTTPException(503, "Set OPENAI_API_KEY and OPENAI_MODEL on the API and worker")
+    if not configured(for_generation=False):
+        raise HTTPException(503, provider_status()["configuration_hint"])
     return submit(user, project_id, "document", body.model_dump())
 
 

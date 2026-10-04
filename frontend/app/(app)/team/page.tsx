@@ -1,4 +1,5 @@
 "use client";
+import { formatQueueTimestamp } from "@/lib/format";
 
 import { UserPlus, Users } from "lucide-react";
 import { useState } from "react";
@@ -39,12 +40,12 @@ function InviteSheet({ open, onClose }: { open: boolean; onClose: () => void }) 
       {inviteUrl && <div className="mb-4 space-y-2 text-sm"><p>Share this one-time invitation with {email}. It expires in 48 hours and is not emailed automatically.</p><TextInput aria-label="Invitation link" readOnly value={inviteUrl} onFocus={e => e.target.select()} /><p>The teammate chooses their own password. Add them to projects after they accept.</p></div>}
       <form onSubmit={handleSubmit} className="flex flex-col gap-3">
         <div>
-          <FieldLabel>Email</FieldLabel>
-          <TextInput type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+          <FieldLabel htmlFor="field-1">Email</FieldLabel>
+          <TextInput id="field-1" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
         </div>
         <div>
-          <FieldLabel>Role</FieldLabel>
-          <Select value={role} onChange={(e) => setRole(e.target.value as UserRole)}>
+          <FieldLabel htmlFor="field-2">Role</FieldLabel>
+          <Select id="field-2" value={role} onChange={(e) => setRole(e.target.value as UserRole)}>
             {ROLES.map((r) => (
               <option key={r} value={r}>{r}</option>
             ))}
@@ -54,6 +55,7 @@ function InviteSheet({ open, onClose }: { open: boolean; onClose: () => void }) 
         <Button type="submit" loading={create.isPending} className="mt-1">
           Create invitation link
         </Button>
+        <Button type="button" variant="secondary" onClick={() => { setInviteUrl(""); onClose(); }}>Cancel</Button>
       </form>
     </Sheet>
   );
@@ -96,8 +98,8 @@ export default function TeamPage() {
                     <td className="px-4 py-3 text-text-primary">{u.email}</td>
                     <td className="px-4 py-3 capitalize text-text-secondary">{u.role}</td>
                     <td className="px-4 py-3 text-text-secondary">{u.is_active ? "Yes" : "No"}</td>
-                    <td className="px-4 py-3 text-text-secondary">{u.last_login_at ?? "Never"}</td>
-                    <td className="px-4 py-3 text-text-secondary">{u.created_at ?? "—"}</td>
+                    <td className="px-4 py-3 text-text-secondary">{u.last_login_at ? formatQueueTimestamp(u.last_login_at) : "Never"}</td>
+                    <td className="px-4 py-3 text-text-secondary">{formatQueueTimestamp(u.created_at)}</td>
                   </tr>
                 ))}
               </tbody>

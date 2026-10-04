@@ -1,20 +1,24 @@
 "use client";
 
-import { Activity, MapPinned, LayoutList, BrainCircuit, ScrollText } from "lucide-react";
+import { Users, Activity, MapPinned, LayoutList, BrainCircuit, ScrollText } from "lucide-react";
 import Link from "next/link";
+import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 
 export function ProjectTabs({ projectId }: { projectId: string }) {
   const pathname = usePathname();
+  const nav = useRef<HTMLElement>(null);
+  useEffect(() => { nav.current?.querySelector<HTMLElement>('[aria-current="page"]')?.scrollIntoView({ block: "nearest", inline: "nearest" }); }, [pathname]);
   const options = [
     { href: `/projects/${projectId}/monitoring`, label: "Monitoring", icon: Activity },
     { href: `/projects/${projectId}/fields`, label: "Fields", icon: MapPinned },
     { href: `/projects/${projectId}/methodology`, label: "Methodology", icon: ScrollText },
+    { href: `/projects/${projectId}/members`, label: "Members", icon: Users },
     { href: `/projects/${projectId}/ai`, label: "AI workspace", icon: BrainCircuit },
     { href: `/reviews?project=${projectId}`, label: "Reviews", icon: LayoutList },
   ];
   return (
-    <nav aria-label="Project sections" className="flex gap-1 overflow-x-auto border-b border-border-subtle">
+    <nav ref={nav} aria-label="Project sections" className="flex gap-1 overflow-x-auto border-b border-border-subtle">
       {options.map(({ href, label, icon: Icon }) => {
         const active = pathname === href;
         return (

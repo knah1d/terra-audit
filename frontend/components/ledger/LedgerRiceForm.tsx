@@ -157,7 +157,7 @@ export function LedgerRiceForm({
     if (cr.qa3_pathway_valid === false) return; // blocked — don't attempt commit
     await commit.mutateAsync({ body, idempotencyKey: crypto.randomUUID() });
     setCommitted(true);
-    show("Carbon credits saved to history", "success");
+    show("Calculated estimate saved to legacy history", "success");
   }
 
   return (
@@ -183,53 +183,53 @@ export function LedgerRiceForm({
 
       <form onSubmit={handleSubmit(onPreview)} className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <div>
-          <FieldLabel>Season Length (days)</FieldLabel>
-          <TextInput type="number" {...register("season_length_days")} />
+          <FieldLabel htmlFor="field-1">Season Length (days)</FieldLabel>
+          <TextInput id="field-1" type="number" {...register("season_length_days")} />
           <ErrorText>{errors.season_length_days?.message}</ErrorText>
         </div>
         <div>
-          <FieldLabel>Field Area (ha)</FieldLabel>
-          <TextInput type="number" step="0.01" {...register("area_ha")} />
+          <FieldLabel htmlFor="field-2">Field Area (ha)</FieldLabel>
+          <TextInput id="field-2" type="number" step="0.01" {...register("area_ha")} />
           <ErrorText>{errors.area_ha?.message}</ErrorText>
         </div>
         <div>
-          <FieldLabel>AWD Events (verified)</FieldLabel>
-          <TextInput type="number" {...register("awd_events")} />
+          <FieldLabel htmlFor="field-3">AWD Events (verified)</FieldLabel>
+          <TextInput id="field-3" type="number" {...register("awd_events")} />
           <ErrorText>{errors.awd_events?.message}</ErrorText>
         </div>
         <div>
-          <FieldLabel>N Input (kg N/ha)</FieldLabel>
-          <TextInput type="number" {...register("q_n_kg_per_ha")} />
+          <FieldLabel htmlFor="field-4">N Input (kg N/ha)</FieldLabel>
+          <TextInput id="field-4" type="number" {...register("q_n_kg_per_ha")} />
           <ErrorText>{errors.q_n_kg_per_ha?.message}</ErrorText>
         </div>
 
         <div className="col-span-2">
-          <FieldLabel>Pre-season water regime (Table 5.13)</FieldLabel>
-          <Select {...register("preseason_category")}>
+          <FieldLabel htmlFor="field-5">Pre-season water regime (Table 5.13)</FieldLabel>
+          <Select id="field-5" {...register("preseason_category")}>
             <option value="short">Non-flooded pre-season &lt; 180 days (double/multi-cropping)</option>
             <option value="long">Non-flooded pre-season &gt; 180 days (single cropping)</option>
           </Select>
         </div>
 
         <div>
-          <FieldLabel>Baseline organic amendment</FieldLabel>
-          <Select {...register("baseline_amendment_type")}>
+          <FieldLabel htmlFor="field-6">Baseline organic amendment</FieldLabel>
+          <Select id="field-6" {...register("baseline_amendment_type")}>
             {AMENDMENT_TYPE_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
           </Select>
-          <FieldLabel className="mt-2">Application rate (t/ha)</FieldLabel>
-          <TextInput type="number" step="0.1" {...register("baseline_amendment_rate")} />
+          <FieldLabel className="mt-2" htmlFor="field-7">Application rate (t/ha)</FieldLabel>
+          <TextInput id="field-7" type="number" step="0.1" {...register("baseline_amendment_rate")} />
         </div>
         <div>
-          <FieldLabel>Project organic amendment</FieldLabel>
-          <Select {...register("project_amendment_type")}>
+          <FieldLabel htmlFor="field-8">Project organic amendment</FieldLabel>
+          <Select id="field-8" {...register("project_amendment_type")}>
             {AMENDMENT_TYPE_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
           </Select>
-          <FieldLabel className="mt-2">Application rate (t/ha)</FieldLabel>
-          <TextInput type="number" step="0.1" {...register("project_amendment_rate")} />
+          <FieldLabel className="mt-2" htmlFor="field-9">Application rate (t/ha)</FieldLabel>
+          <TextInput id="field-9" type="number" step="0.1" {...register("project_amendment_rate")} />
         </div>
 
         <div className="col-span-full flex gap-3">

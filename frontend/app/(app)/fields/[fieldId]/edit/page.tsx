@@ -44,13 +44,13 @@ export default function EditFieldPage() {
       <Card>
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
           <div>
-            <FieldLabel>Field Name</FieldLabel>
-            <TextInput {...register("name")} />
+            <FieldLabel htmlFor="field-1">Field Name</FieldLabel>
+            <TextInput id="field-1" {...register("name")} />
             <ErrorText>{errors.name?.message}</ErrorText>
           </div>
           <div>
-            <FieldLabel>District</FieldLabel>
-            <TextInput {...register("district")} />
+            <FieldLabel htmlFor="field-2">District</FieldLabel>
+            <TextInput id="field-2" {...register("district")} />
             <ErrorText>{errors.district?.message}</ErrorText>
           </div>
           <p className="ui-meta">

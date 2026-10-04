@@ -230,6 +230,7 @@ export const DatePicker = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLI
         if (event.key === "Escape" && open) { event.preventDefault(); event.stopPropagation(); close(); }
       }} />
     <button type="button" className="ui-date-toggle" disabled={props.disabled || props.readOnly} aria-label={`Open calendar for ${name}`}
+      onKeyDown={event => { if (event.key === "Escape" && open) { event.preventDefault(); event.stopPropagation(); close(); } }}
       aria-haspopup="dialog" aria-expanded={open} aria-controls={open ? calendarId : undefined} onClick={() => open ? close() : show()}>
       <CalendarDays aria-hidden="true" className="size-4" />
     </button>

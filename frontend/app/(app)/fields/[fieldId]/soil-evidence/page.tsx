@@ -240,12 +240,12 @@ export default function SoilEvidencePage() {
             }}
           >
             <div>
-              <FieldLabel>Name</FieldLabel>
-              <TextInput name="name" required />
+              <FieldLabel htmlFor="field-1">Name</FieldLabel>
+              <TextInput id="field-1" name="name" required />
             </div>
             <div>
-              <FieldLabel>Measurement method</FieldLabel>
-              <Select name="measurement_method" defaultValue="dry_combustion">
+              <FieldLabel htmlFor="field-2">Measurement method</FieldLabel>
+              <Select id="field-2" name="measurement_method" defaultValue="dry_combustion">
                 <option value="dry_combustion">Dry combustion</option>
                 <option value="wet_oxidation">Wet oxidation</option>
                 <option value="loss_on_ignition">Loss on ignition</option>
@@ -253,12 +253,12 @@ export default function SoilEvidencePage() {
               </Select>
             </div>
             <div>
-              <FieldLabel>Description</FieldLabel>
-              <TextInput name="description" />
+              <FieldLabel htmlFor="field-3">Description</FieldLabel>
+              <TextInput id="field-3" name="description" />
             </div>
             <div>
-              <FieldLabel>Remeasurement interval (years)</FieldLabel>
-              <TextInput name="remeasurement_interval_years" type="number" step="any" />
+              <FieldLabel htmlFor="field-4">Remeasurement interval (years)</FieldLabel>
+              <TextInput id="field-4" name="remeasurement_interval_years" type="number" step="any" />
             </div>
             <Button type="submit" className="w-fit" loading={createPlan.isPending}>Create plan</Button>
           </form>

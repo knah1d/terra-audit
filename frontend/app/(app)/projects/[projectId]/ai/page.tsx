@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useState } from "react";
 import { apiFetchBlob } from "@/lib/api";
 import { useProjectContext } from "@/components/projects/ProjectContext";
@@ -46,11 +47,13 @@ export default function AIWorkspacePage() {
   const documents = data.records.filter(r => r.kind === "document") as unknown as AIRecord<DocumentData>[];
   const chosenSeason = data.seasons.find(s => s.season_id === seasonId);
   const disabled = !data.can_manage || action.isPending;
+  const canTrain = !!corpus.data && corpus.data.examples.length >= 4 && new Set(corpus.data.examples.map(e => e.crop)).size >= 2;
   return <div className="ui-container space-y-6">
     <p className="ui-secondary">Multi-crop AI supports monitoring and evidence preparation. Model scores are uncalibrated; outputs require human review and do not authorize carbon credits.</p>
     {!data.can_manage && <p className="text-sm">Project leads and organization admins can run AI workflows. You can view saved results.</p>}
     {(error || query.error) && <p role="alert" className="text-danger-700">{error}</p>}
     {notice && <p role="status" className="text-success-700">{notice}</p>}
+    <Card><h2 className="ui-section-title mb-3">AI provider</h2><p className="ui-secondary">{data.provider_status?.provider ?? "Unknown"} · {data.provider_status?.model || "No model configured"}. Configuration presence does not verify worker connectivity. Drafts still require human review.</p></Card>
     <Card><h2 className="ui-section-title mb-3">Train a crop model</h2>
       <p className="mb-3 text-sm text-text-secondary">Requires at least four eligible field-seasons, two crops, and independently reviewed labels. Training uses only active project fields and reserves independent groups for evaluation.</p>
       {corpus.error && <p role="alert" className="mb-3 text-sm text-danger-700">{corpus.error.message}</p>}
@@ -59,7 +62,7 @@ export default function AIWorkspacePage() {
         <label className="text-sm">Version name<TextInput required maxLength={120} value={name} onChange={e => setName(e.target.value)} placeholder="September crop baseline" /></label>
         <label className="text-sm">Model<Select value={model} onChange={e => setModel(e.target.value)}><option value="random_forest">Random forest</option><option value="xgboost">XGBoost</option></Select></label>
         <label className="text-sm">Hold out by<Select value={split} onChange={e => setSplit(e.target.value)}><option value="field">Field</option><option value="year">Year</option><option value="district">District</option></Select></label>
-        <Button type="submit" disabled={disabled}>Train and evaluate</Button>
+        <Button type="submit" disabled={disabled || !canTrain}>Train and evaluate</Button>
       </form>
     </Card>
     <Card><h2 className="ui-section-title mb-3">Model versions</h2>
@@ -86,12 +89,13 @@ export default function AIWorkspacePage() {
         <Button size="sm" variant="ghost" onClick={() => download(r, `prediction-${r.id}.json`)}>Download provenance</Button></div>)}
     </Card>
     <Card><h2 className="ui-section-title mb-3">Document proposals</h2>
-      <p className="mb-2 text-sm text-text-secondary">Select an attachment already uploaded to the chosen field or season. PDF, DOCX, UTF-8 text/CSV, JPEG, PNG, and WebP are supported. Text is sent to the configured OpenAI model; visual extraction also sends the selected page images or document photo.</p>
-      {!data.assistant_configured && <p className="mb-2 text-warning-700">Assistant is disabled. Configure OPENAI_API_KEY and OPENAI_MODEL on the API and worker.</p>}
+      <p className="mb-2 text-sm text-text-secondary">Select an attachment already uploaded to the chosen field or season. PDF, DOCX, UTF-8 text/CSV, JPEG, PNG, and WebP are supported. Text is sent to the configured provider. Visual OCR is a separate OpenAI feature and sends page images or document photos.</p>
+      {!data.assistant_configured && <p className="mb-2 text-warning-700">Assistant is disabled. {data.provider_status?.configuration_hint ?? "Check the AI provider configuration on API and worker."}</p>}
       <Select aria-label="Document" value={attachmentId} onChange={e => setAttachmentId(e.target.value)}><option value="">Select a document</option>{data.attachments.filter(a => a.field_id === chosenSeason?.field_id).map(a => <option key={a.attachment_id} value={a.attachment_id}>{a.filename}</option>)}</Select>
       <label className="mt-3 block text-sm">Extraction method<Select value={extractionMode} onChange={e => setExtractionMode(e.target.value)}><option value="auto">Automatic: text with OCR for sparse pages</option><option value="text">Text only: no images or handwriting</option><option value="vision" disabled={!data.vision_configured}>Visual: read every PDF page or image</option></Select></label>
       <p className="mt-2 text-xs text-text-secondary">Up to 10 visual pages per request. Choose visual mode when handwritten or scanned content appears beside existing text. Each visual page uses one provider request.</p>
       {!data.vision_configured && <p className="mt-2 text-sm text-warning-700">Visual extraction is unavailable until OPENAI_VISION_MODEL is configured.</p>}
+      {chosenSeason && <Link className="block mt-3 text-brand-700 underline" href={`/fields/${chosenSeason.field_id}/evidence-files?season=${seasonId}`}>Upload evidence for this season</Link>}
       <Button className="mt-3" disabled={disabled || !data.assistant_configured || !chosenSeason || !attachmentId} onClick={() => chosenSeason && dispatch("/documents", { field_id: chosenSeason.field_id, season_id: seasonId, attachment_id: attachmentId, extraction_mode: extractionMode })}>Extract proposals</Button>
       {documents.map(doc => <div key={doc.id} className="mt-4 border-t border-border pt-3"><h3 className="ui-subsection-title">{doc.payload.filename}</h3>
         <Button size="sm" variant="secondary" className="my-2" onClick={() => { void downloadOriginal(doc.id, doc.payload.filename); }}>Download original for review</Button>
@@ -103,7 +107,7 @@ export default function AIWorkspacePage() {
       </div>)}
     </Card>
     <Card><h2 className="ui-section-title mb-3">Evidence assistant</h2>
-      <p className="mb-2 text-sm text-text-secondary">Ask about project evidence, missing records, or a draft report. Relevant project records are sent to OpenAI. Every saved factual claim includes a source quote; review its meaning before using it.</p>
+      <p className="mb-2 text-sm text-text-secondary">Ask about project evidence, missing records, or a draft report. Relevant project records are sent to the configured provider. Every saved factual claim includes a source quote; review its meaning before using it.</p>
       <form onSubmit={e => { e.preventDefault(); dispatch("/ask", { question }); }} className="space-y-3">
         <TextArea aria-label="Question" required minLength={3} maxLength={4000} rows={3} placeholder="Summarize the evidence gaps for this project, citing sources." value={question} onChange={e => setQuestion(e.target.value)} />
         <Button type="submit" disabled={disabled || !data.assistant_configured}>Ask assistant</Button>

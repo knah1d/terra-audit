@@ -53,6 +53,10 @@ export default function LedgerPage() {
         </p>
       </div>
 
+      <Alert tone="warning" title="Legacy estimates — not issued credits">
+        This ledger retains older calculation records without the full evidence snapshot and review context.
+        Use <Link className="underline" href={`/fields/${field.field_id}/calculations`}>Evidence-linked calculations</Link> for readiness and internal review. Saving an estimate does not certify or issue credits.
+      </Alert>
       {field.field_type === "rice_awd" ? (
         <LedgerRiceForm fieldId={field.field_id} defaultArea={field.area_ha ?? 1} />
       ) : (
@@ -62,7 +66,7 @@ export default function LedgerPage() {
       <div>
         <h3 className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-text-secondary">
           <History className="size-4" />
-          Verification History
+          Legacy calculation history
         </h3>
         <CreditHistoryTable fieldId={field.field_id} />
       </div>

@@ -1,5 +1,9 @@
 "use client";
 
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { SeasonHistory } from "@/components/evidence/SeasonHistory";
+import { formatDate } from "@/lib/format";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSession } from "@/app/providers";
@@ -34,7 +38,8 @@ export default function CropSeasonsPage() {
   const writable = session?.role === "admin" || session?.role === "analyst";
   const queryClient = useQueryClient();
   const base = `/fields/${encodeURIComponent(field.field_id)}/crop-seasons`;
-  const [selected, setSelected] = useState("");
+  const search = useSearchParams();
+  const [selected, setSelected] = useState(search.get("season") ?? "");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
@@ -44,8 +49,8 @@ export default function CropSeasonsPage() {
   const [isHistorical, setIsHistorical] = useState(false);
   const [split, setSplit] = useState("field");
   const [cropSequence, setCropSequence] = useState<{ crop: string; start_date: string; end_date: string }[]>([]);
-  const seasons = useQuery({ queryKey: ["crop-seasons", field.field_id], queryFn: () => apiFetch<RecordRow<Season>[]>(base) });
-  const seasonId = selected || seasons.data?.[0]?.id || "";
+  const seasons = useQuery({ queryKey: ["crop-seasons", field.field_id], queryFn: () => apiFetch<RecordRow<Season>[]>(base), select: rows => Array.from(new Map(rows.map(row => [row.season_id || row.id, { ...row, id: row.season_id || row.id }])).values()) });
+  const seasonId = seasons.data?.some(s => s.id === selected) ? selected : seasons.data?.[0]?.id || "";
   const path = `${base}/${seasonId}`;
   const evidence = useQuery({ queryKey: ["crop-evidence", field.field_id, seasonId], queryFn: () => apiFetch<Evidence>(`${path}/evidence`), enabled: !!seasonId });
   const corpus = useQuery({ queryKey: ["crop-corpus"], queryFn: () => apiFetch<Corpus>("/multi-crop/dataset") });
@@ -162,15 +167,17 @@ export default function CropSeasonsPage() {
         )}
         <p className="ui-meta sm:col-span-2">
           Grouped-project eligibility areas are not yet editable here — see the field&apos;s Quantification
-          Units tab and the API for the fuller data model.
+          Enrollment tab for quantification units.
         </p>
         <div><Button loading={busy} type="submit">Save season</Button></div>
       </form>
     </Card>}
     {seasons.isLoading ? <p role="status">Loading seasons…</p> : !seasons.data?.length ? <Card>No crop seasons recorded yet.</Card> : <>
       <label className="ui-label block">Selected season<Select value={seasonId} onChange={e => setSelected(e.target.value)}>
-        {seasons.data.map(s => <option key={s.id} value={s.id}>{s.payload.name} · {s.payload.crops.join(" + ")} · {s.payload.start_date} to {s.payload.end_date}</option>)}
+        {seasons.data.map(s => <option key={s.id} value={s.id}>{s.payload.name} · {s.payload.crops.join(" + ")} · {formatDate(s.payload.start_date)} to {formatDate(s.payload.end_date)}</option>)}
       </Select></label>
+      <SeasonHistory key={seasonId} fieldId={field.field_id} seasonId={seasonId} writable={writable} />
+      <Link className="text-brand-700 underline" href={`/fields/${field.field_id}/evidence-files?season=${seasonId}`}>View or upload season evidence files</Link>
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h3 className="ui-subsection-title">Satellite observations</h3>

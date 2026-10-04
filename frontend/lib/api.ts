@@ -19,16 +19,16 @@ export class ApiError extends Error {
 
 export async function apiFetch<T>(
   path: string,
-  options: { method?: string; json?: unknown; headers?: Record<string, string> } = {},
+  options: { method?: string; json?: unknown; headers?: Record<string, string>; form?: FormData } = {},
 ): Promise<T> {
-  const { method = "GET", json, headers = {} } = options;
+  const { method = "GET", json, headers = {}, form } = options;
   const res = await fetch(`/api/proxy${path}`, {
     method,
     headers: {
       ...(json !== undefined ? { "Content-Type": "application/json" } : {}),
       ...headers,
     },
-    body: json !== undefined ? JSON.stringify(json) : undefined,
+    body: form ?? (json !== undefined ? JSON.stringify(json) : undefined),
   });
 
   if (res.status === 204) return undefined as T;

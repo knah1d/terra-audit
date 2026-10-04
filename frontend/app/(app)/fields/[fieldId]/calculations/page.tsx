@@ -1,5 +1,8 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
+import { AMENDMENT_TYPE_OPTIONS } from "@/lib/schemas/ledger";
+import { formatDate, formatNumber, formatQueueTimestamp } from "@/lib/format";
 import { useState } from "react";
 import { ExplainButton } from "@/components/ai/ExplainDrawer";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -66,6 +69,9 @@ function ReadinessList({ checklist, explain }: { checklist: ReadinessCheck[]; ex
 
 export default function CalculationsPage() {
   const field = useFieldContext();
+  const search = useSearchParams();
+  const requestedRequirement = search.get("requirement") ?? "";
+  const requestedDate = (key: string) => /^\d{4}-\d{2}-\d{2}$/.test(search.get(key) ?? "") ? search.get(key)! : "";
   const session = useSession();
   const writable = session?.role === "admin" || session?.role === "analyst";
   const queryClient = useQueryClient();
@@ -83,11 +89,11 @@ export default function CalculationsPage() {
   const projects = useProjects();
   const createSubmission = useCreateSubmission();
 
-  const [selectedSeasons, setSelectedSeasons] = useState<string[]>([]);
-  const [periodStart, setPeriodStart] = useState("");
-  const [periodEnd, setPeriodEnd] = useState("");
+  const [selectedSeasons, setSelectedSeasons] = useState<string[]>(() => search.getAll("season"));
+  const [periodStart, setPeriodStart] = useState(() => requestedDate("start"));
+  const [periodEnd, setPeriodEnd] = useState(() => requestedDate("end"));
   const [supersedes, setSupersedes] = useState("");
-  const [projectId, setProjectId] = useState("");
+  const [projectId, setProjectId] = useState(() => search.get("project") ?? "");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
@@ -127,19 +133,24 @@ export default function CalculationsPage() {
 
   function readEngineInputs(form: HTMLFormElement): Record<string, unknown> {
     const data = new FormData(form);
+    function number(name: string) {
+      const value = data.get(name);
+      if (typeof value !== "string" || !value.trim() || !Number.isFinite(Number(value))) throw new Error(`Enter an evidence-backed value for ${name.replaceAll("_", " ")}.`);
+      return Number(value);
+    }
     if (pathway === "vm0051_rice_awd") {
       return {
-        awd_events: Number(data.get("awd_events")),
-        season_length_days: Number(data.get("season_length_days")),
-        q_n_kg_per_ha: Number(data.get("q_n_kg_per_ha")),
+        awd_events: number("awd_events"),
+        season_length_days: number("season_length_days"),
+        q_n_kg_per_ha: number("q_n_kg_per_ha"),
         preseason_category: data.get("preseason_category"),
-        baseline_amendments: [[data.get("baseline_amendment_type"), Number(data.get("baseline_amendment_rate"))]],
-        project_amendments: [[data.get("project_amendment_type"), Number(data.get("project_amendment_rate"))]],
+        baseline_amendments: [[data.get("baseline_amendment_type"), number("baseline_amendment_rate")]],
+        project_amendments: [[data.get("project_amendment_type"), number("project_amendment_rate")]],
       };
     }
     return {
-      verification_years: Number(data.get("verification_years")),
-      non_permanence_risk_pct: Number(data.get("non_permanence_risk_pct")),
+      verification_years: number("verification_years"),
+      non_permanence_risk_pct: number("non_permanence_risk_pct"),
     };
   }
 
@@ -148,19 +159,19 @@ export default function CalculationsPage() {
       <div>
         <h2 className="ui-section-title">Evidence-linked calculations</h2>
         <p className="mt-1 text-sm text-text-secondary">
-          Committing here freezes the exact field geometry, crop-season versions, practice records, and
-          measurements used into an immutable snapshot. This is separate from the original Carbon Asset Ledger
-          (still available under Carbon Asset Ledger) — that flow keeps working unchanged; this one adds
-          project/season context, a readiness checklist, and versioned corrections instead of overwriting a result.
+          Save a versioned calculation with its field boundary, crop seasons, practices and measurements frozen as evidence.
+          Run readiness first, supply evidence-backed inputs, then prepare the calculation for internal review.
+          Older ledger results remain available as legacy estimates; neither a saved result nor internal review is registry issuance.
         </p>
       </div>
 
+      {requestedRequirement && <p role="status" className="ui-body">Review requested for <strong>{requestedRequirement}</strong>. Check the selected context, click Check readiness, then use Record an evidence review below. Only an authorized reviewer can record a decision.</p>}
       {error && <p role="alert" className="rounded-lg bg-danger-50 p-3 text-danger-700">{error}</p>}
       {notice && <p role="status" className="text-sm text-success-700">{notice} <Link href="/reviews" className="underline">Go to Reviews</Link></p>}
 
       <Card>
         <h3 className="ui-subsection-title mb-3">Calculation context</h3>
-        {!seasons.data?.length ? (
+        {seasons.isLoading ? <p role="status">Loading crop seasons…</p> : seasons.error ? <p role="alert">{seasons.error.message}</p> : !seasons.data?.length ? (
           <p className="ui-secondary">No crop seasons recorded yet — add one under Crop Seasons first.</p>
         ) : (
           <div className="space-y-3 text-sm">
@@ -170,7 +181,7 @@ export default function CalculationsPage() {
                 {seasons.data.map((s) => (
                   <label key={s.id} className={`cursor-pointer rounded-lg border px-3 py-1.5 ${selectedSeasons.includes(s.id) ? "border-brand-600 bg-brand-50 text-brand-700" : "border-border"}`}>
                     <input type="checkbox" className="mr-1.5" checked={selectedSeasons.includes(s.id)} onChange={() => toggleSeason(s.id)} />
-                    {s.payload.name} · {s.payload.start_date} to {s.payload.end_date}
+                    {s.payload.name} · {formatDate(s.payload.start_date)} to {formatDate(s.payload.end_date)}
                   </label>
                 ))}
               </div>
@@ -215,8 +226,8 @@ export default function CalculationsPage() {
 
       {writable && !!selectedSeasons.length && periodStart && periodEnd && (
         <Card>
-          <h3 className="ui-subsection-title mb-3">Engine inputs</h3>
-          <form className="grid gap-3 sm:grid-cols-2" onSubmit={(e) => {
+          <h3 id="engine-inputs" className="ui-subsection-title mb-3 scroll-mt-28">Engine inputs</h3>
+          <form key={`${field.field_id}:${projectId}:${selectedSeasons.join()}:${periodStart}:${periodEnd}`} className="grid gap-3 sm:grid-cols-2" onSubmit={(e) => {
             e.preventDefault();
             const submitter = (e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
             const action = submitter?.value === "commit" ? "commit" : "preview";
@@ -235,23 +246,24 @@ export default function CalculationsPage() {
               await queryClient.invalidateQueries({ queryKey: ["calculations", field.field_id] });
             });
           }}>
+            <p className="ui-secondary sm:col-span-2">Manual evidence entry for this monitoring period. No measurements are assumed. Use zero only when the evidence records zero; amendment rates may be zero when no material was applied.</p>
             {pathway === "vm0051_rice_awd" ? (
               <>
-                <label className="text-sm">AWD events (verified)<TextInput name="awd_events" type="number" required defaultValue={0} /></label>
-                <label className="text-sm">Season length (days)<TextInput name="season_length_days" type="number" required defaultValue={120} /></label>
-                <label className="text-sm">N input (kg N/ha)<TextInput name="q_n_kg_per_ha" type="number" step="any" required defaultValue={100} /></label>
-                <label className="text-sm">Pre-season water regime<Select name="preseason_category" defaultValue="short">
-                  <option value="short">Non-flooded &lt; 180 days</option><option value="long">Non-flooded &gt; 180 days</option>
+                <label className="text-sm">AWD events (evidence-backed)<TextInput name="awd_events" type="number" required min={0} /></label>
+                <label className="text-sm">Season length (days)<TextInput name="season_length_days" type="number" required min={1} /></label>
+                <label className="text-sm">N input (kg N/ha)<TextInput name="q_n_kg_per_ha" type="number" step="any" required min={0} /></label>
+                <label className="text-sm">Pre-season water regime<Select name="preseason_category" required defaultValue="">
+                  <option value="">Select documented water regime</option><option value="short">Non-flooded &lt; 180 days</option><option value="long">Non-flooded &gt; 180 days</option>
                 </Select></label>
-                <label className="text-sm">Baseline amendment type<TextInput name="baseline_amendment_type" defaultValue="straw_shortly_before" required /></label>
-                <label className="text-sm">Baseline amendment rate (t/ha)<TextInput name="baseline_amendment_rate" type="number" step="any" required defaultValue={5} /></label>
-                <label className="text-sm">Project amendment type<TextInput name="project_amendment_type" defaultValue="straw_shortly_before" required /></label>
-                <label className="text-sm">Project amendment rate (t/ha)<TextInput name="project_amendment_rate" type="number" step="any" required defaultValue={5} /></label>
+                <label className="text-sm">Baseline amendment type<Select name="baseline_amendment_type" defaultValue="" required><option value="">Select documented amendment</option>{AMENDMENT_TYPE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</Select></label>
+                <label className="text-sm">Baseline amendment rate (t/ha)<TextInput name="baseline_amendment_rate" type="number" step="any" required min={0} /></label>
+                <label className="text-sm">Project amendment type<Select name="project_amendment_type" defaultValue="" required><option value="">Select documented amendment</option>{AMENDMENT_TYPE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</Select></label>
+                <label className="text-sm">Project amendment rate (t/ha)<TextInput name="project_amendment_rate" type="number" step="any" required min={0} /></label>
               </>
             ) : (
               <>
-                <label className="text-sm">Verification years<TextInput name="verification_years" type="number" step="any" required defaultValue={1} /></label>
-                <label className="text-sm">Non-permanence risk (%)<TextInput name="non_permanence_risk_pct" type="number" step="any" required defaultValue={20} /></label>
+                <label className="text-sm">Verification years<TextInput name="verification_years" type="number" step="any" required min={1} /></label>
+                <label className="text-sm">Non-permanence risk (%)<TextInput name="non_permanence_risk_pct" type="number" step="any" required min={0} max={100} /></label>
               </>
             )}
             <p className="text-xs text-text-secondary sm:col-span-2">Field area used is always this field&apos;s registered area_ha ({field.area_ha?.toFixed(2)} ha) — it is frozen from the field record, not re-entered here.</p>
@@ -267,6 +279,7 @@ export default function CalculationsPage() {
                 </Select>
               </label>
             )}
+            <label className="ui-label sm:col-span-2"><input type="checkbox" required className="mr-2" />I have checked these values against evidence for the selected period.</label>
             <div className="sm:col-span-2 flex gap-2">
               <Button type="submit" name="action" value="preview" variant="secondary" loading={preview.isPending}>Preview calculation</Button>
               <Button type="submit" name="action" value="commit" loading={commit.isPending}>Commit (freeze evidence)</Button>
@@ -278,7 +291,7 @@ export default function CalculationsPage() {
       {preview.data && (
         <Card>
           <h3 className="ui-subsection-title mb-3">Preview result</h3>
-          <p className="text-sm">Final issuance: <span className="font-mono">{String(preview.data.result.final_issuance ?? "—")}</span></p>
+          <p className="text-sm">Calculated estimate (not issued credits): <span className="font-mono">{formatNumber(preview.data.result.final_issuance as number | null, "tco2e")}</span></p>
           {pathway === "vm0042_alm" && <div className="mt-2 space-y-1 text-sm">
             <p>Annual displacement leakage: {String(preview.data.result.lk_disp_t ?? "blocked")} tCO2e/year</p>
             <p>Allocated to reductions / removals: {String(preview.data.result.lk_er_t ?? "—")} / {String(preview.data.result.lk_cr_t ?? "—")} tCO2e/year</p>
@@ -292,7 +305,7 @@ export default function CalculationsPage() {
 
       {writable && projectId && selectedSeasons.length > 0 && periodStart && periodEnd && (preview.data || readiness.data) && (
         <Card>
-          <h3 className="ui-subsection-title">Record an evidence review</h3>
+          <h3 id="evidence-review" className="ui-subsection-title scroll-mt-28">Record an evidence review</h3>
           <p className="my-2 text-sm text-text-secondary">Project leads and administrators can decide reviewable requirements. Decisions apply to the selected project, dates and current evidence. Changed leakage inputs or production records require a new review.</p>
           <form className="space-y-2" onSubmit={(e) => {
             e.preventDefault();
@@ -307,11 +320,11 @@ export default function CalculationsPage() {
               setNotice("Review saved. Run a fresh preview before committing.");
             });
           }}>
-            <Select name="requirement" required defaultValue=""><option value="">Select reviewable requirement</option>
+            <Select aria-label="Requirement to review" name="requirement" required defaultValue={requestedRequirement}><option value="">Select reviewable requirement</option>
               {(preview.data?.readiness ?? readiness.data?.checklist ?? []).filter((c) => c.reviewer_authority !== "automated_only" && c.implementation_support !== "unsupported").map((c) => <option key={c.requirement_id} value={c.requirement_id}>{c.requirement_id}</option>)}
             </Select>
-            <Select name="decision" defaultValue="satisfied"><option value="satisfied">Evidence accepted</option><option value="not_applicable">Not applicable (where permitted)</option><option value="needs_review">Further review needed</option></Select>
-            <TextInput name="reason" required placeholder="Decision, source references and justification" />
+            <Select aria-label="Review decision" name="decision" defaultValue="satisfied"><option value="satisfied">Evidence accepted</option><option value="not_applicable">Not applicable (where permitted)</option><option value="needs_review">Further review needed</option></Select>
+            <TextInput aria-label="Review justification and sources" name="reason" required placeholder="Decision, source references and justification" />
             <Button type="submit" loading={determination.isPending}>Record review</Button>
           </form>
         </Card>
@@ -337,8 +350,8 @@ export default function CalculationsPage() {
                       <span className="font-mono text-xs text-text-tertiary">v{row.version}</span>
                     </>
                   )}
-                  <span className="ml-2">{new Date(row.created_at).toLocaleString()}</span>
-                  <span className="ml-2 font-mono">{row.final_issuance ?? "—"} tCO2e</span>
+                  <span className="ml-2">{formatQueueTimestamp(row.created_at)}</span>
+                  <span className="ml-2 font-mono">{row.final_issuance == null ? "—" : formatNumber(row.final_issuance)} tCO2e</span>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {!row.legacy && row.project_id && row.calculation_id && <>

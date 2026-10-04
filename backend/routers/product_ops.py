@@ -8,6 +8,7 @@ from backend.deps import require_admin
 from backend.config import JWT_SECRET, _DEV_ONLY_JWT_SECRET, EMAIL_CONFIGURED
 from src.persistence.database import get_db_connection, is_sqlite
 from src.ai.assistant import configured
+from src.ai.providers import provider_status
 
 router = APIRouter(tags=["product operations"])
 
@@ -25,7 +26,7 @@ def readiness(user=Depends(require_admin)):
     checks = [
         {"name": "Database", "ready": True, "detail": "SQLite" if is_sqlite() else "PostgreSQL"},
         {"name": "Session signing", "ready": JWT_SECRET != _DEV_ONLY_JWT_SECRET and len(JWT_SECRET) >= 32, "detail": "Use a private secret of at least 32 characters."},
-        {"name": "AI assistant configuration", "ready": configured(), "detail": "Requires OPENAI_API_KEY and OPENAI_MODEL on API and worker. Configuration presence only; no provider call performed."},
+        {"name": "AI assistant configuration", "ready": configured(for_generation=False), "detail": provider_status()["configuration_hint"] + " Configuration presence only; worker credentials and provider connectivity are not verified."},
         {"name": "Recovery email", "ready": EMAIL_CONFIGURED, "detail": "Brevo key and verified sender are required. Delivery is not probed."},
         {"name": "Public account links", "ready": os.environ.get("FRONTEND_PUBLIC_URL", "").startswith("https://"), "detail": "Set FRONTEND_PUBLIC_URL to the HTTPS frontend address."},
         {"name": "Shared file storage", "ready": storage == "s3" and bool(os.environ.get("S3_BUCKET")), "detail": "S3 configuration is present." if storage == "s3" else "Local storage: API and worker must mount the same persistent directory."},

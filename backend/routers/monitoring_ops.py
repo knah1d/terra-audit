@@ -159,4 +159,4 @@ def resolve_issue(issue_id: str, body: IssueResolve, user=Depends(require_writer
 def get_queue_status(user=Depends(require_admin)):
     """Admin-only operational visibility into the durable job queue and
     live workers — not tenant data, so intentionally not org-scoped."""
-    return jobs_db.queue_status()
+    return {**jobs_db.queue_status(), "recent_jobs": jobs_db.recent_org_jobs(user["org_id"])}

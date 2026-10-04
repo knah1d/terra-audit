@@ -1,6 +1,6 @@
 "use client";
 
-import { Calculator, ClipboardList, FlaskConical, Microscope, Pencil, Satellite, Wallet, Sprout, Wheat } from "lucide-react";
+import { Paperclip, Calculator, ClipboardList, FlaskConical, Microscope, Pencil, Satellite, Wallet, Sprout, Wheat } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -38,6 +38,7 @@ export function FieldTabs({ fieldId, fieldType }: { fieldId: string; fieldType: 
           { href: `/fields/${fieldId}/production-records`, label: "Production Records", icon: Wheat },
         ]
       : []),
+    { href: `/fields/${fieldId}/evidence-files`, label: "Evidence Files", icon: Paperclip },
     { href: `/fields/${fieldId}/edit`, label: "Edit", icon: Pencil },
   ];
 
@@ -54,6 +55,7 @@ export function FieldTabs({ fieldId, fieldType }: { fieldId: string; fieldType: 
       const elRect = activeEl.getBoundingClientRect();
       setPillStyle({ left: elRect.left - containerRect.left, width: elRect.width });
     }
+    containerRef.current?.querySelector<HTMLElement>('[data-active="true"]')?.scrollIntoView({ block: "nearest", inline: "nearest" });
     measure();
     window.addEventListener("resize", measure);
     return () => window.removeEventListener("resize", measure);

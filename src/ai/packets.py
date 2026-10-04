@@ -10,7 +10,7 @@ import json
 import math
 import re
 from datetime import date, datetime
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 from sqlalchemy import bindparam, text
 
@@ -38,9 +38,10 @@ ACTIONS = {"explain_block", "missing_evidence", "applicable_requirements",
            "explain_leakage", "diff_since_previous"}
 
 REQUIREMENT_FIX_MAP = {
-    "common.methodology_applicability": ("methodology_applicability", "/projects/{project_id}/methodology"),
+    "common.methodology_applicability": ("methodology_applicability", "/fields/{field_id}/calculations"),
     "common.monitoring_period_coverage": ("crop_season", "/fields/{field_id}/crop-seasons"),
     "common.observation_review": ("observation_review", "/fields/{field_id}/crop-seasons"),
+    "common.evidence_review_status": ("observation_review", "/fields/{field_id}/crop-seasons"),
     "vm0042.baseline_documentation": ("practice_schedule", "/fields/{field_id}/practice-data"),
     "vm0042.project_practice_schedule": ("practice_schedule", "/fields/{field_id}/practice-data"),
     "vm0042.historical_lookback": ("historical_crop_season", "/fields/{field_id}/crop-seasons"),
@@ -244,6 +245,8 @@ class _Builder:
         if snapshot.get("project_id") != self.project or snapshot.get("field", {}).get("field_id") != self.field_id:
             raise ValueError("Calculation snapshot scope does not match its record")
         self.packet["calculation_id"] = calculation_id
+        self.packet["request_scope"] = {"start": calc["monitoring_period_start"],
+                                        "end": calc["monitoring_period_end"], "season_ids": calc["season_ids"]}
         self.packet["target_id"] = calculation_id
         self.fact("calculation", {k: calc[k] for k in (
             "calculation_id", "status", "accounting_pathway", "monitoring_period_start",
@@ -322,6 +325,15 @@ class _Builder:
             rid = check["requirement_id"]
             self.requirements.add(rid)
             fix = fix_for_requirement(rid, self.field_id, self.project)
+            if fix.get("route") and fix["route"].endswith("/calculations"):
+                scope = self.packet.get("request_scope", {})
+                params = {"project": self.project, "requirement": rid}
+                if scope.get("start") and scope.get("end"):
+                    params.update(start=scope["start"], end=scope["end"])
+                fix["route"] += "?" + urlencode(params, doseq=True)
+                for sid in scope.get("season_ids", []):
+                    fix["route"] += "&season=" + quote(str(sid), safe="")
+                fix["route"] += "#engine-inputs" if rid == "vm0051.required_measurement_inputs" else "#evidence-review"
             row = {**check, "fix": fix}
             action = action_for(row)
             if action:

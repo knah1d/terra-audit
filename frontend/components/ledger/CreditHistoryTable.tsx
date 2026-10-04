@@ -7,7 +7,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Sheet } from "@/components/ui/Sheet";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useCreditHistory } from "@/hooks/use-carbon";
-import { formatNumber } from "@/lib/format";
+import { formatNumber, formatQueueTimestamp } from "@/lib/format";
 import type { CreditHistoryEntry } from "@/types/api";
 
 /** Renders a run's raw inputs as a clean key/value grid inside a Sheet —
@@ -37,7 +37,7 @@ export function CreditHistoryTable({ fieldId }: { fieldId: string }) {
 
   if (isLoading) return <Skeleton className="h-24" />;
   if (!history || history.length === 0) {
-    return <EmptyState icon={History} title="No verification runs yet" description="Calculated carbon-credit results for this field will appear here." />;
+    return <EmptyState icon={History} title="No legacy calculations yet" description="Calculated carbon-credit results for this field will appear here." />;
   }
 
   const showCumulative = history.some((h) => h.result.cumulative_delta_co2_wp !== undefined);
@@ -50,7 +50,7 @@ export function CreditHistoryTable({ fieldId }: { fieldId: string }) {
           <thead>
             <tr className="ui-meta text-left font-medium uppercase tracking-wide">
               <th className="px-4 pb-2.5 pt-4">Calculated At</th>
-              <th className="px-4 pb-2.5 pt-4 text-right">Final Issuance (tCO2e)</th>
+              <th className="px-4 pb-2.5 pt-4 text-right">Calculated estimate (tCO2e)</th>
               {showCumulative && <th className="px-4 pb-2.5 pt-4 text-right">Cumulative SOC Δ (tCO2e)</th>}
               <th className="px-4 pb-2.5 pt-4" />
             </tr>
@@ -62,7 +62,7 @@ export function CreditHistoryTable({ fieldId }: { fieldId: string }) {
                 className="enter border-t border-border/60 transition-colors duration-[var(--dur-fast)] hover:bg-surface-muted/60"
                 style={{ animationDelay: `${Math.min(i, 8) * 30}ms` }}
               >
-                <td className="px-4 py-3.5 text-text-secondary">{entry.calculated_at}</td>
+                <td className="px-4 py-3.5 text-text-secondary">{formatQueueTimestamp(entry.calculated_at)}</td>
                 <td className="px-4 py-3.5 text-right font-mono tabular-nums text-text-primary">
                   {formatNumber(entry.final_issuance, "tco2e")}
                 </td>

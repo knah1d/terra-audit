@@ -97,18 +97,18 @@ export default function RegisterPage() {
           {step === "details" && (
             <form onSubmit={detailsForm.handleSubmit(requestOtp)} className="flex flex-col gap-4">
               <div>
-                <FieldLabel>Organization name</FieldLabel>
-                <TextInput autoComplete="organization" {...detailsForm.register("org_name")} />
+                <FieldLabel htmlFor="field-1">Organization name</FieldLabel>
+                <TextInput id="field-1" autoComplete="organization" {...detailsForm.register("org_name")} />
                 <ErrorText>{detailsForm.formState.errors.org_name?.message}</ErrorText>
               </div>
               <div>
-                <FieldLabel>Email</FieldLabel>
-                <TextInput type="email" autoComplete="email" {...detailsForm.register("email")} />
+                <FieldLabel htmlFor="field-2">Email</FieldLabel>
+                <TextInput id="field-2" type="email" autoComplete="email" {...detailsForm.register("email")} />
                 <ErrorText>{detailsForm.formState.errors.email?.message}</ErrorText>
               </div>
               <div>
-                <FieldLabel>Password</FieldLabel>
-                <PasswordInput
+                <FieldLabel htmlFor="field-3">Password</FieldLabel>
+                <PasswordInput id="field-3"
                   autoComplete="new-password"
                   {...detailsForm.register("password")}
                 />
@@ -124,8 +124,8 @@ export default function RegisterPage() {
           {step === "otp" && (
             <form onSubmit={otpForm.handleSubmit(verifyOtp)} className="flex flex-col gap-4">
               <div>
-                <FieldLabel>6-digit code</FieldLabel>
-                <TextInput
+                <FieldLabel htmlFor="field-4">6-digit code</FieldLabel>
+                <TextInput id="field-4"
                   inputMode="numeric"
                   autoComplete="one-time-code"
                   maxLength={6}

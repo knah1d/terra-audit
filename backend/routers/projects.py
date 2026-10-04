@@ -72,6 +72,13 @@ def get_project_members(project_id: str, user=Depends(get_current_user)):
     return [ProjectMemberOut(**m) for m in projects_db.list_project_members(user["org_id"], project_id)]
 
 
+@router.get("/projects/{project_id}/member-candidates")
+def member_candidates(project_id: str, user=Depends(require_writer)):
+    require_project_lead(user["org_id"], project_id, user)
+    _owned_project(user["org_id"], project_id)
+    return [{"user_id": row["user_id"], "email": row["email"]} for row in list_org_users(user["org_id"])]
+
+
 @router.post("/projects/{project_id}/members", response_model=list[ProjectMemberOut], status_code=status.HTTP_201_CREATED)
 def add_project_member(project_id: str, body: ProjectMemberCreate, user=Depends(require_writer)):
     require_project_lead(user["org_id"], project_id, user)
