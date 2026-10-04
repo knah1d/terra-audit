@@ -295,11 +295,20 @@ class _Builder:
                     self.packet["limitations"].append(f"Correction text for {correction['id']}: {correction['retrieval_status']}.")
 
     def checklist(self, checks, stored_bundle=None, *, retrieve=True):
+        from src.ai.evidence_actions import action_for
         for check in sorted(checks, key=lambda r: r["requirement_id"]):
             rid = check["requirement_id"]
             self.requirements.add(rid)
             fix = fix_for_requirement(rid, self.field_id, self.project)
-            self.fact("readiness", {**check, "fix": fix})
+            row = {**check, "fix": fix}
+            action = action_for(row)
+            if action:
+                action_source_id = f"readiness:{rid}:action"
+                self.source(action_source_id, check.get("title") or rid, "readiness", action["explanation"],
+                            requirement_id=rid, route=fix.get("route"), action_kind=action["action_kind"])
+                action["sentence_ids"] = [s["id"] for s in self.sources[action_source_id]["sentences"]]
+                row["required_action"] = action
+            self.fact("readiness", row)
             title = check.get("title") or rid
             description = (f"Requirement {rid}: {title}\n"
                            f"Status: {check.get('status', 'not assessed')}; "

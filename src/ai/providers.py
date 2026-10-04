@@ -223,7 +223,7 @@ def _fake_explanation(packet):
     """Exercise real citations/readiness links using supplied facts; no numeric invention."""
     sources = {s["id"]: s for s in packet["sources"]}
     result = {"summary_claims": [], "missing_evidence": [], "conflicts": [],
-              "limitations": ["AI_PROVIDER=fake: no model was called; this checks the explanation pipeline."]}
+              "limitations": list(packet.get("limitations", []))}
     for fact in packet.get("facts", []):
         if fact["kind"] != "readiness":
             continue
@@ -239,8 +239,12 @@ def _fake_explanation(packet):
         if len(result["summary_claims"]) < 40:
             result["summary_claims"].append({"text": claim, "sentence_ids": ids})
         if status in {"missing", "needs_review", "unsupported"} and len(result["missing_evidence"]) < 40:
+            from src.ai.evidence_actions import action_for
+            action = row.get("required_action") or action_for(row)
             result["missing_evidence"].append({"requirement_id": rid,
-                "record_type": row["fix"]["record_type"], "explanation": claim, "sentence_ids": ids})
+                "record_type": row["fix"]["record_type"],
+                "explanation": action["explanation"] if action else claim,
+                "sentence_ids": action.get("sentence_ids", ids) if action else ids})
     if not result["summary_claims"]:
         chosen = next((s for s in sources.values() if s["kind"] == "leakage_assessment"), None)
         chosen = chosen or next((s for s in sources.values() if s["id"].endswith(":diff")), None)

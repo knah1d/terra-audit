@@ -4,7 +4,7 @@ import { apiFetch } from "@/lib/api";
 
 export type Explanation = {
   summary_claims: { text: string; sentence_ids: string[] }[];
-  missing_evidence: { requirement_id: string; explanation: string; route?: string | null }[];
+  missing_evidence: { requirement_id: string; explanation: string; action_kind?: "review" | "evidence" | "implementation"; link_label?: string; route?: string | null }[];
   conflicts: { description: string }[];
   limitations: string[];
   context_sha256: string;

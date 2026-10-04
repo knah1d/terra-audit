@@ -44,7 +44,7 @@ export function ExplainButton({ projectId, request, children }: {
             return href ? <a key={id} href={href} target={citation.document_id ? "_blank" : undefined} rel="noopener noreferrer" className="rounded border border-border px-2 py-1 text-xs" title={citation.text}>{citation.title || id}{citation.label ? ` · ${citation.label}` : ""}</a> : <span key={id} title={citation.text} className="rounded border border-border px-2 py-1 text-xs">{citation.title || id}{citation.label ? ` · ${citation.label}` : ""}</span>;
           })}</div>
         </div>)}
-        {ai.explanation.missing_evidence.length > 0 && <section><h3 className="ui-subsection-title">Missing evidence</h3>{ai.explanation.missing_evidence.map((item, i) => <p key={i} className="py-2">{item.explanation} {item.route && <a className="text-brand-600 underline" href={item.route}>Go fix</a>}</p>)}</section>}
+        {ai.explanation.missing_evidence.length > 0 && <section><h3 className="ui-subsection-title">Evidence and review needed</h3>{ai.explanation.missing_evidence.map(item => <p key={item.requirement_id} className="py-2">{item.explanation} {item.route && <a className="text-brand-600 underline" href={item.route}>{item.link_label || "View requirement"}</a>}</p>)}</section>}
         {ai.explanation.conflicts.length > 0 && <section><h3 className="ui-subsection-title">Conflicts</h3>{ai.explanation.conflicts.map((item, i) => <p key={i}>{item.description}</p>)}</section>}
         {ai.explanation.limitations.map((item, i) => <p key={i} className="text-sm text-text-secondary">{item}</p>)}
         <p className="break-all text-xs text-text-tertiary">Provider: {ai.explanation.provider.provider} · Model: {ai.explanation.provider.model || "none"} · Context: {ai.explanation.context_sha256}</p>
