@@ -206,7 +206,7 @@ def record_determination(org_id: str, field_id: str, accounting_pathway: str, re
     even when the bundle and dates are unchanged."""
     if status not in DETERMINATION_STATUSES:
         raise ValueError(f"status must be one of {sorted(DETERMINATION_STATUSES)}")
-    from src.methodology import registry as registry
+    from src.methodology import registry
     meta = registry.get_requirement_meta(requirement_id, bundle_id)
     if meta is None:
         raise ValueError("Unknown requirement; no manual determination is permitted.")

@@ -11,7 +11,7 @@ from backend.schemas.calculations import (
     ReadinessRequest,
 )
 from src.carbon import calculations as calculations_db
-from src.methodology import registry as registry
+from src.methodology import registry
 from src.projects import repository as projects_db
 from src.methodology import readiness as readiness_engine
 from src.carbon.calculations import PATHWAYS

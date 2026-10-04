@@ -1,3 +1,4 @@
+"""Shared SQL repositories and connection lifecycle. DDL lives in schema.py."""
 import json
 import os
 import uuid

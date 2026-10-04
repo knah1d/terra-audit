@@ -8,9 +8,9 @@ import pytest
 from sqlalchemy import create_engine, text
 
 from src.persistence import database
-from src.methodology import library as library
-from src.methodology import registry as registry
-from src.methodology import corrections as corrections
+from src.methodology import library
+from src.methodology import registry
+from src.methodology import corrections
 
 
 @pytest.fixture()

@@ -23,7 +23,7 @@ jobs:
       # requirements.txt alone is enough to run the API and its test
       # suite — Streamlit (requirements-ui.txt) is deliberately excluded,
       # see requirements.txt's own doc comment and
-      # tests/backend/test_no_streamlit_in_api.py.
+      # tests/backend/test_import_hygiene.py.
       - run: pip install -r requirements.txt
       # tests/backend/ stubs Earth Engine and uses an isolated throwaway
       # SQLite file per test (see tests/backend/conftest.py) — no GEE
@@ -43,6 +43,7 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
-      - run: npx tsc --noEmit
-      - run: npx eslint .
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
       - run: npm run build

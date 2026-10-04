@@ -29,7 +29,7 @@ bare "field_type matches pathway" / "a schedule dict exists" check —
 see _methodology_applicability_check and _alm_checks below.
 """
 from src.evidence import crop_taxonomy
-from src.methodology import registry as registry
+from src.methodology import registry
 from src.evidence import monitoring
 from src.evidence import soil as soil_evidence
 from src.carbon.calculations import PATHWAYS, latest_determinations

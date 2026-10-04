@@ -15,8 +15,8 @@ from urllib.parse import quote
 from sqlalchemy import bindparam, text
 
 from src.carbon import calculations
-from src.methodology import library as library
-from src.methodology import registry as registry
+from src.methodology import library
+from src.methodology import registry
 from src.evidence import monitoring
 from src.evidence import production as production_records
 from src.projects import repository as projects

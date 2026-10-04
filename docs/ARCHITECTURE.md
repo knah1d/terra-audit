@@ -105,3 +105,24 @@ shared shell/navigation and the browser-only account recovery form.
 Historical SRS/presentation documents are retained; they are not current runtime
 instructions. The legacy Streamlit runtime is retired. `railway.json` remains an
 optional deployment configuration.
+
+## Restructuring verification (2026-10-04)
+
+- Python compileall: passed for src, backend and scripts.
+- Python pytest: 143 passed, 28 failed. The unchanged committed baseline
+  (f870ebf) also has 143 passed and the exact same 28 failures. These are existing
+  leakage/issuance fixture expectations, legacy synchronous-job assumptions and
+  an outdated AI action fixture; calculation behavior was not changed to make
+  old expectations pass.
+- OpenAPI comparison: all 143 paths and request/response schemas match the
+  baseline, excluding descriptive prose.
+- Rice/ALM engine AST comparison and extracted schema-function comparison:
+  unchanged apart from source-location references.
+- Frontend TypeScript and existing Node test: passed.
+- ESLint: no errors; three pre-existing warnings remain (unused soil plan prop
+  and label synchronization effects in Select/DatePicker).
+- Production Next.js build: passed with `npm run build -- --webpack`.
+  The default Turbopack build was blocked by this execution environment's
+  local-port restrictions. The project build configuration was not changed.
+- Worker, methodology ingestion, packet-export and backup CLI help commands:
+  imports resolve. No operational job or deployment was started.

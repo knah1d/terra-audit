@@ -58,10 +58,12 @@ requires real Earth Engine credentials — see `tests/backend/conftest.py`.
 
 ## Notes
 
-- Every router calls `src.*` directly — nothing under `backend/` forks or
+- Routers call domain modules under `src/` — nothing under `backend/` forks or
   duplicates calculation/persistence logic.
 - `org_id` always comes from the JWT, never from a URL path or request
   body.
 - Signal-analytics (GEE fetch) and AI training run as background jobs
   (`background_jobs` table in `src/persistence/database.py`) when the DB cache
   misses; a cache hit stays synchronous. See plan Part A4.
+
+See [the package guide](../docs/ARCHITECTURE.md) for module responsibilities.

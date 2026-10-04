@@ -26,7 +26,6 @@ hand-typed, so it can never silently drift from what's really on disk.
 """
 import hashlib
 from src.paths import METHODOLOGIES_DIR
-from pathlib import Path
 
 from sqlalchemy import text
 

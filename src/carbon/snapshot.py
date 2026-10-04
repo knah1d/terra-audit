@@ -8,7 +8,7 @@ calculation engine actually computes from — a caller must not read
 records again afterward to "fill in" the snapshot, which is exactly the
 drift this function exists to prevent.
 """
-from src.methodology import registry as registry
+from src.methodology import registry
 from src.evidence import monitoring
 from src.projects import repository as projects_db
 from src.persistence.database import get_alm_livestock_schedule, get_alm_practice_schedule

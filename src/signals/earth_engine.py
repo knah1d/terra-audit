@@ -4,7 +4,6 @@ import os
 import pandas as pd
 from datetime import datetime, timezone
 from src.paths import PROJECT_ROOT
-from pathlib import Path
 from dotenv import load_dotenv
 from scipy.signal import savgol_filter
 

@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from backend.access import require_project_lead
 from backend.deps import get_current_user, get_owned_field, require_admin, require_writer
 from backend.schemas.methodology import ProjectApplicabilityRequest, QuantificationUnitCreate
-from src.methodology import registry as registry
+from src.methodology import registry
 from src.projects import repository as projects_db
 from src.methodology import quantification
 from src.methodology import readiness as readiness_engine
