@@ -115,6 +115,15 @@ def library_status(user=Depends(get_current_user)):
     return methodology_library.index_status()
 
 
+@router.get("/methodology/library/ingest/jobs/{job_id}")
+def library_ingest_job(job_id: str, user=Depends(require_admin)):
+    from src.jobs import get_job_row
+    job = get_job_row(user["org_id"], job_id)
+    if job is None or job["job_type"] != "methodology_ingest":
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Methodology ingestion job not found")
+    return {"job_id": job_id, "status": job["status"], "error": job.get("error")}
+
+
 @router.get("/methodology/library/search")
 def search_library(q: str, bundle_id: str, limit: int = 8, user=Depends(get_current_user)):
     """Full-text search limited to one bundle's documents."""

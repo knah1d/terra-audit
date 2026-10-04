@@ -17,6 +17,7 @@ the file on disk, the document is skipped; otherwise its chunks are
 replaced, so a replaced PDF never leaves stale text behind.
 """
 import re
+import shutil
 import subprocess
 
 from sqlalchemy import text
@@ -73,6 +74,8 @@ def initialize_tables(conn):
 
 
 def _extract_pages(pdf_path) -> list[str]:
+    if not shutil.which("pdftotext"):
+        raise RuntimeError("Methodology indexing requires pdftotext. Install poppler-utils on the worker host.")
     result = subprocess.run(["pdftotext", "-layout", str(pdf_path), "-"], capture_output=True, timeout=300)
     if result.returncode != 0:
         raise ValueError(f"pdftotext failed for {pdf_path}: {result.stderr.decode(errors='replace')[:300]}")
@@ -151,19 +154,19 @@ def ingest_document(document: dict) -> dict:
                 "DELETE FROM methodology_chunks_fts WHERE chunk_id IN "
                 "(SELECT chunk_id FROM methodology_chunks WHERE document_id = :d)"), {"d": doc_id})
         conn.execute(text("DELETE FROM methodology_chunks WHERE document_id = :d"), {"d": doc_id})
-        for c in chunks:
-            row = {**c, "chunk_id": f"{doc_id}:p{c['page']}:c{c['segment']}", "document_id": doc_id,
-                   "document_sha256": sha, "index_version": INDEX_VERSION}
+        rows = [{**c, "chunk_id": f"{doc_id}:p{c['page']}:c{c['segment']}", "document_id": doc_id,
+                 "document_sha256": sha, "index_version": INDEX_VERSION} for c in chunks]
+        if rows:
             conn.execute(text("""
                 INSERT INTO methodology_chunks (chunk_id, document_id, document_sha256, page, segment,
                                                 section, section_title, equations, content, index_version)
                 VALUES (:chunk_id, :document_id, :document_sha256, :page, :segment,
                         :section, :section_title, :equations, :content, :index_version)
-            """), row)
+            """), rows)
             if is_sqlite():
                 conn.execute(text(
                     "INSERT INTO methodology_chunks_fts (chunk_id, section_title, content) "
-                    "VALUES (:chunk_id, :section_title, :content)"), row)
+                    "VALUES (:chunk_id, :section_title, :content)"), rows)
         conn.commit()
     return {"document_id": doc_id, "status": "indexed", "chunks": len(chunks), "sha256": sha}
 
@@ -174,12 +177,26 @@ def ingest_all() -> list[dict]:
 
 
 def index_status() -> list[dict]:
+    from src.methodology_registry import list_documents
     with get_db_connection() as conn:
         rows = conn.execute(text("""
-            SELECT document_id, document_sha256, COUNT(*) AS chunks, MAX(page) AS pages
+            SELECT document_id, document_sha256, COUNT(*) AS chunks, MAX(page) AS pages,
+                   MIN(index_version) AS index_version
             FROM methodology_chunks GROUP BY document_id, document_sha256 ORDER BY document_id
         """)).mappings().fetchall()
-    return [dict(r) for r in rows]
+    indexed = {r["document_id"]: dict(r) for r in rows}
+    result = []
+    for document in list_documents():
+        row = indexed.get(document["document_id"])
+        state = "not_indexed" if document.get("file_path") else "external_reference"
+        if row:
+            state = "indexed" if (row["document_sha256"] == document.get("sha256")
+                                  and row["index_version"] == INDEX_VERSION) else "stale"
+        result.append({"document_id": document["document_id"], "title": document["title"],
+                       "document_sha256": row["document_sha256"] if row else None,
+                       "chunks": row["chunks"] if row else 0, "pages": row["pages"] if row else 0,
+                       "index_version": row["index_version"] if row else None, "status": state})
+    return result
 
 
 def _fts_query(query: str) -> str:
