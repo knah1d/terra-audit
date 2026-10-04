@@ -1,5 +1,7 @@
 "use client";
 
+import { formatQueueTimestamp } from "@/lib/format";
+
 import { useParams } from "next/navigation";
 import { useState } from "react";
 import { Alert } from "@/components/ui/Alert";
@@ -307,7 +309,7 @@ export default function SubmissionDetailPage() {
           {[...events.map((e) => ({ at: e.created_at, text: `${e.from_status || "—"} → ${e.to_status}${e.reason ? `: ${e.reason}` : ""}` })),
             ...assignment_history.map((a) => ({ at: a.created_at, text: `Reviewer set to ${a.reviewer_id ?? "unassigned"}: ${a.reason}` }))]
             .sort((a, b) => a.at.localeCompare(b.at))
-            .map((item, i) => <p key={i} className="border-t border-border py-1.5 first:border-t-0">{new Date(item.at).toLocaleString()} — {item.text}</p>)}
+            .map((item, i) => <p key={i} className="border-t border-border py-1.5 first:border-t-0">{formatQueueTimestamp(item.at)} — {item.text}</p>)}
         </div>
       </Card>
     </div>

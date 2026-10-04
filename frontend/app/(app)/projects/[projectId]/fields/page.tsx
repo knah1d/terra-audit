@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDate } from "@/lib/format";
 import Link from "next/link";
 import { useState } from "react";
 import { useProjectContext } from "@/components/projects/ProjectContext";
@@ -74,7 +75,7 @@ function EndMembershipRow({ membershipId, fieldId, name, start, onEnd }: {
     <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border py-2 text-sm first:border-t-0">
       <div>
         <Link className="underline" href={`/fields/${fieldId}/enrollment`}>{name}</Link> <span className="ui-meta">{fieldId}</span>
-        <Badge tone="neutral" className="ml-2">since {start}</Badge>
+        <Badge tone="neutral" className="ml-2">since {formatDate(start)}</Badge>
       </div>
       {!open ? (
         <Button variant="ghost" size="sm" onClick={() => setOpen(true)}>End membership</Button>

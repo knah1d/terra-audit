@@ -1,4 +1,5 @@
 "use client";
+import { formatDate, formatQueueTimestamp, formatNumber } from "@/lib/format";
 
 import { ExplainButton } from "@/components/ai/ExplainDrawer";
 
@@ -38,9 +39,9 @@ function RecordsTable({ records }: { records: ProductionRecordOut[] }) {
               <td className="pr-3 py-1">{r.period_type}</td>
               <td className="pr-3 py-1">{r.period_label}</td>
               <td className="pr-3 py-1">{r.crop_cycle_index}</td>
-              <td className="pr-3 py-1">{r.area_share_pct}%</td>
+              <td className="pr-3 py-1">{formatNumber(r.area_share_pct, "%")}%</td>
               <td className="pr-3 py-1"><Badge tone={r.production_status === "produced" ? "success" : r.production_status === "missing" ? "danger" : "neutral"}>{r.production_status}</Badge></td>
-              <td className="pr-3 py-1">{r.production_quantity ?? "—"} {r.unit}</td>
+              <td className="pr-3 py-1">{formatNumber(r.production_quantity)} {r.unit}</td>
             </tr>
           ))}
         </tbody>
@@ -60,7 +61,7 @@ function LeakageCalculator({ fieldId, commodities, writable }: { fieldId: string
     {saved.error && <p role="alert">Unable to load saved assessments.</p>}
     <Select value={selected} onChange={(e) => setSelected(e.target.value)}>
       <option value="">New assessment</option>
-      {saved.data?.map((a) => <option key={a.assessment_id} value={a.assessment_id}>{a.period_start} – {a.period_end} · {a.project_id} · {a.created_at}</option>)}
+      {saved.data?.map((a) => <option key={a.assessment_id} value={a.assessment_id}>{formatDate(a.period_start)} – {formatDate(a.period_end)} · {a.project_id} · {formatQueueTimestamp(a.created_at)}</option>)}
     </Select>
     {initial && <ExplainButton projectId={initial.project_id} request={{ action: "explain_leakage", field_id: fieldId, assessment_id: initial.assessment_id }}>Explain this leakage result</ExplainButton>}
     {initial && <details className="my-2 text-sm"><summary>Stored evidence and parameters</summary><pre className="overflow-auto whitespace-pre-wrap text-xs">{JSON.stringify(initial.payload, null, 2)}</pre></details>}

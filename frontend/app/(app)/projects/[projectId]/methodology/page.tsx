@@ -1,5 +1,7 @@
 "use client";
 
+import { formatDate } from "@/lib/format";
+
 import { useState } from "react";
 import { useProjectContext } from "@/components/projects/ProjectContext";
 import { Badge } from "@/components/ui/Badge";
@@ -39,7 +41,7 @@ function PathwaySection({ projectId, pathway, label }: { projectId: string; path
           </p>
           {explicit ? (
             <p className="mt-1 text-xs text-text-secondary">
-              Explicitly pinned: {explicit.reason} (decided {new Date(explicit.decided_at).toLocaleDateString()})
+              Explicitly pinned: {explicit.reason} (decided {formatDate(explicit.decided_at)})
             </p>
           ) : (
             <p className="ui-meta mt-1">No explicit decision recorded — using whichever bundle is currently marked current.</p>

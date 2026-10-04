@@ -1,5 +1,8 @@
 "use client";
 
+import { formatDate, formatQueueTimestamp } from "@/lib/format";
+
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 
 import { useMemo, useState } from "react";
@@ -28,7 +31,8 @@ export default function ProjectMonitoringPage() {
   const [cropFilter, setCropFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [forceRefresh, setForceRefresh] = useState(false);
-  const [activeBatchId, setActiveBatchId] = useState<string | null>(null);
+  const search = useSearchParams();
+  const [activeBatchId, setActiveBatchId] = useState<string | null>(search.get("batch"));
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
@@ -100,7 +104,7 @@ export default function ProjectMonitoringPage() {
                         </Badge>
                       ) : <Badge tone="neutral">no run yet</Badge>}</td>
                       <td>{r.latest_run_source ?? "—"}</td>
-                      <td>{r.latest_run_at ? new Date(r.latest_run_at).toLocaleDateString() : "—"}</td>
+                      <td>{r.latest_run_at ? formatDate(r.latest_run_at) : "—"}</td>
                       <td>{r.open_issue_count ? <Badge tone="danger">{r.open_issue_count}</Badge> : "—"}</td>
                     </tr>
                   );
@@ -152,7 +156,7 @@ function BatchesCard({ batches, activeBatchId, onSelectBatch }: {
           {batches.map((b) => (
             <button key={b.batch_id} type="button" onClick={() => onSelectBatch(b.batch_id)} aria-pressed={activeBatchId === b.batch_id}
                     className={`flex min-h-11 w-full items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-colors ${activeBatchId === b.batch_id ? "border-brand-600 bg-brand-50" : "border-transparent hover:bg-surface-muted"}`}>
-              <span><Badge tone={b.status === "completed" ? "success" : b.status === "partial_failure" ? "warning" : "neutral"}>{b.status}</Badge> {b.total_children} job(s) · {new Date(b.created_at).toLocaleString()}</span>
+              <span><Badge tone={b.status === "completed" ? "success" : b.status === "partial_failure" ? "warning" : "neutral"}>{b.status}</Badge> {b.total_children} job(s) · {formatQueueTimestamp(b.created_at)}</span>
             </button>
           ))}
         </div>
@@ -215,7 +219,7 @@ function IssuesCard({ projectId }: { projectId: string }) {
                     e.preventDefault();
                     resolve.mutateAsync({ issueId: i.issue_id, reason }).then(() => { setReasonFor(null); setReason(""); });
                   }}>
-                    <TextInput value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Resolution reason" required className="flex-1" />
+                    <TextInput aria-label="Reason for resolving this issue" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Resolution reason" required className="flex-1" />
                     <Button type="submit" size="sm" loading={resolve.isPending}>Resolve</Button>
                   </form>
                 ) : (

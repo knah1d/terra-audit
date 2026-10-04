@@ -193,7 +193,7 @@ export function LedgerRiceForm({
           <ErrorText>{errors.area_ha?.message}</ErrorText>
         </div>
         <div>
-          <FieldLabel htmlFor="field-3">AWD Events (verified)</FieldLabel>
+          <FieldLabel htmlFor="field-3">AWD Events (evidence-backed)</FieldLabel>
           <TextInput id="field-3" type="number" {...register("awd_events")} />
           <ErrorText>{errors.awd_events?.message}</ErrorText>
         </div>

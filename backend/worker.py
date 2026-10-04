@@ -125,6 +125,7 @@ def _maybe_notify_exhausted(org_id: str, job_id: str) -> None:
         reviews_db.notify(
             org_id, requested_by, "job_retries_exhausted",
             f"A {job['job_type']} job failed after {job['attempt_count']} attempt(s) and will not retry further.",
+            job_id=job_id,
         )
 
 

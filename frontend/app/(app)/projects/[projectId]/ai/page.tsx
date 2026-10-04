@@ -1,4 +1,6 @@
 "use client";
+
+import { formatQueueTimestamp } from "@/lib/format";
 import Link from "next/link";
 import { useState } from "react";
 import { apiFetchBlob } from "@/lib/api";
@@ -79,7 +81,7 @@ export default function AIWorkspacePage() {
         <Button type="submit" disabled={disabled}>Save activation decision</Button>
       </form>
       <p className="mt-2 text-xs text-text-secondary">Current revision: {data.deployment.revision}; threshold: {data.deployment.threshold}. Activation records your decision; it does not establish regional validity.</p>
-      <details className="mt-3 text-sm"><summary>Activation history</summary>{data.records.filter(r => r.kind === "deployment").map(r => <p key={r.id}>{new Date(r.created_at).toLocaleString()} · {String(r.payload.reason)} · revision {String(r.payload.revision)}</p>)}</details>
+      <details className="mt-3 text-sm"><summary>Activation history</summary>{data.records.filter(r => r.kind === "deployment").map(r => <p key={r.id}>{formatQueueTimestamp(r.created_at)} · {String(r.payload.reason)} · revision {String(r.payload.revision)}</p>)}</details>
     </Card>
     <Card><h2 className="ui-section-title mb-3">Analyze a field-season</h2>
       <label className="text-sm">Crop season<Select value={seasonId} onChange={e => { setSeasonId(e.target.value); setAttachmentId(""); }}><option value="">Select a field-season</option>{data.seasons.map(s => <option key={s.season_id} value={s.season_id}>{s.field_name} · {s.name} · {s.crops.join(", ")}</option>)}</Select></label>
@@ -119,7 +121,7 @@ export default function AIWorkspacePage() {
         <Button size="sm" variant="secondary" className="mt-3" onClick={() => download(r, `draft-${r.id}.json`)}>Download cited draft</Button>
       </div>)}
     </Card>
-    <Card><h2 className="ui-section-title mb-3">Recent jobs</h2>{!data.jobs.length && <p className="text-sm">No AI jobs yet.</p>}{data.jobs.map(j => <div key={j.job_id} className="flex flex-wrap items-center justify-between gap-2 border-t border-border py-2 text-sm"><span>{j.job_type.replace("workspace_", "")} · {j.status} · {new Date(j.created_at).toLocaleString()}{j.error && <span className="block text-danger-700">{j.error}</span>}</span>{["pending", "running"].includes(j.status) && <Button size="sm" variant="secondary" disabled={disabled} onClick={() => dispatch(`/jobs/${j.job_id}/cancel`)}>Cancel</Button>}</div>)}</Card>
+    <Card><h2 className="ui-section-title mb-3">Recent jobs</h2>{!data.jobs.length && <p className="text-sm">No AI jobs yet.</p>}{data.jobs.map(j => <div key={j.job_id} className="flex flex-wrap items-center justify-between gap-2 border-t border-border py-2 text-sm"><span>{j.job_type.replace("workspace_", "")} · {j.status} · {formatQueueTimestamp(j.created_at)}{j.error && <span className="block text-danger-700">{j.error}</span>}</span>{["pending", "running"].includes(j.status) && <Button size="sm" variant="secondary" disabled={disabled} onClick={() => dispatch(`/jobs/${j.job_id}/cancel`)}>Cancel</Button>}</div>)}</Card>
   </div>;
 }
 

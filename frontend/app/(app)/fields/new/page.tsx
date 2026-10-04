@@ -94,18 +94,18 @@ export default function NewFieldPage() {
           <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
             <div>
               <FieldLabel htmlFor="field-1">Field ID</FieldLabel>
-              <TextInput id="field-1" {...register("field_id")} />
-              <ErrorText>{errors.field_id?.message}</ErrorText>
+              <TextInput id="field-1" aria-invalid={!!errors.field_id} aria-describedby={errors.field_id ? "new-field-field_id-error" : undefined} {...register("field_id")} />
+              <ErrorText id="new-field-field_id-error">{errors.field_id?.message}</ErrorText>
             </div>
             <div>
               <FieldLabel htmlFor="field-2">Field Name</FieldLabel>
-              <TextInput id="field-2" {...register("name")} />
-              <ErrorText>{errors.name?.message}</ErrorText>
+              <TextInput id="field-2" aria-invalid={!!errors.name} aria-describedby={errors.name ? "new-field-name-error" : undefined} {...register("name")} />
+              <ErrorText id="new-field-name-error">{errors.name?.message}</ErrorText>
             </div>
             <div>
               <FieldLabel htmlFor="field-3">District</FieldLabel>
-              <TextInput id="field-3" {...register("district")} />
-              <ErrorText>{errors.district?.message}</ErrorText>
+              <TextInput id="field-3" aria-invalid={!!errors.district} aria-describedby={errors.district ? "new-field-district-error" : undefined} {...register("district")} />
+              <ErrorText id="new-field-district-error">{errors.district?.message}</ErrorText>
             </div>
             <div>
               <FieldLabel htmlFor="field-4">Field Type / Methodology</FieldLabel>

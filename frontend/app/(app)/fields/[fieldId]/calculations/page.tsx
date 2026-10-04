@@ -273,7 +273,7 @@ export default function CalculationsPage() {
                   <option value="">New calculation chain</option>
                   {openCalculations.map((c) => "calculation_id" in c && c.calculation_id && (
                     <option key={c.calculation_id} value={c.calculation_id}>
-                      v{c.version} · {c.status} · {new Date(c.created_at).toLocaleString()}
+                      v{c.version} · {c.status} · {formatQueueTimestamp(c.created_at)}
                     </option>
                   ))}
                 </Select>
@@ -351,7 +351,7 @@ export default function CalculationsPage() {
                     </>
                   )}
                   <span className="ml-2">{formatQueueTimestamp(row.created_at)}</span>
-                  <span className="ml-2 font-mono">{row.final_issuance == null ? "—" : formatNumber(row.final_issuance)} tCO2e</span>
+                  <span className="ml-2 font-mono">{row.final_issuance == null ? "—" : formatNumber(row.final_issuance, "tco2e")} tCO2e</span>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {!row.legacy && row.project_id && row.calculation_id && <>

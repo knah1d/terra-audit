@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { SeasonHistory } from "@/components/evidence/SeasonHistory";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatQueueTimestamp } from "@/lib/format";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSession } from "@/app/providers";
@@ -136,20 +136,20 @@ export default function CropSeasonsPage() {
               {seasonType === "rotation" ? "Crop sequence (sequential cycles within this season)" : "Intercropped commodities"}
             </p>
             {cropSequence.map((entry, i) => (
-              <div key={i} className="grid grid-cols-4 gap-2">
+              <div key={i} className="grid gap-2 sm:grid-cols-4">
                 <TextInput
-                  placeholder="Crop" value={entry.crop}
+                  aria-label={`Crop for sequence entry ${i + 1}`} required placeholder="Crop" value={entry.crop}
                   onChange={e => setCropSequence(seq => seq.map((s, j) => j === i ? { ...s, crop: e.target.value } : s))}
                 />
                 <TextInput
-                  type="date" value={entry.start_date}
+                  aria-label={`Start date for sequence entry ${i + 1}`} required type="date" value={entry.start_date}
                   onChange={e => setCropSequence(seq => seq.map((s, j) => j === i ? { ...s, start_date: e.target.value } : s))}
                 />
                 <TextInput
-                  type="date" value={entry.end_date}
+                  aria-label={`End date for sequence entry ${i + 1}`} required type="date" value={entry.end_date}
                   onChange={e => setCropSequence(seq => seq.map((s, j) => j === i ? { ...s, end_date: e.target.value } : s))}
                 />
-                <Button type="button" variant="ghost" onClick={() => setCropSequence(seq => seq.filter((_, j) => j !== i))}>Remove</Button>
+                <Button type="button" variant="ghost" onClick={() => setCropSequence(seq => seq.filter((_, j) => j !== i))} aria-label={`Remove sequence entry ${i + 1}`}>Remove</Button>
               </div>
             ))}
             <Button
@@ -228,7 +228,7 @@ export default function CropSeasonsPage() {
           const review = reviews.at(-1);
           return <div key={o.id} className="border-t border-border py-4 text-sm">
             <p className="font-medium">{o.payload.value}{o.payload.numeric_value !== null ? ` · ${o.payload.numeric_value} ${o.payload.kind === "water_level" ? "cm" : "%"}` : ""}</p>
-            <p className="text-text-secondary">{o.payload.source.replaceAll("_", " ")} · {new Date(o.payload.observed_at).toLocaleString()} · {review?.payload.decision ?? "Awaiting review"}</p>
+            <p className="text-text-secondary">{o.payload.source.replaceAll("_", " ")} · {formatQueueTimestamp(o.payload.observed_at)} · {review?.payload.decision ?? "Awaiting review"}</p>
             <p className="break-words text-text-secondary">Evidence: {o.payload.evidence_reference}</p>
             {review && <p>Review: {review.payload.reason}</p>}
             {reviews.length > 1 && <details className="mt-2"><summary>Review history ({reviews.length})</summary>{reviews.map(r => <p key={r.id}>{r.payload.decision}: {r.payload.reason}</p>)}</details>}

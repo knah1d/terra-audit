@@ -24,7 +24,9 @@ StaleSubmissionError (a stale browser tab, or a second concurrent
 approve/reject, loses instead of silently overwriting the other's
 decision).
 """
+import json
 import uuid
+from urllib.parse import quote
 from datetime import datetime, timezone
 
 from sqlalchemy import text
@@ -157,6 +159,7 @@ def initialize_tables(conn):
             finding_id     TEXT,
             batch_id       TEXT,
             issue_id       TEXT,
+            job_id         TEXT,
             message        TEXT NOT NULL,
             read_at        TIMESTAMP,
             created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -170,7 +173,7 @@ def initialize_tables(conn):
     # risk); SQLite doesn't, so it's guarded the same try/except way
     # src.persistence.database's own SQLite ALTER-TABLE migrations already are.
     from src.persistence.database import is_sqlite
-    for col in ("batch_id", "issue_id"):
+    for col in ("batch_id", "issue_id", "job_id"):
         if is_sqlite():
             try:
                 conn.execute(text(f"ALTER TABLE notifications ADD COLUMN {col} TEXT"))
@@ -184,24 +187,25 @@ def _uid():
     return uuid.uuid4().hex
 
 
-def _notify(conn, org_id, user_id, kind, submission_id, finding_id, message, batch_id=None, issue_id=None):
+def _notify(conn, org_id, user_id, kind, submission_id, finding_id, message, batch_id=None, issue_id=None, job_id=None):
     if not user_id:
         return
     conn.execute(text("""
-        INSERT INTO notifications (id, org_id, user_id, kind, submission_id, finding_id, batch_id, issue_id, message)
-        VALUES (:id, :org_id, :user_id, :kind, :submission_id, :finding_id, :batch_id, :issue_id, :message)
+        INSERT INTO notifications (id, org_id, user_id, kind, submission_id, finding_id, batch_id, issue_id, job_id, message)
+        VALUES (:id, :org_id, :user_id, :kind, :submission_id, :finding_id, :batch_id, :issue_id, :job_id, :message)
     """), {"id": _uid(), "org_id": org_id, "user_id": user_id, "kind": kind,
            "submission_id": submission_id, "finding_id": finding_id, "batch_id": batch_id,
-           "issue_id": issue_id, "message": message})
+           "issue_id": issue_id, "job_id": job_id, "message": message})
 
 
 def notify(org_id: str, user_id: str, kind: str, message: str, submission_id: str | None = None,
-           finding_id: str | None = None, batch_id: str | None = None, issue_id: str | None = None) -> None:
+           finding_id: str | None = None, batch_id: str | None = None, issue_id: str | None = None,
+           job_id: str | None = None) -> None:
     """Public entry point for OTHER modules (src.jobs.queue/src.evidence.operations
     via backend/job_handlers.py) to raise an in-app notification —
     reuses this table/module rather than standing up a parallel one."""
     with get_db_connection() as conn:
-        _notify(conn, org_id, user_id, kind, submission_id, finding_id, message, batch_id, issue_id)
+        _notify(conn, org_id, user_id, kind, submission_id, finding_id, message, batch_id, issue_id, job_id)
         conn.commit()
 
 
@@ -500,7 +504,49 @@ def list_notifications(org_id: str, user_id: str, unread_only: bool = False) -> 
     query += " ORDER BY created_at DESC"
     with get_db_connection() as conn:
         rows = conn.execute(text(query), {"org_id": org_id, "user_id": user_id}).mappings().fetchall()
-    return [dict(r) for r in rows]
+        results = []
+        # Resolve only references already stored on this user's notification.
+        # Both lookups retain org scoping; destination APIs enforce current access.
+        for stored in rows:
+            row = dict(stored)
+            row.update(recovery_route=None, recovery_label=None)
+            if row.get("job_id"):
+                job = conn.execute(text("SELECT job_type, payload_json FROM background_jobs WHERE org_id=:org AND job_id=:id"),
+                                   {"org": org_id, "id": row["job_id"]}).mappings().first()
+                if job:
+                    payload = json.loads(job["payload_json"] or "{}")
+                    request = payload.get("request") or payload
+                    field, project = request.get("field_id"), payload.get("project_id")
+                    if job["job_type"].startswith("workspace_") and project:
+                        row["recovery_route"] = f"/projects/{quote(project, safe='')}/ai"
+                    elif field:
+                        page = "calculations" if job["job_type"] == "ai_explain" else "signal-analytics" if job["job_type"] == "signal_run" else "crop-seasons"
+                        row["recovery_route"] = f"/fields/{quote(field, safe='')}/{page}"
+                        params = []
+                        if project:
+                            params.append("project=" + quote(project, safe=""))
+                        if request.get("season_id"):
+                            params.append("season=" + quote(request["season_id"], safe=""))
+                        if params:
+                            row["recovery_route"] += "?" + "&".join(params)
+                    elif project:
+                        row["recovery_route"] = f"/projects/{quote(project, safe='')}/ai"
+                    if row["recovery_route"]:
+                        row["recovery_label"] = "Return to source and request again"
+            elif row.get("issue_id"):
+                issue = conn.execute(text("SELECT field_id, season_id FROM data_quality_issues WHERE org_id=:org AND issue_id=:id"),
+                                     {"org": org_id, "id": row["issue_id"]}).mappings().first()
+                if issue:
+                    row["recovery_route"] = f"/fields/{quote(issue['field_id'], safe='')}/crop-seasons?season={quote(issue['season_id'], safe='')}"
+                    row["recovery_label"] = "Review field evidence"
+            elif row.get("batch_id"):
+                project = conn.execute(text("SELECT project_id FROM job_batches WHERE org_id=:org AND batch_id=:id"),
+                                       {"org": org_id, "id": row["batch_id"]}).scalar()
+                if project:
+                    row["recovery_route"] = f"/projects/{quote(project, safe='')}/monitoring?batch={quote(row['batch_id'], safe='')}"
+                    row["recovery_label"] = "View batch and recovery options"
+            results.append(row)
+    return results
 
 
 def mark_notification_read(org_id: str, user_id: str, notification_id: str) -> bool:

@@ -143,14 +143,14 @@ export default function EnrollmentPage() {
           }).then(() => (e.target as HTMLFormElement).reset())
             .catch((err) => setError(err instanceof Error ? err.message : "Failed to add unit"));
         }}>
-          <TextInput name="name" placeholder="Unit name" required maxLength={200} />
-          <TextInput name="area_ha" type="number" step="any" placeholder="Area (ha)" required min={0.01} />
-          <Select value={eligibility} onChange={(e) => setEligibility(e.target.value)}>
+          <TextInput aria-label="Quantification unit name" name="name" placeholder="Unit name" required maxLength={200} />
+          <TextInput aria-label="Quantification unit area in hectares" name="area_ha" type="number" step="any" placeholder="Area (ha)" required min={0.01} />
+          <Select aria-label="Quantification unit eligibility" value={eligibility} onChange={(e) => setEligibility(e.target.value)}>
             <option value="needs_review">Needs review</option>
             <option value="eligible">Eligible</option>
             <option value="excluded">Excluded</option>
           </Select>
-          {eligibility === "excluded" && <TextInput name="exclusion_reason" placeholder="Exclusion reason (required)" required maxLength={2000} />}
+          {eligibility === "excluded" && <TextInput aria-label="Reason for excluding this unit" name="exclusion_reason" placeholder="Exclusion reason (required)" required maxLength={2000} />}
           <div className="sm:col-span-2"><Button type="submit" loading={createUnit.isPending}>Add quantification unit</Button></div>
         </form>
       </Card>

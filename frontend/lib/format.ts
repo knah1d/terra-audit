@@ -25,7 +25,7 @@ export function formatQueueTimestamp(value: string | null | undefined): string {
 }
 
 export function formatNumber(value: number | null | undefined, unit: string = ""): string {
-  if (value === null || value === undefined || Number.isNaN(value)) return "—";
+  if (value === null || value === undefined || !Number.isFinite(value)) return "—";
   const decimals = DECIMALS[unit.toLowerCase()] ?? 2;
   return value.toLocaleString(undefined, {
     minimumFractionDigits: decimals,

@@ -407,6 +407,11 @@ export interface SubmissionDiffOut {
 }
 
 export interface NotificationOut {
+  job_id?: string | null;
+  recovery_route?: string | null;
+  recovery_label?: string | null;
+  batch_id?: string | null;
+  issue_id?: string | null;
   id: string;
   user_id: string;
   kind: string;

@@ -1,5 +1,7 @@
 "use client";
 
+import { formatDate } from "@/lib/format";
+
 import { Bell, ClipboardCheck } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -32,7 +34,7 @@ function SubmissionRow({ row }: { row: ReviewSubmissionOut }) {
         {overdue && <Badge tone="danger">overdue</Badge>}
         <span className="font-mono text-xs text-text-tertiary">{row.field_id}</span>
       </div>
-      <span className="text-text-secondary">Submitted {new Date(row.submitted_at).toLocaleDateString()}</span>
+      <span className="text-text-secondary">Submitted {formatDate(row.submitted_at)}</span>
     </Link>
   );
 }
@@ -65,10 +67,10 @@ export default function ReviewsPage() {
         ) : (
           <div className="space-y-1">
             {notifications.data.slice(0, 8).map((n) => (
-              <div key={n.id} className={`flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-sm ${!n.read_at ? "bg-brand-50/50" : ""}`}>
+              <div key={n.id} className={`flex flex-wrap items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-sm ${!n.read_at ? "bg-brand-50/50" : ""}`}>
                 <span>
                   {n.message}{" "}
-                  {n.submission_id && <Link href={`/reviews/${n.submission_id}`} className="underline">View</Link>}
+                  {n.submission_id ? <Link href={`/reviews/${n.submission_id}`} className="underline">View review</Link> : n.recovery_route && <Link href={n.recovery_route} className="underline">{n.recovery_label ?? "Open source"}</Link>}
                 </span>
                 {!n.read_at && (
                   <Button variant="ghost" size="sm" onClick={() => markRead.mutate(n.id)}>Mark read</Button>

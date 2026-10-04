@@ -52,7 +52,7 @@ export function TextArea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return <textarea {...props} className={`${FIELD_BASE} ui-textarea ${props.className ?? ""}`} />;
 }
 
-export function ErrorText({ children }: { children?: string }) {
+export function ErrorText({ children, id }: { children?: string; id?: string }) {
   if (!children) return null;
-  return <p className="mt-1 text-xs text-danger-600">{children}</p>;
+  return <p id={id} role="alert" className="mt-1 text-sm text-danger-600">{children}</p>;
 }
