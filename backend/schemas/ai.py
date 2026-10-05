@@ -8,7 +8,7 @@ class DatasetBuildResult(BaseModel):
 
 
 class TrainRequest(BaseModel):
-    model_key: str = "random_forest"  # "random_forest" | " xgboost"
+    model_key: str = "random_forest"  # "random_forest" | "xgboost"
     k: int = 3
 
 
