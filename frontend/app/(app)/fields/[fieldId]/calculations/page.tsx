@@ -267,7 +267,7 @@ function CalculationsView() {
           <form key={contextKey} className="grid gap-3 sm:grid-cols-2" onChange={event => {
             setInputRevision((revision) => revision + 1); setPreviewContext(null);
             const confirmation = event.currentTarget.elements.namedItem("evidence_confirmed") as HTMLInputElement | null;
-            if (confirmation && event.target !== confirmation) confirmation.checked = false;
+            if (confirmation && (event.target as Element) !== confirmation) confirmation.checked = false;
           }} onSubmit={(e) => {
             e.preventDefault();
             const submitter = (e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
