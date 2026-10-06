@@ -348,9 +348,22 @@ class _Builder:
                            f"Status: {check.get('status', 'not assessed')}; "
                            f"implementation support: {check.get('implementation_support', 'not supplied')}.\n"
                            f"{check.get('explanation') or check.get('required_evidence') or ''}")
+            if "status" not in check:
+                # Applicability supplies registry metadata, not assessed readiness.
+                # Title/ID already occur in the fact and source metadata. Avoid
+                # repeating them in citable text, while preserving every evidence
+                # requirement and implementation limitation under the same budget.
+                description = (f"Implementation support: {check.get('implementation_support', 'not supplied')}; "
+                               f"reviewer authority: {check.get('reviewer_authority', 'not supplied')}; "
+                               f"blocking: {bool(check.get('blocking', True))}.\n"
+                               f"Required evidence: {check.get('required_evidence') or ''}")
             if check.get("explanation") and check.get("required_evidence"):
                 description += "\nRequired evidence: " + check["required_evidence"]
-            self.source(f"readiness:{rid}", title, "readiness", description, requirement_id=rid, **fix)
+            # Unassessed registry rows have their complete fix metadata in the
+            # structured fact. A citation needs only its navigation route.
+            citation_fix = fix if "status" in check else {"route": fix.get("route")}
+            self.source(f"readiness:{rid}", title, "readiness", description,
+                        requirement_id=rid, **citation_fix)
             # Metadata is already part of the fingerprinted evidence read.
             candidates = [r for r in self.state["requirements"] if r["requirement_id"] == rid]
             meta = next((r for r in candidates if r.get("bundle_id") == self.packet["bundle_id"]),

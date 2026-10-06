@@ -132,6 +132,23 @@ def test_applicability_is_project_scoped_and_does_not_contain_other_tenant_recor
     assert packet["allowed_requirement_ids"]
     assert "SECRET-FOREIGN-FIELD" not in packets.canonical_json(packet)
     assert not any(s.get("document_id", "").startswith("vm0051") for s in packet["sources"])
+    assert packet == packets.applicable_requirements(**args(scope))
+    assert packet["estimated_tokens"] <= packets.DEFAULT_PACKET_TOKENS
+    assert len(packets.canonical_json(packet)) <= packets.DEFAULT_PACKET_TOKENS * 4
+    requirements = registry.list_requirements(packet["bundle_id"])
+    facts = {f["data"]["requirement_id"]: f["data"]
+             for f in packet["facts"] if f["kind"] == "readiness"}
+    assert set(facts) == {r["requirement_id"] for r in requirements}
+    sources = {s["id"]: s for s in packet["sources"]}
+    for requirement in requirements:
+        rid = requirement["requirement_id"]
+        # Budget compaction must not drop evidence text, blocking flags,
+        # implementation limitations or reviewer authority from any fact.
+        assert all(facts[rid][key] == value for key, value in requirement.items())
+        citation = sources[f"readiness:{rid}"]
+        text_value = " ".join(s["text"] for s in citation["sentences"])
+        assert " ".join(requirement["required_evidence"].split()) in " ".join(text_value.split())
+        assert not citation.get("truncated", False)
 
 
 def test_diff_without_previous_skips_model_and_diff_reuses_review_logic(scope):

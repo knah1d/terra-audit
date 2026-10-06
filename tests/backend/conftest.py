@@ -177,3 +177,36 @@ def alm_field(client, auth_headers):
         assert r.status_code == 200, r.text
 
     return "F-TEST-ALM"
+
+
+@pytest.fixture()
+def alm_calculation_context(client, alm_field, auth_headers, seeded_users, leakage_case):
+    """Current ALM workflow with real scoped production/assessment rows.
+
+    It deliberately leaves expert/readiness decisions outstanding: an
+    internal draft is not an external verified event or an issued credit.
+    """
+    from src.persistence import database as db
+    from src.projects import repository as projects
+    from src.evidence import production
+
+    actor = seeded_users["admin"]
+    project_id = projects.create_project("testorg", "Regression project", "", "", None, None, "active", actor)
+    projects.assign_field_to_project("testorg", project_id, alm_field, "2020-01-01", actor)
+    season = client.post(f"/fields/{alm_field}/crop-seasons", headers=auth_headers["admin"], json={
+        "name": "Wheat 2026", "crops": ["wheat"], "start_date": "2026-01-01", "end_date": "2026-12-31",
+    })
+    assert season.status_code == 201, season.text
+    case = leakage_case(area_ha=db.get_field("testorg", alm_field)["area_ha"],
+                        field_id=alm_field, project_id=project_id)
+    for record in case["evidence"]["production_records"]:
+        production.create_production_record("testorg", alm_field, **{
+            k: record[k] for k in ("commodity", "period_type", "period_label", "crop_cycle_index",
+                "harvest_start_date", "harvest_end_date", "harvested_area_ha", "area_share_pct",
+                "production_status", "production_quantity", "unit", "evidence_ref", "notes")
+        }, created_by=actor)
+    production.save_leakage_assessment("testorg", alm_field, case["evidence"]["assessment"]["payload"], actor)
+    return {"project_id": project_id, "accounting_pathway": "vm0042_alm",
+            "season_ids": [season.json()["id"]], "monitoring_period_start": "2026-01-01",
+            "monitoring_period_end": "2026-12-31",
+            "engine_inputs": {"verification_years": 1.0, "non_permanence_risk_pct": 20.0}}

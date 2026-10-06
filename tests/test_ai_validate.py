@@ -51,16 +51,31 @@ def test_unknown_sentence_and_empty_citation_rejected():
 
 
 def test_missing_evidence_uses_allowed_requirement_and_server_route():
+    from src.ai.evidence_actions import action_for
+
+    p = packet()
+    row = p["facts"][0]["data"]
+    action = action_for(row)
+    action["sentence_ids"] = ["readiness:vm0042.soc_measurements:action:s1"]
+    row["required_action"] = action
+    p["sources"].append({"id": "readiness:vm0042.soc_measurements:action", "kind": "readiness",
+        "title": row["requirement_id"], "requirement_id": row["requirement_id"], "sentences": [
+            {"id": action["sentence_ids"][0], "text": action["explanation"]}]})
     output = response()
     output["missing_evidence"] = [{"requirement_id": "vm0042.soc_measurements", "record_type": "soil_evidence_review",
-                                    "explanation": "The sample value is 12.3 tCO2e.", "sentence_ids": ["source:s1"]}]
-    result = validate_response(output, packet())
+                                    "explanation": action["explanation"], "sentence_ids": action["sentence_ids"]}]
+    result = validate_response(output, p)
     assert result["missing_evidence"][0]["route"] == "/fields/f/soil-evidence"
+    assert result["missing_evidence"][0] == action
     for key, value in (("requirement_id", "vm0042.fake"), ("record_type", "invented")):
         bad = copy.deepcopy(output)
         bad["missing_evidence"][0][key] = value
         with pytest.raises(ExplanationValidationError):
-            validate_response(bad, packet())
+            validate_response(bad, p)
+    altered = copy.deepcopy(output)
+    altered["missing_evidence"][0]["explanation"] = "The sample value is 12.3 tCO2e."
+    with pytest.raises(ExplanationValidationError, match="server_owned_actions"):
+        validate_response(altered, p)
 
 
 def test_numeric_limitation_and_conflict_cannot_bypass_validation():
