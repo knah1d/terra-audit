@@ -1,8 +1,8 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
-import type { CarbonResult, CommitResponse, CreditHistoryEntry } from "@/types/api";
+import type { CarbonResult, CreditHistoryEntry } from "@/types/api";
 
 export function useCreditHistory(fieldId: string) {
   return useQuery({
@@ -12,25 +12,15 @@ export function useCreditHistory(fieldId: string) {
   });
 }
 
+// Preview-only — the matching POST /carbon-credits/commit write path is
+// retired for every field_type (see src.persistence.database.
+// commit_carbon_credit_result's docstring: a client-supplied, un-frozen
+// area_ha could otherwise determine recorded credits). Use the
+// evidence-linked Calculations workflow (frontend/hooks/use-calculations.ts,
+// if present, or POST /fields/{id}/calculations) to persist a real result.
 export function usePreviewCarbonCredits(fieldId: string) {
   return useMutation({
     mutationFn: (body: Record<string, unknown>) =>
       apiFetch<CarbonResult>(`/fields/${fieldId}/carbon-credits/preview`, { method: "POST", json: body }),
-  });
-}
-
-export function useCommitCarbonCredits(fieldId: string) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ body, idempotencyKey }: { body: Record<string, unknown>; idempotencyKey: string }) =>
-      apiFetch<CommitResponse>(`/fields/${fieldId}/carbon-credits/commit`, {
-        method: "POST",
-        json: body,
-        headers: { "Idempotency-Key": idempotencyKey },
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["credit-history", fieldId] });
-      queryClient.invalidateQueries({ queryKey: ["field", fieldId] }); // cumulative delta may have changed
-    },
   });
 }
