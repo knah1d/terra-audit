@@ -30,7 +30,11 @@ def _get_engine():
     if _ENGINE is None:
         database_url = os.environ.get("DATABASE_URL")
         if database_url:
-            _ENGINE = create_engine(database_url)
+            # pool_pre_ping: Neon suspends its compute after a few minutes
+            # idle, which silently kills existing connections server-side.
+            # Without this, the next checkout reuses the dead connection and
+            # raises OperationalError instead of transparently reconnecting.
+            _ENGINE = create_engine(database_url, pool_pre_ping=True)
         else:
             DB_PATH.parent.mkdir(parents=True, exist_ok=True)
             _ENGINE = create_engine(f"sqlite:///{DB_PATH}")
