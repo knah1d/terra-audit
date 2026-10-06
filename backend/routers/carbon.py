@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, Header
 
 from backend.deps import get_current_user, get_owned_field, require_writer
 from backend.schemas.carbon import (
@@ -10,7 +10,6 @@ from src.persistence.database import (
     get_alm_practice_schedule, get_credit_history, get_soc_measurements,
 )
 from src.field_types.registry import build_methodology
-from src.carbon.issuance import result_is_issuable
 
 _field = get_owned_field()
 
@@ -71,31 +70,21 @@ def commit_carbon_credits(
     idempotency_key: str = Header(..., alias="Idempotency-Key"),
     user: dict = Depends(require_writer), field: dict = Depends(_field),
 ):
-    """Writer-only. Requires an Idempotency-Key header — a retried request
-    with the same key returns the original result instead of re-computing
-    and double-accruing the ALM cumulative delta (src.persistence.database.
-    commit_carbon_credit_result handles the atomicity)."""
-    org_id = user["org_id"]
-    field_type = field["field_type"]
-    result = _calculate(org_id, field_id, field, body)
-
-    # One rule for both methodologies (src/carbon/issuance.py). commit_carbon_
-    # credit_result enforces this again at the write path; checking here
-    # turns it into a clean 422 with the methodology's own reason instead
-    # of surfacing the guard's exception.
-    from src.carbon.calculations import PATHWAYS
-    issuable, block_reason = result_is_issuable(result, PATHWAYS.get(field_type))
-    if not issuable:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, block_reason)
-
-    new_cumulative_delta = (
-        result["cumulative_delta_co2_wp"] if field_type != "rice_awd" else None
+    """RETIRED for every field_type — src.persistence.database.
+    commit_carbon_credit_result always refuses to write (see its
+    docstring: a client-supplied, un-frozen area_ha could otherwise
+    determine recorded credits). Kept as a real endpoint, not deleted,
+    so `Idempotency-Key` is still required/validated and a caller gets
+    the SAME clean 422 shape (via NonIssuableResultError's global
+    exception handler in backend/main.py) that the old per-methodology
+    gate used to return for a blocked result — never a 404 or a 500.
+    No calculation is run here; retirement doesn't depend on or expose
+    what the client's body would have computed to.
+    Use POST /fields/{field_id}/calculations instead."""
+    commit_carbon_credit_result(
+        user["org_id"], field_id, idempotency_key, field["field_type"], body, {},
     )
-
-    outcome = commit_carbon_credit_result(
-        org_id, field_id, idempotency_key, field_type, body, result, new_cumulative_delta,
-    )
-    return CommitResponse(**outcome)
+    raise AssertionError("unreachable — commit_carbon_credit_result always raises")
 
 
 @router.get("/fields/{field_id}/credit-history", response_model=list[CreditHistoryEntry])

@@ -151,8 +151,18 @@ def test_current_alm_pdf_uses_frozen_snapshot_and_enforces_scope(
     assert client.get(path, headers=auth_headers["other_org_admin"]).status_code == 404
     assert client.get(path, headers=auth_headers["viewer"]).status_code == 403
 
-    # Change current field data. The report must still render stored values.
+    # Change current field AND practice-schedule data after commit. The
+    # report must still render the frozen snapshot, never a live re-read
+    # of either — a stale snapshot caught only one of the two would be a
+    # real regression hiding behind a passing test.
     isolated_db.update_field_info("testorg", alm_field, "Changed after commit", "Different district")
+    mutated_baseline = client.put(
+        f"/fields/{alm_field}/practice-schedule/baseline",
+        json={"crop_type": "changed_after_commit", "tillage": True, "tillage_depth_cm": 99.0},
+        headers=auth_headers["admin"],
+    )
+    assert mutated_baseline.status_code == 200, mutated_baseline.text
+    assert mutated_baseline.json()["baseline"] != calc["snapshot"]["alm_practice_schedule"].get("baseline")
     rendered = []
     generate = export.generate_pdf_alm
     def capture(field, meta, practices, result, livestock):

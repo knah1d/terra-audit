@@ -10,7 +10,7 @@ import pandas as pd
 from sqlalchemy import create_engine, text
 
 from src.persistence.schema import _init_sqlite, _init_postgres
-from src.carbon.issuance import NonIssuableResultError, result_is_issuable
+from src.carbon.issuance import NonIssuableResultError
 
 DB_PATH = DATA_DIR / "project_store.db"
 _DB_INITIALIZED = False
@@ -667,90 +667,36 @@ def commit_carbon_credit_result(
     org_id: str, field_id: str, idempotency_key: str, field_type: str,
     inputs: dict, result: dict, new_cumulative_delta: float | None = None,
 ) -> dict:
-    """Atomically persists one Calculate-Carbon-Credits run: the
-    credit_history row, the idempotency-key record, and (for ALM,
-    when new_cumulative_delta is given) the cumulative SOC delta bump —
-    all in ONE connection/ONE commit, unlike calling save_credit_history +
-    update_alm_cumulative_delta back-to-back from a router (two separate
-    connections, two separate commits), which would leave the two writes
-    non-atomic under a crash or a concurrent duplicate request. A retried
-    request with the same idempotency_key returns the original result
-    instead of double-accruing the cumulative delta — the whole reason
-    this function exists rather than just being save_credit_history called
-    twice: a single browser tab (today's only client) never raced this;
-    multiple people hitting the API concurrently can.
+    """RETIRED write path — always raises NonIssuableResultError, for
+    every field_type. This used to persist a credit_history row directly
+    from a client-supplied, unfrozen request body (notably a
+    client-supplied area_ha, which then determined the recorded
+    final_issuance with no stored evidence behind it). The evidence-linked
+    Calculations workflow (src.carbon.calculations.commit_calculation,
+    POST /fields/{field_id}/calculations) replaced it: it freezes the
+    field's own registered area_ha plus a full evidence snapshot before
+    computing anything, and runs the same result_is_issuable() gate.
 
-    Returns {"final_issuance": ..., "already_committed": bool}.
+    ALM was retired first (docs/RESEARCH_IMPLEMENTATION_PLAN_2026-09-23.md);
+    this retires rice_awd the same way, closing the one remaining gap
+    where a client-supplied area_ha could still determine recorded
+    credits. Reading historical rows (get_credit_history, exports) is
+    UNCHANGED and fully supported — only this write path is retired, and
+    no existing credit_history/commit_idempotency_keys row is touched or
+    deleted.
 
-    Refuses to persist a result that its methodology has blocked from
-    issuance (raises NonIssuableResultError). This guard lives here, at
-    the single write path, rather than in each caller — the two clients
-    previously each implemented "gate then persist" and app.py had them
-    in the wrong order, so blocked calculations were still recorded as
-    issuance rows. See src/carbon/issuance.py.
+    Returns nothing; always raises. The signature and docstring are kept
+    descriptive (not deleted outright) so every caller's error message and
+    this function's own history stay easy to find.
     """
-    # Lazy import: src.carbon.calculations imports from this module at load time,
-    # so importing it back at module level here would be circular.
-    from src.carbon.calculations import PATHWAYS
-    if field_type == "cropland_alm_vm0042":
-        raise NonIssuableResultError(
-            "New ALM records require the evidence-linked Calculations workflow and full readiness checks. "
-            "Legacy credit history remains available for reading."
-        )
-    issuable, block_reason = result_is_issuable(result, PATHWAYS.get(field_type))
-    if not issuable:
-        raise NonIssuableResultError(
-            f"refusing to persist a non-issuable calculation for field "
-            f"{field_id!r}: {block_reason}"
-        )
-
-    with get_db_connection() as conn:
-        existing = conn.execute(
-            text("SELECT credit_history_id FROM commit_idempotency_keys "
-                 "WHERE org_id = :org_id AND field_id = :field_id AND idempotency_key = :key"),
-            {"org_id": org_id, "field_id": field_id, "key": idempotency_key},
-        ).mappings().fetchone()
-        if existing is not None:
-            prior = conn.execute(
-                text("SELECT final_issuance FROM credit_history WHERE id = :id"),
-                {"id": existing["credit_history_id"]},
-            ).mappings().fetchone()
-            return {
-                "final_issuance": prior["final_issuance"] if prior else None,
-                "already_committed": True,
-            }
-
-        insert_result = conn.execute(
-            text("""
-                INSERT INTO credit_history (org_id, field_id, field_type, final_issuance, inputs_json, result_json)
-                VALUES (:org_id, :field_id, :field_type, :final_issuance, :inputs_json, :result_json)
-            """),
-            {
-                "org_id": org_id, "field_id": field_id, "field_type": field_type,
-                "final_issuance": float(result["final_issuance"]),
-                "inputs_json": json.dumps(inputs), "result_json": json.dumps(result),
-            },
-        )
-        credit_history_id = insert_result.lastrowid if is_sqlite() else conn.execute(
-            text("SELECT MAX(id) FROM credit_history WHERE org_id = :org_id AND field_id = :field_id"),
-            {"org_id": org_id, "field_id": field_id},
-        ).scalar()
-
-        conn.execute(
-            text("INSERT INTO commit_idempotency_keys (org_id, field_id, idempotency_key, credit_history_id) "
-                 "VALUES (:org_id, :field_id, :key, :chid)"),
-            {"org_id": org_id, "field_id": field_id, "key": idempotency_key, "chid": credit_history_id},
-        )
-
-        if new_cumulative_delta is not None:
-            conn.execute(
-                text("UPDATE fields SET alm_cumulative_delta_co2_wp = :value "
-                     "WHERE org_id = :org_id AND field_id = :field_id"),
-                {"value": new_cumulative_delta, "org_id": org_id, "field_id": field_id},
-            )
-
-        conn.commit()
-    return {"final_issuance": float(result["final_issuance"]), "already_committed": False}
+    raise NonIssuableResultError(
+        "The legacy /carbon-credits/commit endpoint no longer writes new credit history for any "
+        "field type (a client-supplied area_ha could otherwise determine recorded credits with no "
+        "frozen evidence behind it). Use the evidence-linked Calculations workflow "
+        "(POST /fields/{field_id}/calculations), which freezes the field's own registered area_ha "
+        "and full evidence into an immutable snapshot before computing. Legacy credit history "
+        "remains available for reading and export."
+    )
 
 
 def create_job(org_id: str, job_type: str) -> str:

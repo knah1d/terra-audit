@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Satellite, Sparkles } from "lucide-react";
+import { Satellite } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import type { z } from "zod";
@@ -12,9 +12,7 @@ import { Button } from "@/components/ui/Button";
 import { StatCard } from "@/components/ui/Card";
 import { FinalIssuanceStat } from "@/components/ledger/FinalIssuanceStat";
 import { ErrorText, FieldLabel, Select, TextInput } from "@/components/ui/Field";
-import { RoleGate } from "@/components/ui/RoleGate";
-import { useToast } from "@/components/ui/Toast";
-import { useCommitCarbonCredits, useCreditHistory, usePreviewCarbonCredits } from "@/hooks/use-carbon";
+import { useCreditHistory, usePreviewCarbonCredits } from "@/hooks/use-carbon";
 import { useLatestSignalRun } from "@/hooks/use-signal";
 import { formatNumber } from "@/lib/format";
 import { AMENDMENT_TYPE_OPTIONS, ledgerRiceSchema, type LedgerRiceForm as FormValues } from "@/lib/schemas/ledger";
@@ -90,11 +88,8 @@ export function LedgerRiceForm({
   defaultArea: number;
 }) {
   const [result, setResult] = useState<CarbonResult | null>(null);
-  const [committed, setCommitted] = useState(false);
   const preview = usePreviewCarbonCredits(fieldId);
-  const commit = useCommitCarbonCredits(fieldId);
   const { data: history } = useCreditHistory(fieldId);
-  const { show } = useToast();
   const latestSignal = useLatestSignalRun(fieldId);
 
   const {
@@ -144,20 +139,9 @@ export function LedgerRiceForm({
   }
 
   async function onPreview(values: FormValues) {
-    setCommitted(false);
     const body = toRequestBody(values);
     const cr = await preview.mutateAsync(body);
     setResult(cr);
-  }
-
-  async function onCommit(values: FormValues) {
-    const body = toRequestBody(values);
-    const cr = await preview.mutateAsync(body); // recompute against latest form values
-    setResult(cr);
-    if (cr.qa3_pathway_valid === false) return; // blocked — don't attempt commit
-    await commit.mutateAsync({ body, idempotencyKey: crypto.randomUUID() });
-    setCommitted(true);
-    show("Calculated estimate saved to legacy history", "success");
   }
 
   return (
@@ -232,32 +216,22 @@ export function LedgerRiceForm({
           <TextInput id="field-9" type="number" step="0.1" {...register("project_amendment_rate")} />
         </div>
 
-        <div className="col-span-full flex gap-3">
-          <Button type="submit" variant="secondary" loading={preview.isPending}>
+        <div className="col-span-full flex flex-col gap-2">
+          <Button type="submit" variant="secondary" loading={preview.isPending} className="w-fit">
             Calculate (preview)
           </Button>
-          <RoleGate allow={["admin", "analyst"]}>
-            <Button
-              type="button"
-              icon={Sparkles}
-              onClick={handleSubmit(onCommit)}
-              loading={commit.isPending}
-              disabled={preview.isPending}
-            >
-              Calculate &amp; Save Carbon Credits
-            </Button>
-          </RoleGate>
+          <p className="text-xs text-text-tertiary">
+            Preview-only — this legacy form can no longer save new credit history (a client-supplied area
+            here could otherwise determine recorded credits with no evidence behind it). Use{" "}
+            <a href={`/fields/${fieldId}/calculations`} className="underline">Evidence-linked calculations</a>{" "}
+            to save a real result.
+          </p>
         </div>
       </form>
 
       {preview.isError && (
         <Alert tone="danger" title="Calculation failed">
           {preview.error.message}
-        </Alert>
-      )}
-      {commit.isError && (
-        <Alert tone="danger" title="Save failed">
-          {commit.error.message}
         </Alert>
       )}
 
@@ -276,7 +250,6 @@ export function LedgerRiceForm({
             <StatCard label="Uncertainty Deduction" value={`${formatNumber(result.unc_deduction_pct as number, "%")}%`} />
           </div>
           <DerivationTrail steps={buildSteps(result)} />
-          {committed && <Alert tone="success">Saved to credit history.</Alert>}
         </>
       )}
 

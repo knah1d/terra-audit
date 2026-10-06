@@ -51,7 +51,9 @@ def result_is_issuable(result: dict, accounting_pathway: str | None = None) -> t
 
     `accounting_pathway` is optional ONLY for backward compatibility with
     call sites that predate it (see backend/routers/carbon.py's legacy
-    /carbon-credits/commit endpoint, explicitly preserved unchanged) — a
+    /carbon-credits/commit endpoint — its own write path is now retired,
+    see src.persistence.database.commit_carbon_credit_result, but its
+    /preview endpoint still calls this with no pathway) — a
     caller that omits it keeps the original lenient behavior (missing
     flags default to issuable). Passing it applies the tightened,
     unified gate docs/RESEARCH_IMPLEMENTATION_PLAN_2026-09-23.md Phase 1

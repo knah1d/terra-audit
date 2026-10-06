@@ -156,7 +156,14 @@ def handle_ai_train(job: dict, ctx) -> dict:
 
 def handle_crop_benchmark(job: dict, ctx) -> dict:
     payload = job["payload"]
-    return benchmark(payload["corpus"], payload["split"], payload["models"])
+    try:
+        return benchmark(payload["corpus"], payload["split"], payload["models"])
+    except ValueError as exc:
+        # The corpus is frozen into the job payload at submission time —
+        # retrying can never produce more eligible field-seasons, so this
+        # is an invalid request, not a transient failure (see
+        # src.jobs.queue.InvalidJobRequest's docstring).
+        raise InvalidJobRequest(str(exc)) from exc
 
 
 def handle_multicrop_monitoring(job: dict, ctx) -> dict:

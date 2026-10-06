@@ -1,5 +1,4 @@
 from copy import deepcopy
-from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 import pandas as pd
@@ -157,7 +156,7 @@ def test_delete_field_removes_monitoring_records(client, auth_headers, rice_fiel
     assert monitoring.records("crop_seasons", "testorg", rice_field) == []
 
 
-def test_insufficient_benchmark_returns_actionable_error_after_worker_retries(client, auth_headers, monkeypatch):
+def test_insufficient_benchmark_returns_actionable_error_without_retrying(client, auth_headers):
     response = client.post("/multi-crop/benchmarks", headers=auth_headers["admin"], json={})
     assert response.status_code == 202
     jobid = response.json()["job_id"]
@@ -167,20 +166,16 @@ def test_insufficient_benchmark_returns_actionable_error_after_worker_retries(cl
     assert "payload" not in job
     job = get_job_row("testorg", jobid)
     assert job["payload"]["corpus"]["examples"] == []
-    # ValueErrors currently use bounded retry handling. Advance the queue clock
-    # across its backoff intervals rather than sleeping or bypassing the worker.
-    now = datetime.now(timezone.utc)
-    for attempt in range(1, job["max_attempts"] + 1):
-        monkeypatch.setattr("src.jobs.queue._now", lambda attempt=attempt: now + timedelta(days=attempt))
-        run_pending_job(jobid, "crop_benchmark")
-        public_job = client.get(path, headers=auth_headers["admin"]).json()
-        job = get_job_row("testorg", jobid)
-        assert public_job["status"] == job["status"]
-        assert public_job["error"] == job["error"]
-        assert job["attempt_count"] == attempt
-        assert job["status"] == ("error" if attempt == job["max_attempts"] else "pending")
-        assert "four eligible" in job["error"]
-    assert job["status"] == "error"
+    # The corpus is frozen into the payload at submission time, so an
+    # insufficient-data ValueError can never be fixed by retrying — it must
+    # fail immediately as error_kind='invalid' on the first attempt, not
+    # consume all of max_attempts' retries before giving up.
+    run_pending_job(jobid, "crop_benchmark")
+    public_job = client.get(path, headers=auth_headers["admin"]).json()
+    job = get_job_row("testorg", jobid)
+    assert public_job["status"] == job["status"] == "error"
+    assert public_job["error"] == job["error"]
+    assert job["attempt_count"] == 1
     assert "four eligible" in job["error"]
-    assert job["error_kind"] == "retryable"
+    assert job["error_kind"] == "invalid"
     assert client.get(path, headers=auth_headers["other_org_admin"]).status_code == 404

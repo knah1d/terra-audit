@@ -1,18 +1,22 @@
-def test_duplicate_commit_does_not_double_write(client, rice_field, auth_headers):
+def test_retired_rice_commit_is_rejected_without_history_writes(client, rice_field, auth_headers):
+    """The legacy rice commit path is retired for the same reason ALM's
+    was: a client-supplied, un-frozen area_ha could otherwise determine
+    recorded credits (see src.persistence.database.
+    commit_carbon_credit_result's docstring). This replaces the old
+    test_duplicate_commit_does_not_double_write, which asserted the
+    legacy path still wrote credit_history rows."""
     body = {"awd_events": 1, "season_length_days": 90, "area_ha": 3.0}
     headers = {**auth_headers["admin"], "Idempotency-Key": "same-key"}
 
     r1 = client.post(f"/fields/{rice_field}/carbon-credits/commit", json=body, headers=headers)
-    assert r1.status_code == 200
-    assert r1.json()["already_committed"] is False
+    assert r1.status_code == 422
+    assert "evidence-linked Calculations" in r1.json()["detail"]
 
     r2 = client.post(f"/fields/{rice_field}/carbon-credits/commit", json=body, headers=headers)
-    assert r2.status_code == 200
-    assert r2.json()["already_committed"] is True
-    assert r2.json()["final_issuance"] == r1.json()["final_issuance"]
+    assert r2.status_code == 422
 
     r = client.get(f"/fields/{rice_field}/credit-history", headers=auth_headers["admin"])
-    assert len(r.json()) == 1  # not 2
+    assert r.json() == []
 
 
 def test_missing_idempotency_key_is_422(client, rice_field, auth_headers):

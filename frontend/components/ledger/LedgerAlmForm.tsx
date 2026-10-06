@@ -1,7 +1,6 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Sparkles } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import type { z } from "zod";
@@ -12,9 +11,7 @@ import { Button } from "@/components/ui/Button";
 import { StatCard } from "@/components/ui/Card";
 import { FinalIssuanceStat } from "@/components/ledger/FinalIssuanceStat";
 import { ErrorText, FieldLabel, TextInput } from "@/components/ui/Field";
-import { RoleGate } from "@/components/ui/RoleGate";
-import { useToast } from "@/components/ui/Toast";
-import { useCommitCarbonCredits, useCreditHistory, usePreviewCarbonCredits } from "@/hooks/use-carbon";
+import { useCreditHistory, usePreviewCarbonCredits } from "@/hooks/use-carbon";
 import { formatNumber } from "@/lib/format";
 import { ledgerAlmSchema, type LedgerAlmForm as FormValues } from "@/lib/schemas/ledger";
 import type { CarbonResult } from "@/types/api";
@@ -82,11 +79,8 @@ function buildSteps(cr: CarbonResult): DerivationStep[] {
 
 export function LedgerAlmForm({ fieldId, defaultArea }: { fieldId: string; defaultArea: number }) {
   const [result, setResult] = useState<CarbonResult | null>(null);
-  const [committed, setCommitted] = useState(false);
   const preview = usePreviewCarbonCredits(fieldId);
-  const commit = useCommitCarbonCredits(fieldId);
   const { data: history } = useCreditHistory(fieldId);
-  const { show } = useToast();
 
   const {
     register,
@@ -98,18 +92,8 @@ export function LedgerAlmForm({ fieldId, defaultArea }: { fieldId: string; defau
   });
 
   async function onPreview(values: FormValues) {
-    setCommitted(false);
     const cr = await preview.mutateAsync(values);
     setResult(cr);
-  }
-
-  async function onCommit(values: FormValues) {
-    const cr = await preview.mutateAsync(values);
-    setResult(cr);
-    if (cr.production_decline_leakage_blocked) return;
-    await commit.mutateAsync({ body: values, idempotencyKey: crypto.randomUUID() });
-    setCommitted(true);
-    show("Calculated estimate saved to legacy history", "success");
   }
 
   return (
@@ -131,26 +115,22 @@ export function LedgerAlmForm({ fieldId, defaultArea }: { fieldId: string; defau
           <ErrorText>{errors.non_permanence_risk_pct?.message}</ErrorText>
         </div>
 
-        <div className="col-span-full flex gap-3">
-          <Button type="submit" variant="secondary" loading={preview.isPending}>
+        <div className="col-span-full flex flex-col gap-2">
+          <Button type="submit" variant="secondary" loading={preview.isPending} className="w-fit">
             Calculate (preview)
           </Button>
-          <RoleGate allow={["admin", "analyst"]}>
-            <Button type="button" icon={Sparkles} onClick={handleSubmit(onCommit)} loading={commit.isPending} disabled={preview.isPending}>
-              Calculate &amp; Save Carbon Credits
-            </Button>
-          </RoleGate>
+          <p className="text-xs text-text-tertiary">
+            Preview-only — this legacy form can no longer save new credit history (a client-supplied area
+            here could otherwise determine recorded credits with no evidence behind it). Use{" "}
+            <a href={`/fields/${fieldId}/calculations`} className="underline">Evidence-linked calculations</a>{" "}
+            to save a real result.
+          </p>
         </div>
       </form>
 
       {preview.isError && (
         <Alert tone="danger" title="Calculation failed">
           {preview.error.message}
-        </Alert>
-      )}
-      {commit.isError && (
-        <Alert tone="danger" title="Save failed">
-          {commit.error.message}
         </Alert>
       )}
 
@@ -179,7 +159,6 @@ export function LedgerAlmForm({ fieldId, defaultArea }: { fieldId: string; defau
             />
           </div>
           <DerivationTrail steps={buildSteps(result)} />
-          {committed && <Alert tone="success">Saved to credit history.</Alert>}
         </>
       )}
 
