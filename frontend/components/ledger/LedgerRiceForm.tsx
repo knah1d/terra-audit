@@ -156,13 +156,13 @@ export function LedgerRiceForm({
           </span>
         </Alert>
       ) : latestSignal.isError ? (
-        <Alert tone="warning" title="No Signal Analytics run yet">
-          AWD Events and Season Length below are not backed by a satellite run — run{" "}
+        <p className="ui-meta">
+          No satellite run yet. Run{" "}
           <a href={`/fields/${fieldId}/signal-analytics`} className="font-medium underline">
             Signal Analytics
           </a>{" "}
-          first, then return here to prefill these fields from real data.
-        </Alert>
+          to prefill AWD Events and Season Length.
+        </p>
       ) : null}
 
       <form onSubmit={handleSubmit(onPreview)} className="grid grid-cols-2 gap-4 sm:grid-cols-4">

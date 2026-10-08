@@ -1,12 +1,13 @@
 "use client";
 
-import { ArrowRight, History, Wallet } from "lucide-react";
+import { ArrowRight, FlaskConical, History, Wallet } from "lucide-react";
 import Link from "next/link";
 import { useFieldContext } from "@/components/fields/FieldContext";
 import { CreditHistoryTable } from "@/components/ledger/CreditHistoryTable";
 import { LedgerAlmForm } from "@/components/ledger/LedgerAlmForm";
 import { LedgerRiceForm } from "@/components/ledger/LedgerRiceForm";
-import { Alert } from "@/components/ui/Alert";
+import { ButtonLink } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { IconTile } from "@/components/ui/IconTile";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useAlmCompleteness } from "@/hooks/use-alm";
@@ -17,19 +18,28 @@ function AlmLedger({ fieldId, defaultArea }: { fieldId: string; defaultArea: num
   if (isLoading) return <Skeleton className="h-32" />;
 
   if (!completeness?.ready) {
+    const problems = completeness?.problems ?? [];
     return (
-      <Alert tone="warning" title="Practice & Soil Data incomplete">
-        <ul className="mb-2 list-inside list-disc">
-          {completeness?.problems.map((p) => <li key={p}>{p}</li>)}
-        </ul>
-        <Link
-          href={`/fields/${fieldId}/practice-data`}
-          className="inline-flex items-center gap-1 font-medium text-warning-700 hover:underline"
-        >
-          Go to Practice &amp; Soil Data
-          <ArrowRight className="size-3.5" />
-        </Link>
-      </Alert>
+      <EmptyState
+        icon={FlaskConical}
+        title="Add practice & soil data to calculate"
+        description={problems.length ? `${problems.length} required ${problems.length === 1 ? "item is" : "items are"} still missing for this field.` : undefined}
+        action={
+          <div className="flex flex-col items-center gap-3">
+            <ButtonLink href={`/fields/${fieldId}/practice-data`} icon={ArrowRight}>
+              Go to Practice &amp; Soil Data
+            </ButtonLink>
+            {!!problems.length && (
+              <details className="text-left text-sm text-text-secondary">
+                <summary className="cursor-pointer text-center">Show what&apos;s missing</summary>
+                <ul className="mt-2 list-inside list-disc">
+                  {problems.map((p) => <li key={p}>{p}</li>)}
+                </ul>
+              </details>
+            )}
+          </div>
+        }
+      />
     );
   }
 
@@ -51,12 +61,13 @@ export default function LedgerPage() {
             ? "VM0051 QA3 (Default Emission Factors) pathway."
             : "VM0042 — Improved Agricultural Land Management."}
         </p>
+        <p className="ui-meta mt-1">
+          Legacy estimates, not issued credits. Use{" "}
+          <Link className="underline" href={`/fields/${field.field_id}/calculations`}>Calculations</Link>{" "}
+          for evidence-linked runs and review.
+        </p>
       </div>
 
-      <Alert tone="warning" title="Legacy estimates — not issued credits">
-        This ledger retains older calculation records without the full evidence snapshot and review context.
-        Use <Link className="underline" href={`/fields/${field.field_id}/calculations`}>Evidence-linked calculations</Link> for readiness and internal review. Saving an estimate does not certify or issue credits.
-      </Alert>
       {field.field_type === "rice_awd" ? (
         <LedgerRiceForm fieldId={field.field_id} defaultArea={field.area_ha ?? 1} />
       ) : (

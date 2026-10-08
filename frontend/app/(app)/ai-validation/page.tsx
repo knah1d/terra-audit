@@ -73,13 +73,11 @@ function ModelSection({ modelKey, label }: { modelKey: "random_forest" | "xgboos
               <p className="font-mono text-lg tabular-nums text-text-primary">{result.summary.stratified ? "Yes" : "No"}</p>
             </div>
           </div>
-          {!result.summary.stratified && (
-            <Alert tone="warning">
-              {result.summary.split_strategy === "field_grouped"
-                ? "Entire fields are held out together. These metrics measure agreement with the threshold gate, not independent field accuracy."
-                : "Legacy evaluation: rebuild and retrain to use field-grouped evaluation."}
-            </Alert>
-          )}
+          {!result.summary.stratified && (result.summary.split_strategy === "field_grouped" ? (
+            <p className="ui-meta">Entire fields are held out together.</p>
+          ) : (
+            <Alert tone="warning">Legacy evaluation: rebuild and retrain to use field-grouped evaluation.</Alert>
+          ))}
 
           <div>
             <p className="mb-2 text-sm font-medium text-text-primary">Confusion Matrix (predicted vs. threshold-gate label)</p>
@@ -111,14 +109,8 @@ export default function AiValidationPage() {
     <div className="ui-container flex flex-col gap-6">
       <PageHeader
         title="AI Validation"
-        subtitle="Cross-validate the Random Forest / XGBoost detectors against the Threshold Gate's own labels."
+        subtitle="Cross-validate the Random Forest / XGBoost detectors against the Threshold Gate's own labels. Metrics show agreement with the gate, not independent field accuracy."
       />
-
-      <Alert tone="warning" title="Not an independent accuracy check">
-        These detectors are trained to reproduce the Threshold Gate&apos;s own output — there is no independent
-        ground truth yet. Validation metrics below measure agreement with the gate, not real-world irrigation
-        accuracy.
-      </Alert>
 
       <RoleGate allow={["admin", "analyst"]}>
         <div className="ui-card flex flex-wrap items-center justify-between gap-3">

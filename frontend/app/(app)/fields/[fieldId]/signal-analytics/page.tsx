@@ -1,7 +1,7 @@
 "use client";
 
 import { useCropSeasons } from "@/hooks/use-crop-seasons";
-import { formatDate } from "@/lib/format";
+import { formatDate, parseQueueTimestamp } from "@/lib/format";
 import { Play, Satellite } from "lucide-react";
 import { useMemo, useState } from "react";
 import { AuditTrailTable } from "@/components/signal/AuditTrailTable";
@@ -10,7 +10,7 @@ import { useFieldContext } from "@/components/fields/FieldContext";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { StatCard } from "@/components/ui/Card";
-import { FieldLabel, Select, TextInput } from "@/components/ui/Field";
+import { ErrorText, FieldLabel, Select, TextInput } from "@/components/ui/Field";
 import { IconTile } from "@/components/ui/IconTile";
 import { Switch } from "@/components/ui/Switch";
 import { useJobPoll } from "@/hooks/use-job-poll";
@@ -122,6 +122,9 @@ function SignalAnalyticsView() {
   const jobActive = jobId !== null && !["done", "error", "cancelled"].includes(jobStatus ?? "");
   const isRunning = run.isPending || jobActive;
   const processing = jobStatus === "running" || jobStatus === "cancel_requested";
+  // Escalate to a warning only once a queued job has gone ~60s without a worker picking it up.
+  const queuedAt = parseQueueTimestamp(jobPoll.data?.created_at)?.getTime();
+  const pendingStalled = jobStatus === "pending" && queuedAt !== undefined && jobPoll.dataUpdatedAt - queuedAt > 60_000;
 
   const awdCount = effectiveResult?.total_awd ?? 0;
   const detectorLabel = useMemo(
@@ -161,7 +164,7 @@ function SignalAnalyticsView() {
             </div>
           )}
           {preset === "Custom Range" && rangeInvalid && (
-            <Alert tone="warning">Close date must be after open date.</Alert>
+            <ErrorText>Close date must be after open date.</ErrorText>
           )}
 
           <div>
@@ -193,7 +196,8 @@ function SignalAnalyticsView() {
           {activeRuns.isPending && <Alert tone="info">Checking for an existing analysis…</Alert>}
           {activeRuns.isError && <Alert tone="danger" title="Unable to restore analysis status">{activeRuns.error.message} <button className="underline" onClick={() => void activeRuns.refetch()}>Retry</button></Alert>}
           {run.isPending && <Alert tone="info" title="Submitting analysis">Checking cached observations and preparing the request.</Alert>}
-          {jobStatus === "pending" && <Alert tone="warning" title="Analysis queued — waiting for a worker">Processing has not started. Your worker must accept satellite analytics jobs; an AI-explanation-only worker cannot process this request. Check Worker &amp; queue, and keep your worker computer awake. Your selected season and detector are preserved.</Alert>}
+          {jobStatus === "pending" && !pendingStalled && <Alert tone="info" title="Analysis queued">Waiting for a worker to start processing.</Alert>}
+          {pendingStalled && <Alert tone="warning" title="Still waiting for a worker">Processing has not started. Your worker must accept satellite analytics jobs; an AI-explanation-only worker cannot process this request. Check Worker &amp; queue, and keep your worker computer awake. Your selected season and detector are preserved.</Alert>}
           {jobStatus === "running" && <Alert tone="info" title={STAGES[jobPoll.data?.progress?.stage ?? ""] || "Analysis in progress"}>Results will update when processing finishes. You can reopen this field to resume checking the active job.</Alert>}
           {jobStatus === "cancel_requested" && <Alert tone="info" title="Cancellation requested">The worker will stop at its next cancellation checkpoint.</Alert>}
           {jobStatus === "cancelled" && <Alert tone="info" title="Analysis cancelled">You can submit a new analysis when ready.</Alert>}
@@ -211,23 +215,15 @@ function SignalAnalyticsView() {
 
           {effectiveResult && (
             <>
-              {!result && !jobResult && (
-                <Alert tone="info">Showing your most recent Signal Analytics run for this field.</Alert>
-              )}
-              <p className="text-xs text-text-secondary">Showing {effectiveResult.window_start} – {effectiveResult.window_end} · {effectiveResult.detector_used} · Source: {effectiveResult.cache_source}</p>
+              <p className="text-xs text-text-secondary">Showing {!result && !jobResult && "your most recent run · "}{effectiveResult.window_start} – {effectiveResult.window_end} · {effectiveResult.detector_used} · Source: {effectiveResult.cache_source}{!effectiveResult.from_phenology && " · Phenology markers not detected, season length uses the 120-day default"}</p>
               {effectiveResult.timings_seconds && <details className="text-xs text-text-secondary"><summary className="cursor-pointer">Worker processing times</summary><div className="mt-2 space-y-1">{Object.entries(effectiveResult.timings_seconds).map(([stage, seconds]) => <p key={stage}>{STAGES[stage] || stage.replaceAll("_", " ")}: {seconds.toFixed(2)} s</p>)}<p>These timings exclude queue waiting and the final result write.</p></div></details>}
-              {!effectiveResult.from_phenology && (
-                <Alert tone="warning">
-                  Phenology markers not detected — season length falls back to a 120-day default.
-                </Alert>
-              )}
               {effectiveResult.model_fallback_msg && <Alert tone="info">{effectiveResult.model_fallback_msg}</Alert>}
 
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
                 <StatCard label="AWD Events" value={String(awdCount)} tone={awdCount > 0 ? "success" : "neutral"} />
                 <StatCard label="Sowing Date" value={effectiveResult.sowing_date} />
                 <StatCard label="Harvest Date" value={effectiveResult.harvest_date} />
-                <StatCard label="Season Length" value={`${effectiveResult.season_length_days} d`} />
+                <StatCard label="Season Length" value={`${effectiveResult.season_length_days} d${effectiveResult.from_phenology ? "" : " (default)"}`} />
                 <StatCard label="Detector Used" value={effectiveResult.detector_used} />
               </div>
 

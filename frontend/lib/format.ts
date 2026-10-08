@@ -16,11 +16,16 @@ const DECIMALS: Record<string, number> = {
 };
 
 /** SQL queue timestamps without an offset are legacy UTC values. */
-export function formatQueueTimestamp(value: string | null | undefined): string {
-  if (!value) return "—";
+export function parseQueueTimestamp(value: string | null | undefined): Date | null {
+  if (!value) return null;
   const normalized = value.trim().replace(" ", "T");
   const date = new Date(/(?:Z|[+-]\d{2}:?\d{2})$/i.test(normalized) ? normalized : `${normalized}Z`);
-  if (Number.isNaN(date.getTime())) return "—";
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+export function formatQueueTimestamp(value: string | null | undefined): string {
+  const date = parseQueueTimestamp(value);
+  if (!date) return "—";
   return `${formatDate(date)} ${date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false, timeZoneName: "short" })}`;
 }
 
