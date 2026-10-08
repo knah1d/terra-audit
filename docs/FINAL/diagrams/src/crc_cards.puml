@@ -1,0 +1,99 @@
+@startuml crc_cards
+!pragma layout smetana
+!include _style.puml
+hide circle
+hide stereotypes
+skinparam class {
+  FontSize 12
+  AttributeFontSize 10
+  HeaderBackgroundColor #E6ECF4
+  FontStyle bold
+  FontColor #1F3A5F
+}
+skinparam nodesep 25
+skinparam ranksep 25
+class "SpatialDataEngine" as A {
+  -- Responsibilities --
+  Query Sentinel-1 GRD (IW, VV+VH)
+  Derive cross-ratio and RVI bands
+  Median-reduce, Savitzky-Golay smooth
+  -- Collaborators --
+  Google Earth Engine, timeseries_cache
+}
+class "AdaptiveAWDGate" as B {
+  -- Responsibilities --
+  Z-score flood detection (z < -0.8)
+  Detect drydown events (1.2 sigma)
+  Extract sowing / harvest dates
+  -- Collaborators --
+  SpatialDataEngine, ML predictor
+}
+class "CarbonAssetEngine" as C {
+  -- Responsibilities --
+  VM0051 QA3 CH4 scaling factors
+  N2O irrigation penalty, uncertainty
+  Block results above 60,000 tCO2e/yr
+  -- Collaborators --
+  AdaptiveAWDGate, snapshot
+}
+class "AlmCarbonEngine" as D {
+  -- Responsibilities --
+  VM0042 SOC stock change, ER / CR
+  Non-SOC, livestock, buffer terms
+  Block missing leakage evidence
+  -- Collaborators --
+  VMD0054 leakage, AlmPracticeValidator
+}
+class "Snapshot & Calculations" as E {
+  -- Responsibilities --
+  Freeze evidence / inputs / results
+  Idempotent, versioned commit
+  Supersede prior version on correction
+  -- Collaborators --
+  Carbon engines, readiness
+}
+class "Readiness" as F {
+  -- Responsibilities --
+  Resolve bundle and applicability
+  Evaluate requirement statuses
+  Compute evidence fingerprint
+  -- Collaborators --
+  Methodology registry, corrections
+}
+class "Reviews" as G {
+  -- Responsibilities --
+  Version-pinned submissions
+  Guarded state transitions
+  Findings, comments, notifications
+  -- Collaborators --
+  calculations, users
+}
+class "Job Queue & Worker" as H {
+  -- Responsibilities --
+  Persist and claim jobs atomically
+  Heartbeat, lease, retry, cancel
+  Dispatch typed job handlers
+  -- Collaborators --
+  Signal / AI / ingest handlers
+}
+class "AI Packet & Validator" as I {
+  -- Responsibilities --
+  Build bundle-scoped context packet
+  Run 14 server-side output checks
+  Store draft for human review
+  -- Collaborators --
+  AI providers, methodology library
+}
+A -[hidden]right- B
+B -[hidden]right- C
+A -[hidden]down- D
+B -[hidden]down- E
+C -[hidden]down- F
+D -[hidden]down- G
+E -[hidden]down- H
+F -[hidden]down- I
+D -[hidden]right- E
+E -[hidden]right- F
+G -[hidden]right- H
+H -[hidden]right- I
+@enduml

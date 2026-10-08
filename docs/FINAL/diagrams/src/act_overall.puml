@@ -1,0 +1,39 @@
+@startuml act_overall
+!include _style.puml
+skinparam linetype polyline
+skinparam SwimlaneWidth same
+|Project User|
+start
+:Sign in;
+|Terra-Audit Server|
+:Validate session, JWT and\ntoken version; derive org;
+|Project User|
+:Select project and field;
+:Record evidence\n(seasons, observations, files);
+|Terra-Audit Server|
+if (Pathway?) then (cropland_alm)
+  :Resolve practice, SOC,\nproduction, livestock\nand leakage evidence;
+else (rice_awd)
+  |Durable Worker|
+  :signal_run job:\nSentinel-1 series +\nAWD threshold gate;
+  |Terra-Audit Server|
+endif
+:Freeze snapshot and run\ndeterministic engine;
+:Evaluate readiness\nand hard gates;
+if (Hard gate blocked?) then (yes)
+  |Project User|
+  :Resolve blocking evidence;
+  stop
+else (no)
+  |Terra-Audit Server|
+  :Persist immutable version\n(draft / ready_for_review);
+endif
+if (ready_for_review?) then (yes)
+  :Internal review of\nversion-pinned submission;
+else (no)
+  :Keep as draft and list\nremaining readiness items;
+endif
+|Project User|
+:Export JSON / PDF;
+stop
+@enduml

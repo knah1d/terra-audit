@@ -1,0 +1,117 @@
+' Shared Terra-Audit diagram style: clean UML, navy monochrome
+skinparam dpi 300
+skinparam defaultFontName "Noto Sans"
+skinparam defaultFontSize 11
+skinparam defaultFontColor #1B2A41
+skinparam shadowing false
+skinparam roundCorner 8
+skinparam backgroundColor #FFFFFF
+skinparam ArrowColor #1F3A5F
+skinparam ArrowFontSize 10
+skinparam ArrowFontColor #33475B
+skinparam ArrowThickness 1.1
+skinparam linetype ortho
+skinparam TitleFontSize 15
+skinparam TitleFontStyle bold
+skinparam TitleFontColor #1F3A5F
+skinparam NoteBackgroundColor #F7F9FC
+skinparam NoteBorderColor #8A9BB0
+skinparam NoteFontSize 10
+skinparam packageStyle rectangle
+skinparam nodesep 40
+skinparam ranksep 50
+
+skinparam actor {
+  BorderColor #1F3A5F
+  BackgroundColor #FFFFFF
+  FontStyle bold
+}
+skinparam usecase {
+  BorderColor #1F3A5F
+  BackgroundColor #F4F7FB
+  BorderThickness 1.2
+}
+skinparam rectangle {
+  BorderColor #1F3A5F
+  BackgroundColor #FFFFFF
+  BorderThickness 1.2
+  FontStyle bold
+}
+skinparam package {
+  BorderColor #1F3A5F
+  BackgroundColor #FFFFFF
+  FontColor #1F3A5F
+  FontStyle bold
+}
+skinparam component {
+  BorderColor #1F3A5F
+  BackgroundColor #F4F7FB
+  BorderThickness 1.2
+}
+skinparam node {
+  BorderColor #1F3A5F
+  BackgroundColor #F4F7FB
+}
+skinparam database {
+  BorderColor #1F3A5F
+  BackgroundColor #F4F7FB
+}
+skinparam artifact {
+  BorderColor #1F3A5F
+  BackgroundColor #FFFFFF
+}
+skinparam class {
+  BorderColor #1F3A5F
+  BackgroundColor #FFFFFF
+  HeaderBackgroundColor #E6ECF4
+  ArrowColor #1F3A5F
+  AttributeFontSize 10
+}
+skinparam entity {
+  BorderColor #1F3A5F
+  BackgroundColor #FFFFFF
+}
+skinparam state {
+  BorderColor #1F3A5F
+  BackgroundColor #F4F7FB
+  StartColor #1F3A5F
+  EndColor #1F3A5F
+  BorderThickness 1.2
+}
+skinparam activity {
+  BorderColor #1F3A5F
+  BackgroundColor #F4F7FB
+  DiamondBorderColor #1F3A5F
+  DiamondBackgroundColor #FFFFFF
+  StartColor #1F3A5F
+  EndColor #1F3A5F
+  BarColor #1F3A5F
+}
+skinparam partition {
+  BorderColor #1F3A5F
+}
+skinparam swimlane {
+  BorderColor #8A9BB0
+  BorderThickness 1
+  TitleFontStyle bold
+  TitleFontColor #1F3A5F
+}
+skinparam sequence {
+  ArrowColor #1F3A5F
+  LifeLineBorderColor #8A9BB0
+  LifeLineBackgroundColor #E6ECF4
+  ParticipantBorderColor #1F3A5F
+  ParticipantBackgroundColor #F4F7FB
+  ParticipantFontStyle bold
+  ActorBorderColor #1F3A5F
+  ActorBackgroundColor #FFFFFF
+  GroupBorderColor #8A9BB0
+  GroupBackgroundColor #F4F7FB
+  GroupHeaderFontColor #1F3A5F
+  DividerBackgroundColor #E6ECF4
+  BoxBorderColor #8A9BB0
+}
+skinparam queue {
+  BackgroundColor #F4F7FB
+  BorderColor #1F3A5F
+}

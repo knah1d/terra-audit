@@ -1,0 +1,10 @@
+@startuml state_dq
+!pragma layout smetana
+!include _style.puml
+hide empty description
+[*] --> open : issue detected
+open --> acknowledged : acknowledge
+open --> resolved : resolve [reason]
+acknowledged --> resolved : resolve [reason]
+resolved --> [*]
+@enduml

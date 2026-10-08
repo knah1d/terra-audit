@@ -1,0 +1,17 @@
+@startuml state_job
+!pragma layout smetana
+!include _style.puml
+hide empty description
+[*] --> pending : create_job()
+pending --> running : claim_next_job()\n[org running < 3]
+running --> done : complete_job()
+running --> pending : fail_job(retryable)\n[attempt < 3] / backoff
+running --> pending : reclaim_abandoned_jobs()\n[heartbeat > lease]
+running --> error : fail_job(invalid)\nor retries exhausted
+running --> cancel_requested : request_cancel()
+pending --> cancelled : request_cancel()
+cancel_requested --> cancelled : mark_cancelled()
+done --> [*]
+error --> [*]
+cancelled --> [*]
+@enduml

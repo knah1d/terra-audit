@@ -1,0 +1,34 @@
+@startuml act_readiness_review
+!include _style.puml
+skinparam linetype polyline
+skinparam SwimlaneWidth same
+|Project User|
+start
+:Open readiness view;
+|Terra-Audit Server|
+:Resolve active bundle,\napplicability, corrections;
+:Compute evidence fingerprint;
+:Evaluate requirements\n(satisfied / missing / needs_review /\nnot_applicable / unsupported);
+if (Blocking items?) then (no)
+  :Mark version\nready_for_review;
+else (yes)
+  :Expose blockers;\nversion stays draft;
+  :Return blockers to user\n(add evidence or\nrecord determination);
+  stop
+endif
+|Project User|
+:Submit ready_for_review version;
+|Terra-Audit Server|
+:Create version-pinned\nsubmission (submitted);
+|Internal Reviewer|
+:Start review (in_review);
+:Record findings / comments;
+if (Open blocking finding?) then (yes)
+  :Request changes\nor reject [reason];
+else (no)
+  :Approve internally\n[reason];
+endif
+|Terra-Audit Server|
+:Append review_event\n(optimistic version check);
+stop
+@enduml

@@ -1,0 +1,10 @@
+@startuml state_calc
+!pragma layout smetana
+!include _style.puml
+hide empty description
+[*] --> draft : commit\n[blocking readiness]
+[*] --> ready_for_review : commit\n[no blocking items]
+draft --> superseded : correction\n(version N+1)
+ready_for_review --> superseded : correction\n(version N+1)
+superseded --> [*]
+@enduml

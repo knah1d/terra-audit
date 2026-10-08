@@ -1,0 +1,16 @@
+@startuml state_review
+!pragma layout smetana
+!include _style.puml
+hide empty description
+[*] --> submitted : submit ready_for_review version
+submitted --> in_review : start review
+submitted --> withdrawn : withdraw [reason]
+in_review --> changes_requested : request changes [reason]
+in_review --> internally_approved : approve [reason]\n[no open blocking finding]
+in_review --> rejected : reject [reason]
+in_review --> withdrawn : withdraw [reason]
+changes_requested --> withdrawn : withdraw [reason]
+internally_approved --> [*]
+rejected --> [*]
+withdrawn --> [*]
+@enduml

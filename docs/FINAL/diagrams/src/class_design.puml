@@ -1,0 +1,86 @@
+@startuml class_design
+!pragma layout smetana
+!include _style.puml
+hide circle
+hide empty members
+skinparam classAttributeIconSize 0
+skinparam nodesep 30
+skinparam ranksep 60
+skinparam class {
+  FontSize 11
+  FontStyle bold
+  AttributeFontSize 9
+  StereotypeFontSize 9
+}
+class "queue" as Q <<src/jobs>> {
+  +create_job(org_id, job_type, payload, ...)
+  +claim_next_job(worker_id, job_types)
+  +complete_job() / fail_job()
+  +request_cancel(org_id, job_id)
+}
+class "reviews" as RV <<src/projects>> {
+  +create_submission(org_id, project_id,
+    calculation, submitted_by)
+  +assign_reviewer(submission_id, reviewer_id, reason)
+  +transition(submission_id, if_version,
+    to_status, actor, reason)
+}
+class "packets / validate" as AI <<src/ai>> {
+  +build_packet(org_id, project_id, user_id,
+    action, field_id)
+  +validate_response(response, packet)
+}
+class SpatialDataEngine <<src/signals>> {
+  +extract_clean_timeseries(geojson_geometry,
+    start_date, end_date)
+}
+class "snapshot / calculations" as SNAP <<src/carbon>> {
+  +build_snapshot(org_id, field, accounting_pathway,
+    engine_inputs, ...)
+  +calculate_from_snapshot(snapshot)
+  +commit_calculation(org_id, field_id, idempotency_key,
+    snapshot, result, readiness, ...)
+}
+class "readiness" as RD <<src/methodology>> {
+  +build_readiness_checklist(org_id, field,
+    accounting_pathway, season_ids, ...)
+  +compute_evidence_fingerprint(org_id, field_id, ...)
+}
+class AdaptiveAWDGate <<src/signals>> {
+  -z_flood_threshold : float = -0.8
+  -dynamic_delta_sigma : float = 1.2
+  +analyze_irrigation_behavior(df)
+  +extract_phenology(df)
+}
+class CarbonAssetEngine <<VM0051 v1.1>> {
+  +calculate_credits(awd_events, season_length_days,
+    area_ha, q_n_kg_per_ha, preseason_category, ...)
+}
+class AlmCarbonEngine <<VM0042 v2.2>> {
+  +calculate_credits(practice_schedule, soc_measurements,
+    area_ha, verification_years, leakage_result, ...)
+}
+class "leakage_vmd0054" as LK <<VMD0054 v1.1>> {
+  +compute_vmd0054_leakage()
+  +calculate_frozen_leakage()
+}
+interface AttachmentStorage <<Protocol>> {
+  +save(key, fileobj)
+  +open(key)
+  +delete(key)
+}
+class LocalFilesystemStorage
+class S3Storage
+Q ..> SpatialDataEngine : <<signal_run>>
+RV --> SNAP : pins version
+AI ..> RD : reads context
+SpatialDataEngine --> AdaptiveAWDGate : time series
+SNAP --> CarbonAssetEngine
+SNAP --> AlmCarbonEngine
+SNAP --> RD : readiness
+AdaptiveAWDGate --> CarbonAssetEngine : AWD events
+AlmCarbonEngine --> LK : frozen leakage
+AttachmentStorage <|.. LocalFilesystemStorage
+AttachmentStorage <|.. S3Storage
+SNAP ..> AttachmentStorage : attachment refs
+@enduml

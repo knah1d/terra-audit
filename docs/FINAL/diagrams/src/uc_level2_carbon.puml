@@ -1,0 +1,32 @@
+@startuml uc_level2_carbon
+!pragma layout smetana
+!include _style.puml
+left to right direction
+actor "Project User\n(Lead / Contributor)" as PU
+actor "Internal Reviewer" as IR
+rectangle "1.4 Carbon Calculation" {
+  usecase "Preview Calculation" as P
+  usecase "Commit Calculation\nVersion" as C
+  usecase "Select Pathway\n& Inputs" as S
+  usecase "Build Frozen\nEvidence Snapshot" as B
+  usecase "Run VM0051 Rice\nEngine (QA3)" as R
+  usecase "Run VM0042 ALM\nEngine" as A
+  usecase "Compute VMD0054\nLeakage" as L
+  usecase "Evaluate Readiness\n& Hard Gates" as E
+  usecase "Reuse Saved\nSignal Evidence" as SE
+  usecase "Supersede Prior\nVersion (Correction)" as SP
+  usecase "View Calculation\nChain / History" as H
+}
+PU -- P
+PU -- C
+IR -- H
+P ..> S : <<include>>
+C ..> S : <<include>>
+C ..> B : <<include>>
+C ..> E : <<include>>
+B ..> R : <<include>>\n[rice_awd]
+B ..> A : <<include>>\n[cropland_alm]
+A ..> L : <<include>>
+SE .up.> S : <<extend>>
+SP .up.> C : <<extend>>
+@enduml
