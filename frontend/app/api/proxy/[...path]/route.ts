@@ -48,6 +48,17 @@ async function proxy(request: NextRequest, path: string[]) {
     cache: "no-store",
   });
 
+  // 204/205/304 are "null body" statuses per the Fetch spec — constructing
+  // a Response/NextResponse with ANY body (even an empty ArrayBuffer)
+  // alongside one of these throws a TypeError. That crashed this route
+  // handler AFTER the backend had already committed (e.g. a field
+  // DELETE succeeding server-side at 204, but the client seeing a 500
+  // because this proxy itself then threw trying to forward the
+  // response) — never forward a body for these.
+  if (res.status === 204 || res.status === 205 || res.status === 304) {
+    return new NextResponse(null, { status: res.status, headers: PRIVATE_HEADERS });
+  }
+
   const resContentType = res.headers.get("content-type") ?? "";
   if (resContentType.includes("application/json") || resContentType.includes("text/")) {
     const text = await res.text();
