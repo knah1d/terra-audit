@@ -1,13 +1,18 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, status
 
-from backend.deps import get_current_user, get_owned_field, require_admin, require_writer
+from backend.deps import (
+    get_current_user, get_owned_field, get_spatial_engine, require_admin, require_writer,
+)
 from backend.schemas.fields import (
     AreaResponse, DistrictResponse, FieldCreate, FieldDetailOut, FieldOut, FieldUpdate,
-    GeometryParseResponse, ParseContentRequest, ParseCoordinatesRequest,
+    GeometryParseResponse, LandUseResponse, ParseContentRequest, ParseCoordinatesRequest,
 )
-from src.persistence.database import create_field, delete_field, get_field, list_fields, update_field_info
+from src.persistence.database import (
+    create_field, delete_field, get_field, list_fields, update_field_info, update_field_land_use,
+)
 from src.field_types.registry import FIELD_TYPES
 from src.signals.districts import detect_district
+from src.signals.land_use import LAND_USE_VALUES, METHOD as LAND_USE_METHOD, detect_land_use
 from src.signals.geometry import (
     compute_area_ha, parse_coordinate_text, parse_geojson_upload, parse_kml_upload,
 )
@@ -30,6 +35,32 @@ def _resolve_district(geojson: dict, submitted: str) -> str:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY,
                             "District is required for boundaries outside Bangladesh")
     return district
+
+
+def _resolve_land_use(request: Request, geojson: dict, submitted: str | None):
+    """Returns (land_use, source, evidence) to store. The source is decided
+    here by re-running detection (cached per geometry per day, so normally
+    no second Earth Engine call) — "detected" only if the submitted value
+    matches it, "manual" otherwise. The detection evidence is kept even on
+    a manual override so the override stays auditable."""
+    if submitted is None:
+        return None, None, None
+    if submitted not in LAND_USE_VALUES:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            f"Unknown land_use '{submitted}'. Must be one of {list(LAND_USE_VALUES)}.",
+        )
+    engine = getattr(request.app.state, "spatial_engine", None)
+    try:
+        if engine is None:
+            raise RuntimeError("Earth Engine is not initialized")
+        detected, evidence = detect_land_use(engine, geojson)
+    except Exception:
+        detected = None
+        evidence = {"method": LAND_USE_METHOD,
+                    "summary": "Satellite detection was unavailable when this was recorded."}
+    source = "detected" if detected == submitted else "manual"
+    return submitted, source, evidence
 
 
 @router.post("/fields/parse/geojson", response_model=GeometryParseResponse)
@@ -83,6 +114,19 @@ def geometry_district(feature: dict, user: dict = Depends(get_current_user)):
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Invalid geometry: {exc}")
 
 
+@router.post("/geometry/land-use", response_model=LandUseResponse)
+def geometry_land_use(feature: dict, user: dict = Depends(get_current_user),
+                      engine=Depends(get_spatial_engine)):
+    """Suggests the observed land use ("Field Type") from WorldCover and
+    Sentinel-1 — see src/signals/land_use.py. 503 (via get_spatial_engine)
+    when Earth Engine isn't configured; the form then falls back to manual."""
+    try:
+        land_use, evidence = detect_land_use(engine, feature)
+    except Exception as exc:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"Land-use detection failed: {exc}")
+    return LandUseResponse(land_use=land_use, evidence=evidence)
+
+
 @router.get("/fields", response_model=list[FieldOut])
 def list_org_fields(user: dict = Depends(get_current_user)):
     return [FieldOut(**f) for f in list_fields(user["org_id"])]
@@ -95,7 +139,7 @@ def get_org_field(field_id: str, user: dict = Depends(get_current_user),
 
 
 @router.post("/fields", response_model=FieldDetailOut, status_code=status.HTTP_201_CREATED)
-def register_field(body: FieldCreate, user: dict = Depends(require_writer)):
+def register_field(body: FieldCreate, request: Request, user: dict = Depends(require_writer)):
     org_id = user["org_id"]
     # field_type was previously accepted unvalidated (a plain `str` on the
     # schema, with the FIELD_TYPES tuple sitting unused), so any string
@@ -117,17 +161,25 @@ def register_field(body: FieldCreate, user: dict = Depends(require_writer)):
     except Exception as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Invalid geometry: {exc}")
     district = _resolve_district(body.feature, body.district)
+    land_use, land_use_source, land_use_evidence = _resolve_land_use(
+        request, body.feature, body.land_use,
+    )
     create_field(org_id, body.field_id, body.name.strip(), district,
-                 body.feature, area_ha, body.field_type)
+                 body.feature, area_ha, body.field_type,
+                 land_use, land_use_source, land_use_evidence)
     return FieldDetailOut(**get_field(org_id, body.field_id))
 
 
 @router.patch("/fields/{field_id}", response_model=FieldDetailOut)
-def edit_field(field_id: str, body: FieldUpdate, user: dict = Depends(require_writer),
-               field: dict = Depends(_field)):
+def edit_field(field_id: str, body: FieldUpdate, request: Request,
+               user: dict = Depends(require_writer), field: dict = Depends(_field)):
     org_id = user["org_id"]
     district = _resolve_district(field["geojson_geometry"], body.district)
     update_field_info(org_id, field_id, body.name.strip(), district)
+    if "land_use" in body.model_fields_set and body.land_use != field["land_use"]:
+        update_field_land_use(org_id, field_id, *_resolve_land_use(
+            request, field["geojson_geometry"], body.land_use,
+        ))
     return FieldDetailOut(**get_field(org_id, field_id))
 
 

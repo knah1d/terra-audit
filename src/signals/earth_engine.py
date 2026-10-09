@@ -132,3 +132,33 @@ class SpatialDataEngine:
             df["vh_smoothed"] = df["vh"]
 
         return df
+
+    def land_cover_fractions(self, geojson_geometry: dict) -> dict:
+        """
+        Share of the polygon's 10 m pixels in each ESA WorldCover 2021 (v200)
+        class, as {class_code: fraction}. Codes: 10 tree cover, 20 shrubland,
+        30 grassland, 40 cropland, 50 built-up, 60 bare/sparse, 70 snow/ice,
+        80 permanent water, 90 herbaceous wetland, 95 mangroves, 100 moss.
+        """
+        if "features" in geojson_geometry:
+            geom_dict = geojson_geometry["features"][0]["geometry"]
+        elif "geometry" in geojson_geometry:
+            geom_dict = geojson_geometry["geometry"]
+        else:
+            geom_dict = geojson_geometry
+
+        histogram = (
+            ee.ImageCollection("ESA/WorldCover/v200").first().select("Map")
+            .reduceRegion(
+                reducer=ee.Reducer.frequencyHistogram(),
+                geometry=ee.Geometry(geom_dict),
+                scale=10,
+                maxPixels=1e9,
+            )
+            .get("Map")
+            .getInfo()
+        ) or {}
+        total = sum(histogram.values())
+        if not total:
+            return {}
+        return {int(float(code)): count / total for code, count in histogram.items()}

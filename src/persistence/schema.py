@@ -313,6 +313,16 @@ def _init_sqlite(conn):
         conn.execute(text(f"INSERT INTO {_table} ({_cols}) SELECT {_cols} FROM {_table}_old"))
         conn.execute(text(f"DROP TABLE {_table}_old"))
 
+    # Observed land use ("Field Type" in the UI), separate from field_type
+    # (the methodology). Added after the PK rebuild above so that rebuild's
+    # fixed column list can't drop them. Nullable: fields registered before
+    # this existed have no land use recorded.
+    for _col in ("land_use TEXT", "land_use_source TEXT", "land_use_evidence TEXT"):
+        try:
+            conn.execute(text(f"ALTER TABLE fields ADD COLUMN {_col}"))
+        except Exception:
+            pass
+
     # Safety net: a DB already past the org_id-in-PK rebuild above (so the
     # loop's `continue` skipped it) still needs the liming columns if it
     # predates them.
@@ -422,9 +432,16 @@ def _init_postgres(conn):
             field_type       TEXT NOT NULL DEFAULT 'rice_awd',
             created_at       TIMESTAMPTZ DEFAULT now(),
             alm_cumulative_delta_co2_wp DOUBLE PRECISION DEFAULT 0.0,
+            land_use         TEXT,
+            land_use_source  TEXT,
+            land_use_evidence TEXT,
             PRIMARY KEY (org_id, field_id)
         )
     """))
+    # Migration: observed land use added later — IF NOT EXISTS makes this
+    # safely re-runnable on DBs that predate it.
+    for _col in ("land_use", "land_use_source", "land_use_evidence"):
+        conn.execute(text(f"ALTER TABLE fields ADD COLUMN IF NOT EXISTS {_col} TEXT"))
     conn.execute(text("""
         CREATE TABLE IF NOT EXISTS timeseries_cache (
             org_id           TEXT NOT NULL DEFAULT 'default',

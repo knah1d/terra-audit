@@ -152,6 +152,25 @@ def initialize_database():
     _DB_INITIALIZED = True
 
 
+def update_field_land_use(
+    org_id: str, field_id: str, land_use: str | None,
+    land_use_source: str | None, land_use_evidence: dict | None,
+):
+    """Records a field's observed land use. Unlike field_type (the
+    methodology) this is editable — it describes the land, not which
+    cached data belongs to the field."""
+    with get_db_connection() as conn:
+        conn.execute(
+            text("UPDATE fields SET land_use = :land_use, land_use_source = :land_use_source, "
+                 "land_use_evidence = :land_use_evidence "
+                 "WHERE org_id = :org_id AND field_id = :field_id"),
+            {"land_use": land_use, "land_use_source": land_use_source,
+             "land_use_evidence": json.dumps(land_use_evidence) if land_use_evidence else None,
+             "org_id": org_id, "field_id": field_id},
+        )
+        conn.commit()
+
+
 def update_field_info(org_id: str, field_id: str, name: str, district: str):
     """Updates a field's name/district in place. field_type and geometry are
     deliberately not editable here — changing methodology path or redrawing
@@ -618,6 +637,8 @@ def get_soc_measurements(org_id: str, field_id: str) -> dict:
 def create_field(
     org_id: str, field_id: str, name: str, district: str,
     feature: dict, area_ha: float, field_type: str,
+    land_use: str | None = None, land_use_source: str | None = None,
+    land_use_evidence: dict | None = None,
 ):
     """Registers a new field. `feature` is a single GeoJSON Feature (the
     parsed/drawn geometry) — wrapped in a FeatureCollection before storage,
@@ -629,10 +650,14 @@ def create_field(
     with get_db_connection() as conn:
         conn.execute(
             text("INSERT INTO fields "
-                 "(org_id, field_id, name, district, geojson_geometry, area_ha, field_type) "
-                 "VALUES (:org_id, :field_id, :name, :district, :geojson_geometry, :area_ha, :field_type)"),
+                 "(org_id, field_id, name, district, geojson_geometry, area_ha, field_type, "
+                 "land_use, land_use_source, land_use_evidence) "
+                 "VALUES (:org_id, :field_id, :name, :district, :geojson_geometry, :area_ha, :field_type, "
+                 ":land_use, :land_use_source, :land_use_evidence)"),
             {"org_id": org_id, "field_id": field_id, "name": name, "district": district,
-             "geojson_geometry": json.dumps(fc), "area_ha": area_ha, "field_type": field_type},
+             "geojson_geometry": json.dumps(fc), "area_ha": area_ha, "field_type": field_type,
+             "land_use": land_use, "land_use_source": land_use_source,
+             "land_use_evidence": json.dumps(land_use_evidence) if land_use_evidence else None},
         )
         conn.commit()
 
@@ -643,7 +668,8 @@ def get_field(org_id: str, field_id: str) -> dict | None:
     with get_db_connection() as conn:
         row = conn.execute(
             text("SELECT field_id, name, district, geojson_geometry, area_ha, "
-                 "field_type, created_at, alm_cumulative_delta_co2_wp FROM fields "
+                 "field_type, created_at, alm_cumulative_delta_co2_wp, "
+                 "land_use, land_use_source, land_use_evidence FROM fields "
                  "WHERE org_id = :org_id AND field_id = :field_id"),
             {"org_id": org_id, "field_id": field_id},
         ).mappings().fetchone()
@@ -651,6 +677,8 @@ def get_field(org_id: str, field_id: str) -> dict | None:
         return None
     result = dict(row)
     result["geojson_geometry"] = json.loads(result["geojson_geometry"])
+    if result["land_use_evidence"]:
+        result["land_use_evidence"] = json.loads(result["land_use_evidence"])
     return result
 
 
@@ -660,7 +688,8 @@ def list_fields(org_id: str) -> list[dict]:
     callers needing geometry should follow up with get_field)."""
     with get_db_connection() as conn:
         rows = conn.execute(
-            text("SELECT field_id, name, district, area_ha, field_type, created_at "
+            text("SELECT field_id, name, district, area_ha, field_type, created_at, "
+                 "land_use, land_use_source "
                  "FROM fields WHERE org_id = :org_id ORDER BY field_id"),
             {"org_id": org_id},
         ).mappings().fetchall()
