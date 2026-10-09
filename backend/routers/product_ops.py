@@ -39,7 +39,10 @@ def readiness(user=Depends(require_admin)):
 @router.get("/admin/accounting-conflicts")
 def accounting_conflicts(user=Depends(require_admin)):
     """Existing double counting (reviewable project calculations overlapping
-    for the same field and pathway), listed for admins to resolve. Committed
-    before the commit-time guard existed; never rewritten automatically."""
+    for the same field and pathway) and fields in more than one project at the
+    same time — both created before the guards existed. Listed for admins to
+    resolve; never rewritten automatically."""
     from src.carbon.calculations import accounting_conflicts as find_conflicts
-    return {"conflicts": find_conflicts(user["org_id"])}
+    from src.projects.repository import overlapping_project_memberships
+    return {"conflicts": find_conflicts(user["org_id"]),
+            "overlapping_memberships": overlapping_project_memberships(user["org_id"])}

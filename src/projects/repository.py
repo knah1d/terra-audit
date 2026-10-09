@@ -12,8 +12,9 @@ a project, editing farm contact details) rather than an append-only log.
 Field <-> project and field <-> farm links are their own membership
 tables with effective_start_date/effective_end_date rather than a column
 on `fields`, so:
-  - a field can belong to more than one project at once (visible overlap,
-    never silently deduplicated) or move between farms over time
+  - a field belongs to at most ONE project at any point in time (project
+    memberships may not overlap, enforced in _assign_field), but can move
+    between projects — and farms — over time
   - ending a membership never deletes the row — it stamps removed_at,
     so the field's history through a project/farm survives
   - assigning a field is always an explicit action (this module never
@@ -109,9 +110,10 @@ def initialize_tables(conn):
     """))
     conn.execute(text("CREATE INDEX IF NOT EXISTS idx_farms_org ON farms(org_id)"))
 
-    # Membership tables: a field can hold more than one open (removed_at
-    # IS NULL) row at once in EITHER table — that overlap is surfaced by
-    # list_projects_for_field()/list_farms_for_field(), never collapsed.
+    # Membership tables. New project memberships may not overlap in time
+    # (one project per field at a time, see _assign_field); rows created
+    # before that rule are never collapsed — overlapping_project_memberships()
+    # reports them.
     for _table, _owner_col in (("project_fields", "project_id"), ("farm_fields", "farm_id")):
         conn.execute(text(f"""
             CREATE TABLE IF NOT EXISTS {_table} (
@@ -359,32 +361,41 @@ def update_farm(org_id: str, farm_id: str, name: str, contact_name: str, contact
 # --------------------------------------------------------------------------
 
 class MembershipConflictError(ValueError):
-    """The field already has a membership in the SAME project/farm that
-    overlaps the requested period. Memberships in DIFFERENT projects may
-    overlap on purpose (see module docstring); double counting is guarded
-    at calculation commit instead (src.carbon.calculations)."""
+    """The requested membership would overlap an existing one in time: for
+    projects, ANY project (a field belongs to at most one project at a time);
+    for farms, the same farm."""
 
 
 def _assign_field(table: str, owner_col: str, org_id: str, owner_id: str, field_id: str,
                    effective_start_date: str, assigned_by: str) -> str:
     membership_id = uuid.uuid4().hex
     with get_db_connection() as conn:
-        # New memberships are open-ended, so any same-owner membership that is
-        # still open or ends on/after the new start overlaps it (ISO dates
-        # compare correctly as text).
+        # New memberships are open-ended, so any membership that is still open
+        # or ends on/after the new start overlaps it (ISO dates compare
+        # correctly as text). Projects: across ALL projects — one project per
+        # field at a time. Farms: the same farm only.
+        owner_filter = "" if table == "project_fields" else f"AND {owner_col} = :owner_id"
         existing = conn.execute(
             text(f"""
-                SELECT effective_start_date, effective_end_date FROM {table}
-                WHERE org_id = :org_id AND {owner_col} = :owner_id AND field_id = :field_id
+                SELECT {owner_col} AS owner_id, effective_start_date, effective_end_date FROM {table}
+                WHERE org_id = :org_id AND field_id = :field_id {owner_filter}
                   AND (effective_end_date IS NULL OR effective_end_date >= :start)
             """),
             {"org_id": org_id, "owner_id": owner_id, "field_id": field_id, "start": effective_start_date},
         ).mappings().fetchone()
         if existing is not None:
-            end = existing["effective_end_date"] or "open"
+            end = existing["effective_end_date"] or "no end date"
+            if table == "project_fields":
+                project = get_project(org_id, existing["owner_id"])
+                where = "this project" if existing["owner_id"] == owner_id else \
+                    f"project {project['name'] if project else existing['owner_id']!r}"
+                raise MembershipConflictError(
+                    f"Field {field_id!r} already belongs to {where} from {existing['effective_start_date']} "
+                    f"({end}). A field can belong to only one project at a time — end that membership "
+                    f"before {effective_start_date} first.")
             raise MembershipConflictError(
                 f"Field {field_id!r} is already a member here from {existing['effective_start_date']} "
-                f"to {end}, which overlaps a start of {effective_start_date}.")
+                f"({end}), which overlaps a start of {effective_start_date}.")
         conn.execute(
             text(f"""
                 INSERT INTO {table} (membership_id, org_id, {owner_col}, field_id,
@@ -444,6 +455,21 @@ def list_project_fields(org_id: str, project_id: str) -> list[dict]:
 
 def list_projects_for_field(org_id: str, field_id: str) -> list[dict]:
     return _list_memberships("project_fields", "project_id", org_id, field_id=field_id)
+
+
+def overlapping_project_memberships(org_id: str) -> list[dict]:
+    """Fields whose project memberships overlap in time — possible only for
+    rows created before the one-project-at-a-time rule. Read-only report."""
+    rows = sorted(_list_memberships("project_fields", "project_id", org_id),
+                  key=lambda m: (m["field_id"], m["effective_start_date"]))
+    overlaps = []
+    for i, a in enumerate(rows):
+        for b in rows[i + 1:]:
+            if b["field_id"] != a["field_id"]:
+                break
+            if a["effective_end_date"] is None or a["effective_end_date"] >= b["effective_start_date"]:
+                overlaps.append({"field_id": a["field_id"], "memberships": [a, b]})
+    return overlaps
 
 
 def field_membership_covers(org_id: str, project_id: str, field_id: str,
