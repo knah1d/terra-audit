@@ -97,7 +97,7 @@ def classify_land_use(
     if cropland < CROPLAND_MIN_FRACTION:
         evidence["summary"] = (
             f"Mostly {evidence['dominant_land_cover']} — only {cropland:.0%} cropland "
-            "(ESA WorldCover 2021)."
+            f"detected."
         )
         return "non_cropland", evidence
 
@@ -120,7 +120,7 @@ def classify_land_use(
         )
         return "rice_paddy", evidence
     evidence["summary"] = (
-        f"Cropland ({cropland:.0%}, ESA WorldCover 2021) with no rice flooding pattern "
+        f"Cropland ({cropland:.0%}, detected) with no rice flooding pattern "
         f"in {n_obs} Sentinel-1 observations over the last 12 months."
     )
     return "upland_cropland", evidence
