@@ -91,10 +91,10 @@ export default function ExternalAWDValidationPage() {
           detector. Nothing on this page changes drydown counting, carbon calculations, readiness or issuance.
         </p>
       </div>
-      <Alert tone="warning" title="Practice classification, not a verified AWD cycle count">
+      {/* <Alert tone="warning" title="Practice classification, not a verified AWD cycle count">
         The model labels a whole season as AWD-like or PTR-like (conventional puddled transplanting). It does
         not count drying events, and it has not been validated on Bangladesh fields.
-      </Alert>
+      </Alert> */}
       {isPending && <Alert tone="info">Loading model metrics and last signal run…</Alert>}
       {error && <Alert tone="danger" title="Unable to load comparison">
         {error.message} <button type="button" className="underline" onClick={() => void refetch()}>Retry</button>
