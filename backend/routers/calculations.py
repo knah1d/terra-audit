@@ -5,6 +5,7 @@ are untouched by this router).
 """
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 
+from backend.access import require_project_access
 from backend.deps import get_current_user, get_owned_field, require_writer
 from backend.schemas.calculations import (
     CalculationCommitRequest, CalculationContext, DeterminationRequest, EngineInputsAlm, EngineInputsRice,
@@ -43,9 +44,14 @@ def _validate_engine_inputs(accounting_pathway: str, raw: dict) -> dict:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Invalid engine_inputs: {exc}") from exc
 
 
-def _validate_project(org_id: str, project_id: str | None) -> None:
-    if project_id is not None and projects_db.get_project(org_id, project_id) is None:
+def _validate_project(user: dict, project_id: str | None) -> str | None:
+    """The project must exist and the caller must be able to work in it
+    (member, or org admin). Returns the caller's project role."""
+    if project_id is None:
+        return None
+    if projects_db.get_project(user["org_id"], project_id) is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Project not found")
+    return require_project_access(user["org_id"], project_id, user)
 
 
 @router.post("/fields/{field_id}/calculations/readiness")
@@ -54,7 +60,7 @@ def get_readiness(field_id: str, body: ReadinessRequest, user=Depends(get_curren
     result-derived checks (QA3 gate, leakage) read as 'needs_review: run
     a preview' rather than silently guessing an outcome."""
     _validate_pathway(field, body.accounting_pathway)
-    _validate_project(user["org_id"], body.project_id)
+    _validate_project(user, body.project_id)
     checklist, bundle_id = readiness_engine.build_readiness_checklist(
         user["org_id"], field, body.accounting_pathway, body.season_ids,
         body.monitoring_period_start.isoformat(), body.monitoring_period_end.isoformat(),
@@ -70,7 +76,7 @@ def preview_calculation(field_id: str, body: CalculationContext, user=Depends(ge
     the legacy /carbon-credits/preview endpoint's no-write contract."""
     org_id = user["org_id"]
     _validate_pathway(field, body.accounting_pathway)
-    _validate_project(org_id, body.project_id)
+    _validate_project(user, body.project_id)
     engine_inputs = _validate_engine_inputs(body.accounting_pathway, body.engine_inputs)
     try:
         snapshot = build_snapshot(
@@ -102,7 +108,17 @@ def commit_calculation(
     the caller cannot override this by asking nicely."""
     org_id = user["org_id"]
     _validate_pathway(field, body.accounting_pathway)
-    _validate_project(org_id, body.project_id)
+    project_role = _validate_project(user, body.project_id)
+    if body.project_id is not None:
+        if project_role == "viewer":
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Project viewers cannot commit calculations")
+        if not projects_db.field_membership_covers(
+                org_id, body.project_id, field_id,
+                body.monitoring_period_start.isoformat(), body.monitoring_period_end.isoformat()):
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                "This field is not a member of the selected project for the whole monitoring period. "
+                "Assign it to the project (or adjust the period) first.")
     engine_inputs = _validate_engine_inputs(body.accounting_pathway, body.engine_inputs)
 
     if body.supersedes_calculation_id is not None:

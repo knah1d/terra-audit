@@ -58,9 +58,12 @@ def assign_field(farm_id: str, body: FieldMembershipAssign, user=Depends(require
     _owned_farm(user["org_id"], farm_id)
     if get_field(user["org_id"], body.field_id) is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Field not found")
-    membership_id = projects_db.assign_field_to_farm(
-        user["org_id"], farm_id, body.field_id, body.effective_start_date.isoformat(), user["user_id"],
-    )
+    try:
+        membership_id = projects_db.assign_field_to_farm(
+            user["org_id"], farm_id, body.field_id, body.effective_start_date.isoformat(), user["user_id"],
+        )
+    except projects_db.MembershipConflictError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
     matches = [m for m in projects_db.list_farm_fields(user["org_id"], farm_id) if m["membership_id"] == membership_id]
     return FieldMembershipOut(**matches[0])
 

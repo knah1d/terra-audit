@@ -34,3 +34,12 @@ def readiness(user=Depends(require_admin)):
     ]
     return {"checked_at": datetime.now(timezone.utc).isoformat(), "checks": checks, "counts": {**counts, "models": models},
             "queued_jobs": queued, "notice": "Configuration checks do not establish production readiness. Confirm delivery, storage access and backup restoration in your environment."}
+
+
+@router.get("/admin/accounting-conflicts")
+def accounting_conflicts(user=Depends(require_admin)):
+    """Existing double counting (reviewable project calculations overlapping
+    for the same field and pathway), listed for admins to resolve. Committed
+    before the commit-time guard existed; never rewritten automatically."""
+    from src.carbon.calculations import accounting_conflicts as find_conflicts
+    return {"conflicts": find_conflicts(user["org_id"])}

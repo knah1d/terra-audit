@@ -121,9 +121,12 @@ def assign_field(project_id: str, body: FieldMembershipAssign, user=Depends(requ
     _owned_project(user["org_id"], project_id)
     if get_field(user["org_id"], body.field_id) is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Field not found")
-    membership_id = projects_db.assign_field_to_project(
-        user["org_id"], project_id, body.field_id, body.effective_start_date.isoformat(), user["user_id"],
-    )
+    try:
+        membership_id = projects_db.assign_field_to_project(
+            user["org_id"], project_id, body.field_id, body.effective_start_date.isoformat(), user["user_id"],
+        )
+    except projects_db.MembershipConflictError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
     matches = [m for m in projects_db.list_project_fields(user["org_id"], project_id) if m["membership_id"] == membership_id]
     return FieldMembershipOut(**matches[0])
 

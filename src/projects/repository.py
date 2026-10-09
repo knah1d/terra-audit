@@ -358,10 +358,33 @@ def update_farm(org_id: str, farm_id: str, name: str, contact_name: str, contact
 # Field <-> project / field <-> farm membership (shared implementation)
 # --------------------------------------------------------------------------
 
+class MembershipConflictError(ValueError):
+    """The field already has a membership in the SAME project/farm that
+    overlaps the requested period. Memberships in DIFFERENT projects may
+    overlap on purpose (see module docstring); double counting is guarded
+    at calculation commit instead (src.carbon.calculations)."""
+
+
 def _assign_field(table: str, owner_col: str, org_id: str, owner_id: str, field_id: str,
                    effective_start_date: str, assigned_by: str) -> str:
     membership_id = uuid.uuid4().hex
     with get_db_connection() as conn:
+        # New memberships are open-ended, so any same-owner membership that is
+        # still open or ends on/after the new start overlaps it (ISO dates
+        # compare correctly as text).
+        existing = conn.execute(
+            text(f"""
+                SELECT effective_start_date, effective_end_date FROM {table}
+                WHERE org_id = :org_id AND {owner_col} = :owner_id AND field_id = :field_id
+                  AND (effective_end_date IS NULL OR effective_end_date >= :start)
+            """),
+            {"org_id": org_id, "owner_id": owner_id, "field_id": field_id, "start": effective_start_date},
+        ).mappings().fetchone()
+        if existing is not None:
+            end = existing["effective_end_date"] or "open"
+            raise MembershipConflictError(
+                f"Field {field_id!r} is already a member here from {existing['effective_start_date']} "
+                f"to {end}, which overlaps a start of {effective_start_date}.")
         conn.execute(
             text(f"""
                 INSERT INTO {table} (membership_id, org_id, {owner_col}, field_id,
@@ -421,6 +444,22 @@ def list_project_fields(org_id: str, project_id: str) -> list[dict]:
 
 def list_projects_for_field(org_id: str, field_id: str) -> list[dict]:
     return _list_memberships("project_fields", "project_id", org_id, field_id=field_id)
+
+
+def field_membership_covers(org_id: str, project_id: str, field_id: str,
+                            period_start: str, period_end: str) -> bool:
+    """True if one of the field's memberships in this project spans the whole
+    period (by effective dates, so an ended membership still covers the past
+    it was in effect for)."""
+    with get_db_connection() as conn:
+        row = conn.execute(text("""
+            SELECT 1 FROM project_fields
+            WHERE org_id = :org_id AND project_id = :project_id AND field_id = :field_id
+              AND effective_start_date <= :start
+              AND (effective_end_date IS NULL OR effective_end_date >= :end)
+        """), {"org_id": org_id, "project_id": project_id, "field_id": field_id,
+               "start": period_start, "end": period_end}).fetchone()
+    return row is not None
 
 
 def assign_field_to_farm(org_id: str, farm_id: str, field_id: str,

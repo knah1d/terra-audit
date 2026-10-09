@@ -323,6 +323,43 @@ def list_calculations(org_id: str, field_id: str | None = None, project_id: str 
     return sorted(best_per_chain.values(), key=lambda r: r["created_at"], reverse=True)
 
 
+class AccountingConflictError(ValueError):
+    """Committing would make two reviewable project calculations account for
+    the same field, pathway and overlapping period — double counting."""
+
+
+_OVERLAPPING_ACCOUNTED = """
+    SELECT calculation_id, project_id, monitoring_period_start, monitoring_period_end
+    FROM calculations
+    WHERE org_id = :org_id AND field_id = :field_id AND accounting_pathway = :pathway
+      AND status = 'ready_for_review' AND project_id IS NOT NULL
+      AND monitoring_period_start <= :period_end AND monitoring_period_end >= :period_start
+"""
+
+
+def accounting_conflicts(org_id: str) -> list[dict]:
+    """Existing pairs of reviewable project calculations that double count
+    (same field + pathway, overlapping periods). Read-only report for admins:
+    data committed before the commit-time guard is listed, never rewritten."""
+    with get_db_connection() as conn:
+        rows = [dict(r) for r in conn.execute(text("""
+            SELECT calculation_id, project_id, field_id, accounting_pathway,
+                   monitoring_period_start, monitoring_period_end
+            FROM calculations
+            WHERE org_id = :org_id AND status = 'ready_for_review' AND project_id IS NOT NULL
+            ORDER BY field_id, monitoring_period_start
+        """), {"org_id": org_id}).mappings().fetchall()]
+    conflicts = []
+    for i, a in enumerate(rows):
+        for b in rows[i + 1:]:
+            if (a["field_id"], a["accounting_pathway"]) == (b["field_id"], b["accounting_pathway"]) \
+                    and a["monitoring_period_start"] <= b["monitoring_period_end"] \
+                    and b["monitoring_period_start"] <= a["monitoring_period_end"]:
+                conflicts.append({"field_id": a["field_id"], "accounting_pathway": a["accounting_pathway"],
+                                  "calculations": [a, b]})
+    return conflicts
+
+
 def commit_calculation(
     org_id: str, field_id: str, idempotency_key: str, snapshot: dict, inputs: dict, result: dict,
     readiness: list[dict], field_type: str, accounting_pathway: str, project_id: str | None,
@@ -365,6 +402,27 @@ def commit_calculation(
                 {"org_id": org_id, "cid": existing["calculation_id"]},
             ).mappings().fetchone()
             return {"calculation": _decode(dict(prior)), "already_committed": True}
+
+        # Double-counting guard: a reviewable project calculation may not
+        # overlap another reviewable project calculation for the same field and
+        # pathway (in this or any other project). Drafts and standalone
+        # (project-less) preliminary calculations are not accounted, and a
+        # correction replaces the version it supersedes, so neither conflicts.
+        if project_id is not None and status == "ready_for_review":
+            overlapping = [
+                row for row in conn.execute(text(_OVERLAPPING_ACCOUNTED), {
+                    "org_id": org_id, "field_id": field_id, "pathway": accounting_pathway,
+                    "period_start": monitoring_period_start, "period_end": monitoring_period_end,
+                }).mappings().fetchall()
+                if row["calculation_id"] != supersedes_calculation_id
+            ]
+            if overlapping:
+                other = overlapping[0]
+                raise AccountingConflictError(
+                    f"Double counting: calculation {other['calculation_id'][:8]} (project {other['project_id']}, "
+                    f"{other['monitoring_period_start']} – {other['monitoring_period_end']}) already accounts for "
+                    "this field and pathway in an overlapping period. To replace it, use "
+                    "'Correct an existing calculation'; otherwise choose a non-overlapping period.")
 
         if supersedes_calculation_id is not None:
             prior = conn.execute(
