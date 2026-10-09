@@ -87,7 +87,7 @@ def classify_land_use(
     """
     evidence = {"method": METHOD, "window_start": window_start, "window_end": window_end}
     if not fractions:
-        evidence["summary"] = "No ESA WorldCover pixels inside the boundary."
+        evidence["summary"] = "No land-cover data inside the boundary."
         return None, evidence
 
     cropland = sum(fractions.get(c, 0.0) for c in CROPLAND_CLASSES)
