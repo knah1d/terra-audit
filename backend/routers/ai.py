@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 
-from backend.deps import get_current_user, require_writer
+from backend.deps import get_current_user, get_owned_field, require_writer
 from backend.schemas.ai import DatasetBuildResult, TrainAccepted, TrainRequest
 from src.ai.ml.dataset_builder import build_dataset, save_dataset, load_dataset
 from src.persistence.database import get_job, list_completed_jobs
@@ -79,3 +79,48 @@ def get_last_validation(model_key: str, user: dict = Depends(get_current_user)):
         if result and result.get("summary", {}).get("model_name") == f"{org_id}_{model_key}":
             return result
     raise HTTPException(status.HTTP_404_NOT_FOUND, f"No completed training run found for '{model_key}'")
+
+
+@router.get("/fields/{field_id}/awd-external-comparison")
+def get_external_awd_comparison(
+    field_id: str,
+    user: dict = Depends(get_current_user),
+    field: dict = Depends(get_owned_field(expect_type="rice_awd")),
+):
+    """Read-only shadow comparison. Never calls prediction or the carbon engine.
+
+    External research dataset features are not interoperable with the existing
+    GEE sigma0 median features without independent preprocessing work.
+    Absence of benchmark results is explicit instead of faking accuracy.
+    """
+    from src.ai.ml.external_awd import read_metrics
+    from src.paths import DATA_DIR
+    from src.persistence.database import get_latest_signal_result
+
+    metrics = read_metrics(DATA_DIR / "external_awd_benchmark")
+    signal = get_latest_signal_result(user["org_id"], field_id)
+    if signal is None:
+        detector = None
+    else:
+        detector = {
+            "window_start": signal.get("window_start"),
+            "window_end": signal.get("window_end"),
+            "detector_used": signal.get("detector_used"),
+            "candidate_drydowns": signal.get("total_awd"),
+            "source": signal.get("cache_source"),
+        }
+    return {
+        "field_id": field_id,
+        "experimental": True,
+        "research_benchmark": metrics,
+        "existing_signal": detector,
+        "field_ml_prediction": None,
+        "comparison_status": "feature_adapter_not_validated",
+        "ground_truth_status": "not_provided",
+        "affects_carbon_calculation": False,
+        "message": (
+            "This research benchmark measures external AWD-practice labels, "
+            "not independent drydown counts. Terra Audit's Sentinel-1 preprocessing "
+            "differs; no field-level ML inference is activated."
+        ),
+    }
