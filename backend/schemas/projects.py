@@ -60,6 +60,11 @@ class FieldMembershipAssign(BaseModel):
     effective_start_date: date = Field(default_factory=date.today)
 
 
+class FieldMembershipStartUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    effective_start_date: date
+
+
 class FieldMembershipEnd(BaseModel):
     model_config = ConfigDict(extra="forbid")
     effective_end_date: date = Field(default_factory=date.today)

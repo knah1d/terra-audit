@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from backend.deps import get_current_user, require_writer
 from backend.access import require_project_access, require_project_lead
 from backend.schemas.projects import (
-    FieldMembershipAssign, FieldMembershipEnd, FieldMembershipOut,
+    FieldMembershipAssign, FieldMembershipEnd, FieldMembershipStartUpdate, FieldMembershipOut,
     ProjectCreate, ProjectMemberCreate, ProjectMemberOut, ProjectOut, ProjectUpdate,
 )
 from src.accounts.auth import list_org_users
@@ -142,6 +142,25 @@ def assign_field(project_id: str, body: FieldMembershipAssign, user=Depends(requ
         )
     except projects_db.MembershipConflictError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    matches = [m for m in projects_db.list_project_fields(user["org_id"], project_id) if m["membership_id"] == membership_id]
+    return FieldMembershipOut(**matches[0])
+
+
+@router.patch("/projects/{project_id}/fields/{membership_id}", response_model=FieldMembershipOut)
+def change_field_membership_start(project_id: str, membership_id: str, body: FieldMembershipStartUpdate,
+                                  user=Depends(require_writer)):
+    """Correct the date a field joined this project (lead or admin)."""
+    require_project_lead(user["org_id"], project_id, user)
+    _owned_project(user["org_id"], project_id)
+    try:
+        projects_db.change_project_field_start(user["org_id"], project_id, membership_id,
+                                               body.effective_start_date.isoformat())
+    except LookupError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
+    except projects_db.MembershipConflictError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
     matches = [m for m in projects_db.list_project_fields(user["org_id"], project_id) if m["membership_id"] == membership_id]
     return FieldMembershipOut(**matches[0])
 

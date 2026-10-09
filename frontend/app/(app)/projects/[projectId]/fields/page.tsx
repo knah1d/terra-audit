@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Select, TextInput } from "@/components/ui/Field";
 import { useFields } from "@/hooks/use-fields";
-import { useAssignFieldToProject, useEndFieldMembership, useProjectFields } from "@/hooks/use-projects";
+import { useAssignFieldToProject, useChangeFieldMembershipStart, useEndFieldMembership, useProjectFields } from "@/hooks/use-projects";
 
 export default function ProjectFieldsPage() {
   const project = useProjectContext();
@@ -56,7 +56,7 @@ export default function ProjectFieldsPage() {
           <div className="space-y-2">
             {openMemberships.map((m) => (
               <EndMembershipRow key={m.membership_id} membershipId={m.membership_id} fieldId={m.field_id}
-                                 name={fields.data?.find(f => f.field_id === m.field_id)?.name ?? m.field_id} start={m.effective_start_date} onEnd={endMembership} />
+                                 name={fields.data?.find(f => f.field_id === m.field_id)?.name ?? m.field_id} start={m.effective_start_date} onEnd={endMembership} projectId={project.project_id} />
             ))}
           </div>
         )}
@@ -65,18 +65,36 @@ export default function ProjectFieldsPage() {
   );
 }
 
-function EndMembershipRow({ membershipId, fieldId, name, start, onEnd }: {
+function EndMembershipRow({ membershipId, fieldId, name, start, onEnd, projectId }: {
   membershipId: string; fieldId: string; name: string; start: string;
-  onEnd: ReturnType<typeof useEndFieldMembership>;
+  onEnd: ReturnType<typeof useEndFieldMembership>; projectId: string;
 }) {
   const [reason, setReason] = useState("");
   const [open, setOpen] = useState(false);
   const [error, setError] = useState("");
+  const changeStart = useChangeFieldMembershipStart(projectId);
+  const [editingStart, setEditingStart] = useState(false);
+  const [newStart, setNewStart] = useState(start);
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border py-2 text-sm first:border-t-0">
       <div>
         <Link className="underline" href={`/fields/${fieldId}/enrollment`}>{name}</Link> <span className="ui-meta">{fieldId}</span>
         <Badge tone="neutral" className="ml-2">since {formatDate(start)}</Badge>
+        {!editingStart ? (
+          <Button variant="ghost" size="sm" className="ml-1" onClick={() => setEditingStart(true)}>Change start date</Button>
+        ) : (
+          <form className="mt-2 flex flex-wrap items-center gap-2" onSubmit={(e) => {
+            e.preventDefault();
+            setError("");
+            changeStart.mutateAsync({ membershipId, start: newStart }).then(() => setEditingStart(false))
+              .catch((err) => setError(err instanceof Error ? err.message : "Could not change the start date"));
+          }}>
+            <TextInput aria-label="New start date" type="date" value={newStart} onChange={(e) => setNewStart(e.target.value)} required className="max-w-44" />
+            <Button type="submit" size="sm" loading={changeStart.isPending}>Save</Button>
+            <Button type="button" variant="secondary" size="sm" onClick={() => { setEditingStart(false); setNewStart(start); }}>Cancel</Button>
+          </form>
+        )}
+        {error && <p role="alert" className="mt-1 text-danger-700">{error}</p>}
       </div>
       {!open ? (
         <Button variant="ghost" size="sm" onClick={() => setOpen(true)}>End membership</Button>
@@ -89,7 +107,6 @@ function EndMembershipRow({ membershipId, fieldId, name, start, onEnd }: {
           <TextInput aria-label="Reason for ending membership" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason" required className="max-w-xs" />
           <Button type="submit" variant="danger" size="sm" loading={onEnd.isPending}>Confirm</Button>
           <Button type="button" variant="secondary" size="sm" onClick={() => setOpen(false)}>Cancel</Button>
-          {error && <p role="alert">{error}</p>}
         </form>
       )}
     </div>

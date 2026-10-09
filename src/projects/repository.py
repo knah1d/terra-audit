@@ -445,6 +445,44 @@ def assign_field_to_project(org_id: str, project_id: str, field_id: str,
                           effective_start_date, assigned_by)
 
 
+def change_project_field_start(org_id: str, project_id: str, membership_id: str, new_start: str) -> None:
+    """Corrects when a field joined a project (e.g. it was added with today's
+    date but was really in the project from an earlier season). Still one
+    project per field at a time: the new period may not overlap any other
+    membership of the field."""
+    with get_db_connection() as conn:
+        row = conn.execute(text("""
+            SELECT field_id, effective_end_date FROM project_fields
+            WHERE org_id = :org_id AND project_id = :project_id AND membership_id = :membership_id
+        """), {"org_id": org_id, "project_id": project_id, "membership_id": membership_id}).mappings().fetchone()
+        if row is None:
+            raise LookupError("Membership not found in this project")
+        end = row["effective_end_date"]
+        if end is not None and new_start > end:
+            raise ValueError(f"The start date must be on or before the membership's end date ({end}).")
+        params = {"org_id": org_id, "field_id": row["field_id"], "membership_id": membership_id, "start": new_start}
+        overlap_end = ""
+        if end is not None:
+            overlap_end = "AND pf.effective_start_date <= :end"
+            params["end"] = end
+        other = conn.execute(text(f"""
+            SELECT pf.effective_start_date, pf.effective_end_date, p.name FROM project_fields pf
+            LEFT JOIN projects p ON p.org_id = pf.org_id AND p.project_id = pf.project_id
+            WHERE pf.org_id = :org_id AND pf.field_id = :field_id AND pf.membership_id != :membership_id
+              AND (pf.effective_end_date IS NULL OR pf.effective_end_date >= :start) {overlap_end}
+        """), params).mappings().fetchone()
+        if other is not None:
+            raise MembershipConflictError(
+                f"From {new_start} the field would overlap its membership in {other['name'] or 'another project'} "
+                f"({other['effective_start_date']} – {other['effective_end_date'] or 'no end date'}). "
+                "A field can belong to only one project at a time.")
+        conn.execute(text("""
+            UPDATE project_fields SET effective_start_date = :start
+            WHERE org_id = :org_id AND membership_id = :membership_id
+        """), params)
+        conn.commit()
+
+
 def end_project_field_membership(org_id: str, membership_id: str, effective_end_date: str, reason: str) -> bool:
     return _end_membership("project_fields", org_id, membership_id, effective_end_date, reason)
 

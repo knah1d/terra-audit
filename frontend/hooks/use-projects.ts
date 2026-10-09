@@ -74,6 +74,21 @@ export function useEndFieldMembership(projectId: string | undefined) {
   });
 }
 
+export function useChangeFieldMembershipStart(projectId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ membershipId, start }: { membershipId: string; start: string }) =>
+      apiFetch<FieldMembershipRow>(`/projects/${projectId}/fields/${membershipId}`, {
+        method: "PATCH", json: { effective_start_date: start },
+      }),
+    onSuccess: () => {
+      for (const key of [["project-fields", projectId], ["fields"], ["field-workflow"], ["project-workflow", projectId]]) {
+        void queryClient.invalidateQueries({ queryKey: key });
+      }
+    },
+  });
+}
+
 export function useAddProjectMember(projectId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
