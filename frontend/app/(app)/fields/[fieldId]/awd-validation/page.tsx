@@ -85,11 +85,7 @@ export default function ExternalAWDValidationPage() {
   return (
     <main className="ui-container space-y-6">
       <div>
-        <h2 className="ui-section-title">AWD practice classification (experimental)</h2>
-        <p className="mt-1 text-sm text-text-secondary">
-          A random forest trained on real research labels, shown alongside the existing rule-based
-          detector. Nothing on this page changes drydown counting, carbon calculations, readiness or issuance.
-        </p>
+        <h2 className="ui-section-title">AWD practice classification</h2>
       </div>
       {/* <Alert tone="warning" title="Practice classification, not a verified AWD cycle count">
         The model labels a whole season as AWD-like or PTR-like (conventional puddled transplanting). It does
