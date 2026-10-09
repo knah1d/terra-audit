@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Calculator, CheckCircle2, Save, Satellite, Sprout, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useToast } from "@/components/ui/Toast";
 import { useSession } from "@/app/providers";
 import { ExplainButton } from "@/components/ai/ExplainDrawer";
@@ -48,6 +48,21 @@ const FIX_TAB: Record<string, string> = {
 const isBlocking = (c: ReadinessCheck) => ["missing", "needs_review", "unsupported"].includes(c.status) && (c as { blocking?: boolean }).blocking !== false;
 
 type Run = { job_id: string; window_start: string; window_end: string; total_awd: number; season_length_days: number };
+
+// The last calculation request per field, for this browser tab. Coming back
+// to the page re-runs it (preview never writes), so the result and the things
+// to fix reappear — re-checked, so items fixed in the meantime drop off.
+type LastCalculation = { runChoice: string; manual: boolean; body: Record<string, unknown> };
+const lastCalculationKey = (fieldId: string) => `terra-audit:last-calculation:${fieldId}`;
+function loadLastCalculation(fieldId: string): LastCalculation | null {
+  try {
+    const raw = window.sessionStorage.getItem(lastCalculationKey(fieldId));
+    return raw ? JSON.parse(raw) as LastCalculation : null;
+  } catch { return null; }
+}
+function storeLastCalculation(fieldId: string, value: LastCalculation) {
+  try { window.sessionStorage.setItem(lastCalculationKey(fieldId), JSON.stringify(value)); } catch { /* storage unavailable */ }
+}
 
 function download(value: unknown, name: string) {
   const url = URL.createObjectURL(new Blob([JSON.stringify(value, null, 2)], { type: "application/json" }));
@@ -110,12 +125,17 @@ function CalculationsView() {
   const projects = useProjects();
 
   // Manual context (Advanced) — also used for deep links that carry dates.
-  const [manual, setManual] = useState(() => !!urlDate("start") && !!urlDate("end"));
-  const [periodStart, setPeriodStart] = useState(() => urlDate("start"));
-  const [periodEnd, setPeriodEnd] = useState(() => urlDate("end"));
-  const [manualSeasons, setManualSeasons] = useState<string[]>(() => search.getAll("season"));
-  const [runChoice, setRunChoice] = useState("");
-  const [projectId, setProjectId] = useState(() => search.get("project") ?? field.current_project?.project_id ?? "");
+  // A deep link wins over the remembered calculation.
+  const deepLink = !!urlDate("start") && !!urlDate("end");
+  const [last, setLast] = useState(() => deepLink ? null : loadLastCalculation(field.field_id));
+  const restoring = last?.manual ? last.body : null;
+  const [manual, setManual] = useState(() => deepLink || !!last?.manual);
+  const [periodStart, setPeriodStart] = useState(() => urlDate("start") || String(restoring?.monitoring_period_start ?? ""));
+  const [periodEnd, setPeriodEnd] = useState(() => urlDate("end") || String(restoring?.monitoring_period_end ?? ""));
+  const [manualSeasons, setManualSeasons] = useState<string[]>(() => (restoring?.season_ids as string[] | undefined) ?? search.getAll("season"));
+  const [runChoice, setRunChoice] = useState(() => last?.runChoice ?? "");
+  const [projectId, setProjectId] = useState(() => search.get("project")
+    ?? (last ? (last.body.project_id as string | null) ?? "" : field.current_project?.project_id ?? ""));
   const [supersedes, setSupersedes] = useState("");
   const [dirty, setDirty] = useState(true);
   const [lastBody, setLastBody] = useState<Record<string, unknown> | null>(null);
@@ -149,6 +169,23 @@ function CalculationsView() {
   const result = !dirty ? preview.data : undefined;
   const blocking = result ? result.readiness.filter(isBlocking) : [];
   const openCalculations = (history.data ?? []).filter((r) => !r.legacy && r.status !== "superseded");
+  // The remembered request applies only while the page still shows the same context.
+  const lastMatches = !!last && !!context && !contextIssue && last.body.monitoring_period_start === context.start
+    && last.body.monitoring_period_end === context.end && JSON.stringify(last.body.season_ids) === JSON.stringify(context.seasons);
+  const lastInputs = lastMatches ? last!.body.engine_inputs as Record<string, unknown> : undefined;
+  const lastAmendment = (lastInputs?.project_amendments as [string, number][] | undefined)?.[0];
+
+  const runPreview = preview.mutateAsync;
+  const contextReady = !!context && seasons.isSuccess;
+  const restored = useRef(false);
+  useEffect(() => {
+    if (restored.current || !contextReady) return;
+    restored.current = true;
+    if (!writable || !lastMatches) return;
+    const body = { ...last!.body, signal_run_id: evidenceRun?.job_id ?? null };
+    runPreview(body).then(() => { setLastBody(body); setDirty(false); })
+      .catch(() => { /* inputs no longer valid — the user recalculates */ });
+  }, [contextReady, writable, lastMatches, last, evidenceRun, runPreview]);
 
   function markDirty() { setDirty(true); setSaved(null); }
 
@@ -232,25 +269,27 @@ function CalculationsView() {
               engine_inputs: readInputs(form), signal_run_id: evidenceRun?.job_id ?? null };
             await preview.mutateAsync(body);
             setLastBody(body); setDirty(false); setSaved(null);
+            const remembered = { runChoice: manual ? "" : run?.job_id ?? "", manual, body };
+            storeLastCalculation(field.field_id, remembered); setLast(remembered);
           });
         }}>
           {isRice ? (
             <>
-              <label className="text-sm">AWD events<TextInput name="awd_events" type="number" min={0} required defaultValue={evidenceRun?.total_awd ?? ""} /></label>
-              <label className="text-sm">Season length (days)<TextInput name="season_length_days" type="number" min={1} required defaultValue={evidenceRun?.season_length_days ?? ""} /></label>
-              <label className="text-sm">Pre-season water regime<Select name="preseason_category" defaultValue="short">
+              <label className="text-sm">AWD events<TextInput name="awd_events" type="number" min={0} required defaultValue={String(lastInputs?.awd_events ?? evidenceRun?.total_awd ?? "")} /></label>
+              <label className="text-sm">Season length (days)<TextInput name="season_length_days" type="number" min={1} required defaultValue={String(lastInputs?.season_length_days ?? evidenceRun?.season_length_days ?? "")} /></label>
+              <label className="text-sm">Pre-season water regime<Select name="preseason_category" defaultValue={String(lastInputs?.preseason_category ?? "short")}>
                 <option value="short">Non-flooded &lt; 180 days (double/multi-cropping)</option><option value="long">Non-flooded &gt; 180 days (single cropping)</option>
               </Select></label>
-              <label className="text-sm">N input (kg N/ha)<TextInput name="q_n_kg_per_ha" type="number" step="any" min={0} required defaultValue={100} /></label>
-              <label className="text-sm">Organic amendment<Select name="amendment_type" defaultValue="straw_shortly_before">
+              <label className="text-sm">N input (kg N/ha)<TextInput name="q_n_kg_per_ha" type="number" step="any" min={0} required defaultValue={Number(lastInputs?.q_n_kg_per_ha ?? 100)} /></label>
+              <label className="text-sm">Organic amendment<Select name="amendment_type" defaultValue={lastAmendment?.[0] ?? "straw_shortly_before"}>
                 {AMENDMENT_TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
               </Select></label>
-              <label className="text-sm">Application rate (t/ha)<TextInput name="amendment_rate" type="number" step="any" min={0} required defaultValue={5} /></label>
+              <label className="text-sm">Application rate (t/ha)<TextInput name="amendment_rate" type="number" step="any" min={0} required defaultValue={lastAmendment?.[1] ?? 5} /></label>
             </>
           ) : (
             <>
-              <label className="text-sm">Verification years<TextInput name="verification_years" type="number" step="any" min={1} required defaultValue={1} /></label>
-              <label className="text-sm">Non-permanence risk (%)<TextInput name="non_permanence_risk_pct" type="number" step="any" min={0} max={100} required defaultValue={20} /></label>
+              <label className="text-sm">Verification years<TextInput name="verification_years" type="number" step="any" min={1} required defaultValue={Number(lastInputs?.verification_years ?? 1)} /></label>
+              <label className="text-sm">Non-permanence risk (%)<TextInput name="non_permanence_risk_pct" type="number" step="any" min={0} max={100} required defaultValue={Number(lastInputs?.non_permanence_risk_pct ?? 20)} /></label>
             </>
           )}
           <div className="sm:col-span-2">
