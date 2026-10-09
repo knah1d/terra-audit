@@ -50,12 +50,17 @@ type Prediction = {
   window_start: string;
   window_end: string;
   observations: number;
+  max_gap_days: number;
   relative_orbit: number | null;
   embedding_year: number;
   model_version: string;
+  warnings: string[];
+  // Always the same Signal Analytics run (same field, same window) as the detector card.
   comparison: {
-    status: "compared" | "different_windows" | "no_detector_run";
+    status: "compared" | "no_detector_run";
     detector_category: "continuous_flooding" | "single_drainage" | "multiple_drainage" | null;
+    detector_drydowns: number | null;
+    ml_is_awd: boolean;
     agrees: boolean | null;
   };
 };
@@ -81,6 +86,8 @@ export default function ExternalAWDValidationPage() {
   const metrics = data?.research_benchmark ?? null;
   const detector = data?.existing_signal ?? null;
   const result = prediction.data;
+  // A 422 is an expected "no prediction" outcome (no run yet, too few observations, embedding not published).
+  const predictionWarning = prediction.error instanceof ApiError && prediction.error.status === 422;
 
   return (
     <main className="ui-container space-y-6">
@@ -106,7 +113,10 @@ export default function ExternalAWDValidationPage() {
                   detector.candidate_drydowns === 0 ? "continuous_flooding"
                     : detector.candidate_drydowns === 1 ? "single_drainage" : "multiple_drainage"]}</strong></p>
               )}
-              <p className="text-sm text-text-secondary">Window: {detector.window_start ?? "—"} – {detector.window_end ?? "—"}</p>
+              <p className="text-sm text-text-secondary">
+                Window: {detector.window_start ?? "—"} – {detector.window_end ?? "—"}
+                {result && " (same window as the ML classification)"}
+              </p>
               <p className="text-xs text-text-tertiary">Detector: {detector.detector_used ?? "Unknown"} · Source: {detector.source ?? "Unknown"}</p>
             </> : <p className="text-sm text-text-secondary">No saved signal run for this field.</p>}
             <Link className="text-sm underline" href={`${fieldPath}/signal-analytics`}>Open Signal Analytics</Link>
@@ -117,31 +127,47 @@ export default function ExternalAWDValidationPage() {
             {!metrics ? (
               <p className="text-sm text-text-secondary">No trained model is installed on this server.</p>
             ) : <>
-              <Button type="button" onClick={() => prediction.mutate()} loading={prediction.isPending}>
+              <Button type="button" onClick={() => prediction.mutate()} loading={prediction.isPending} disabled={!detector}>
                 {result ? "Run again" : "Run ML classification"}
               </Button>
-              {prediction.error && <Alert tone="danger">
+              <p className="ui-meta">
+                {detector
+                  ? `Uses the same field and window as the latest Signal Analytics run (${detector.window_start} – ${detector.window_end}).`
+                  : "Run Signal Analytics first — the ML classification uses the same window."}
+              </p>
+              {prediction.error && <Alert tone={predictionWarning ? "warning" : "danger"}>
                 {prediction.error instanceof ApiError ? prediction.error.detail : prediction.error.message}
               </Alert>}
-              {result && <>
-                <div>
-                  <p className="ui-meta">AWD score</p>
-                  <p className="text-xl font-semibold tabular-nums">{pct(result.awd_score)}</p>
-                  <p className="ui-meta">Share of the model&apos;s trees voting AWD — not a calibrated probability.</p>
+              {result && !prediction.error && <>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <p className="ui-meta">Classification</p>
+                    <p className="text-xl font-semibold">{result.comparison.ml_is_awd ? "AWD" : "Not AWD"}</p>
+                  </div>
+                  <div>
+                    <p className="ui-meta">AWD score</p>
+                    <p className="text-xl font-semibold tabular-nums">{pct(result.awd_score)}</p>
+                  </div>
                 </div>
+                <p className="ui-meta">AWD when the score is 50% or more. The score is the share of the model&apos;s trees
+                  voting AWD, not a calibrated probability.</p>
                 <p className="text-xs text-text-secondary">
-                  Window {result.window_start} – {result.window_end} · {result.observations} ascending observations ·
-                  relative orbit {result.relative_orbit ?? "—"} · Satellite Embedding {result.embedding_year}
+                  Window {result.window_start} – {result.window_end} · {result.observations} ascending Sentinel-1
+                  observations (largest gap {result.max_gap_days} days) · relative orbit {result.relative_orbit ?? "—"} ·
+                  Satellite Embedding {result.embedding_year}
                 </p>
+                {result.warnings.map((w) => <Alert key={w} tone="warning">{w}</Alert>)}
                 <p className="text-sm">
                   <strong>Compared with detector: </strong>
-                  {result.comparison.status === "no_detector_run" ? "no detector run to compare."
-                    : <>
-                      {result.comparison.agrees ? "agrees" : "disagrees"} at practice level
-                      (AWD score ≥ 50% ↔ multiple drainage).
-                      {result.comparison.status === "different_windows" &&
-                        " Caution: the detector run covers a different date window."}
-                    </>}
+                  {result.comparison.status === "no_detector_run" ? "no detector run to compare." : <>
+                    {result.comparison.agrees ? "they agree" : "they disagree"} — ML says{" "}
+                    {result.comparison.ml_is_awd ? "AWD" : "not AWD"} ({pct(result.awd_score)}{" "}
+                    {result.comparison.ml_is_awd ? "≥" : "<"} 50%); the detector found{" "}
+                    {result.comparison.detector_drydowns} drydown{result.comparison.detector_drydowns === 1 ? "" : "s"}{" "}
+                    ({result.comparison.detector_category === "multiple_drainage" ? "AWD: multiple drainage"
+                      : "not AWD: " + (result.comparison.detector_category === "single_drainage"
+                        ? "single drainage" : "continuous flooding")}).
+                  </>}
                 </p>
               </>}
             </>}

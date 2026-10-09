@@ -42,7 +42,9 @@ WINDOW_MONTH_DAY = ((6, 1), (9, 5))
 K = 3
 SPLINE_SIGMA = 0.5
 RATIO_SMOOTHING_SIGMA = 10
-MIN_OBSERVATIONS = 4
+TRAINING_WINDOW_DAYS = 97  # Jun 1 - Sep 5 inclusive
+MIN_OBSERVATIONS = 6       # inference quality screens, not research parameters
+MAX_GAP_DAYS = 30
 VARIABLES = [f"VV_{ORBIT}_mean_spline", f"VH_{ORBIT}_mean_spline", f"{ORBIT}_spline_ratio"]
 EMBEDDING_COLLECTION = "GOOGLE/SATELLITE_EMBEDDING/V1/ANNUAL"
 SE_NAMES = [f"sat_emb_{i}" for i in range(64)]  # research column sat_emb_i = band A{i:02d}
@@ -52,6 +54,20 @@ _EPOCH = pd.Timestamp("1970-01-01")  # matplotlib>=3.3 date2num epoch (research 
 def window_for_year(year: int) -> tuple[str, str]:
     (sm, sd), (em, ed) = WINDOW_MONTH_DAY
     return date(year, sm, sd).isoformat(), date(year, em, ed).isoformat()
+
+
+def embedding_year_for(start: str, end: str) -> int:
+    """Calendar year holding the window's midpoint — the Satellite Embedding
+    year paired with it (training paired each season with its own year)."""
+    s, e = date.fromisoformat(start), date.fromisoformat(end)
+    return (s + (e - s) / 2).year
+
+
+def observation_quality(series: pd.DataFrame, start: str, end: str) -> tuple[int, int]:
+    """(distinct observation dates in the window, largest gap in days including the window edges)."""
+    days = sorted({date.fromisoformat(d) for d in series["date"] if start <= d <= end}) if not series.empty else []
+    bounds = [date.fromisoformat(start), *days, date.fromisoformat(end)]
+    return len(days), max((b - a).days for a, b in zip(bounds, bounds[1:]))
 
 
 def research_window(today: date) -> tuple[str, str]:

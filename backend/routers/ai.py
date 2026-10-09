@@ -1,3 +1,5 @@
+from datetime import date
+
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 
 from backend.deps import get_current_user, get_owned_field, get_spatial_engine, require_writer
@@ -95,21 +97,23 @@ def _detector_summary(org_id: str, field_id: str) -> dict | None:
     }
 
 
-def _compare(detector: dict | None, ml_is_awd: bool, window: tuple[str, str]) -> dict:
-    """Practice-level comparison only. The detector's drydown count maps to
-    VM0051's water-regime categories; the model only says AWD-like vs
-    PTR-like, so the count itself is never compared."""
+def _compare(detector: dict | None, ml_is_awd: bool) -> dict:
+    """Practice-level comparison on the SAME Signal Analytics run (same field,
+    same window). The detector's drydown count maps to VM0051's water-regime
+    categories; VM0051 defines AWD as multiple (>1) drainage events, so the
+    ML side "AWD" (score >= 50%) is compared with "multiple drainage" and
+    "not AWD" with 0 or 1 drydowns. The count itself is never compared."""
     if detector is None or detector["candidate_drydowns"] is None:
-        return {"status": "no_detector_run", "detector_category": None, "agrees": None}
+        return {"status": "no_detector_run", "detector_category": None, "detector_drydowns": None,
+                "ml_is_awd": ml_is_awd, "agrees": None}
     count = detector["candidate_drydowns"]
     category = ("continuous_flooding" if count == 0 else
                 "single_drainage" if count == 1 else "multiple_drainage")
-    overlaps = bool(detector["window_start"] and detector["window_end"]
-                    and detector["window_start"] <= window[1] and detector["window_end"] >= window[0])
     return {
-        "status": "compared" if overlaps else "different_windows",
+        "status": "compared",
         "detector_category": category,
-        # VM0051 defines AWD as multiple (>1) drainage events.
+        "detector_drydowns": count,
+        "ml_is_awd": ml_is_awd,
         "agrees": (category == "multiple_drainage") == ml_is_awd,
     }
 
@@ -145,16 +149,18 @@ def predict_external_awd(
     field: dict = Depends(get_owned_field(expect_type="rice_awd")),
     engine=Depends(get_spatial_engine),
 ):
-    """Experimental, read-only AWD practice classification for one field:
-    ascending Sentinel-1 gamma0 over the research window plus the same
-    year's Satellite Embedding — the same 125 features the model was trained
-    on — then the random forest. Nothing is stored and no calculation input
-    changes."""
-    from datetime import date
+    """Experimental, read-only AWD practice classification for one field, on
+    exactly the window of the field's latest Signal Analytics run (same field
+    geometry, same dates as the rule-based detector it is compared with):
+    ascending Sentinel-1 gamma0 plus the same year's Satellite Embedding, the
+    same 125 features and preprocessing as training, then the random forest.
+    Too few observations or a missing embedding year give a 422 warning
+    instead of a score. Nothing is stored and no calculation input changes."""
     from src.ai.ml.external_awd import load_bundle, predict
     from src.ai.ml.ricemapper_features import (
-        FEATURE_VERSION, extract_ascending_gamma0, extract_satellite_embedding,
-        handcrafted_features, latest_embedding_year, research_window, window_for_year,
+        FEATURE_VERSION, MAX_GAP_DAYS, MIN_OBSERVATIONS, TRAINING_WINDOW_DAYS, embedding_year_for,
+        extract_ascending_gamma0, extract_satellite_embedding, handcrafted_features,
+        latest_embedding_year, observation_quality, window_for_year,
     )
 
     bundle = load_bundle()
@@ -162,15 +168,29 @@ def predict_external_awd(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "External AWD model is not installed on this server")
     if bundle.get("feature_version") != FEATURE_VERSION:
         raise HTTPException(status.HTTP_409_CONFLICT, "Model and feature pipeline versions differ")
+    detector = _detector_summary(user["org_id"], field_id)
+    if detector is None or not detector["window_start"] or not detector["window_end"]:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            "Run Signal Analytics for this field first — the ML classification uses "
+                            "the same window as its latest run.")
+    window = (detector["window_start"], detector["window_end"])
     geometry = field["geojson_geometry"]
-    latest_window_year = int(research_window(date.today())[0][:4])
+    year = embedding_year_for(*window)
     try:
-        year = latest_embedding_year(geometry, up_to=latest_window_year)
-        if year is None:
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY,
-                                "No Satellite Embedding is published for this field yet")
-        window = window_for_year(year)
+        if latest_embedding_year(geometry, up_to=year) != year:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                f"No prediction: Google's Satellite Embedding for {year} is not published yet (it is "
+                "released after the year ends), and the model needs the same year's embedding, as in "
+                "training. Choose a window in an earlier year in Signal Analytics.")
         series, relative_orbit = extract_ascending_gamma0(geometry, *window)
+        n_obs, max_gap = observation_quality(series, *window)
+        if n_obs < MIN_OBSERVATIONS or max_gap > MAX_GAP_DAYS:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                f"No prediction: only {n_obs} ascending Sentinel-1 observations in {window[0]} – {window[1]} "
+                f"(largest gap {max_gap} days). At least {MIN_OBSERVATIONS} observations and no gap over "
+                f"{MAX_GAP_DAYS} days are needed for a reliable classification.")
         embedding = extract_satellite_embedding(geometry, year)
     except HTTPException:
         raise
@@ -179,10 +199,17 @@ def predict_external_awd(
     try:
         features = handcrafted_features(series, *window)
     except ValueError as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc))
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"No prediction: {exc}")
     features.update(embedding)
     score = predict(bundle, features)
     is_awd = score >= 0.5
+    warnings = []
+    if window != window_for_year(year):
+        days = (date.fromisoformat(window[1]) - date.fromisoformat(window[0])).days + 1
+        warnings.append(
+            f"This window ({days} days) is not the model's training window (Jun 1 – Sep 5, "
+            f"{TRAINING_WINDOW_DAYS} days). Features are computed exactly as in training, but the model "
+            "has never seen this period, so treat the score as indicative only.")
     return {
         "field_id": field_id,
         "experimental": True,
@@ -192,11 +219,13 @@ def predict_external_awd(
         "score_calibrated": False,
         "window_start": window[0],
         "window_end": window[1],
-        "observations": int(series["date"].nunique()),
+        "observations": n_obs,
+        "max_gap_days": max_gap,
         "relative_orbit": relative_orbit,
         "embedding_year": year,
         "model_version": bundle["version"],
         "feature_version": FEATURE_VERSION,
-        "comparison": _compare(_detector_summary(user["org_id"], field_id), is_awd, window),
+        "warnings": warnings,
+        "comparison": _compare(detector, is_awd),
         "affects_carbon_calculation": False,
     }
