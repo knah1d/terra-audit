@@ -4,16 +4,16 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Save } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { useFieldContext } from "@/components/fields/FieldContext";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { ErrorText, FieldLabel, TextInput } from "@/components/ui/Field";
+import { ErrorText, FieldLabel, Select, TextInput } from "@/components/ui/Field";
 import { useUpdateField } from "@/hooks/use-fields";
-import { useDetectedDistrict } from "@/hooks/use-geometry";
+import { useDetectedDistrict, useDetectedLandUse } from "@/hooks/use-geometry";
 import { ApiError } from "@/lib/api";
-import { fieldUpdateSchema, type FieldUpdateForm } from "@/lib/schemas/field";
+import { LAND_USE_OPTIONS, fieldUpdateSchema, type FieldUpdateForm } from "@/lib/schemas/field";
 
 export default function EditFieldPage() {
   const field = useFieldContext();
@@ -22,16 +22,25 @@ export default function EditFieldPage() {
   const [serverError, setServerError] = useState<string | null>(null);
   const { data: districtData, isFetching: detectingDistrict } = useDetectedDistrict(field.geojson_geometry);
   const detectedDistrict = districtData?.district ?? null;
+  // Only fields registered before Field Type existed (land_use null) are
+  // detected here; a recorded value is shown as-is.
+  const {
+    data: landUseData, isFetching: detectingLandUse, isError: landUseFailed,
+  } = useDetectedLandUse(field.land_use ? null : field.geojson_geometry);
+  const detectedLandUse = landUseData?.land_use ?? null;
 
   const {
     register,
     handleSubmit,
     setValue,
+    control,
+    getFieldState,
     formState: { errors, isSubmitting },
   } = useForm<FieldUpdateForm>({
     resolver: zodResolver(fieldUpdateSchema),
-    defaultValues: { name: field.name, district: field.district },
+    defaultValues: { name: field.name, district: field.district, land_use: field.land_use ?? "" },
   });
+  const landUse = useWatch({ control, name: "land_use" });
 
   // The boundary is immutable, so a detected district is read-only (and
   // replaces any older manually-entered value on save).
@@ -39,10 +48,31 @@ export default function EditFieldPage() {
     if (detectedDistrict) setValue("district", detectedDistrict, { shouldValidate: true });
   }, [detectedDistrict, setValue]);
 
+  useEffect(() => {
+    if (detectedLandUse && !getFieldState("land_use").isDirty) setValue("land_use", detectedLandUse);
+  }, [detectedLandUse, setValue, getFieldState]);
+
+  const landUseHint = (() => {
+    if (field.land_use) {
+      if (landUse !== field.land_use) return "Changed — will be recorded as a manual entry.";
+      const summary = field.land_use_evidence?.summary ?? "";
+      return field.land_use_source === "detected"
+        ? `Detected from satellite imagery. ${summary}`
+        : `Entered manually. ${summary ? `Satellite detection: ${summary}` : ""}`;
+    }
+    if (detectingLandUse) return "Detecting from satellite imagery…";
+    if (landUseFailed) return "Satellite detection is unavailable — choose the field type manually.";
+    if (!landUseData) return null;
+    if (!detectedLandUse) return `${landUseData.evidence.summary ?? ""} Choose the field type manually.`;
+    return landUse === detectedLandUse
+      ? `${landUseData.evidence.summary ?? ""} Detected from satellite imagery — change it if it's wrong.`
+      : "Changed from the detected value — recorded as a manual entry.";
+  })();
+
   async function onSubmit(values: FieldUpdateForm) {
     setServerError(null);
     try {
-      await updateField.mutateAsync(values);
+      await updateField.mutateAsync({ ...values, land_use: values.land_use || null });
       router.push(`/fields/${field.field_id}/ledger`);
     } catch (err) {
       setServerError(err instanceof ApiError ? err.detail : "Failed to save");
@@ -64,8 +94,20 @@ export default function EditFieldPage() {
             {detectedDistrict && <p className="ui-meta mt-1">Detected from the field boundary.</p>}
             <ErrorText>{errors.district?.message}</ErrorText>
           </div>
+          <div>
+            <FieldLabel htmlFor="field-3">Field Type</FieldLabel>
+            <Select id="field-3" {...register("land_use")}>
+              <option value="">Not set</option>
+              {LAND_USE_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </Select>
+            {landUseHint && <p className="ui-meta mt-1">{landUseHint}</p>}
+          </div>
           <p className="ui-meta">
-            Field type and boundary are not editable here — they determine which cached data
+            Methodology and boundary are not editable here — they determine which cached data
             belongs to this field. Remove and re-register to change either.
           </p>
           {serverError && <Alert tone="danger">{serverError}</Alert>}

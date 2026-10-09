@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 import type { FieldCreateForm } from "@/lib/schemas/field";
-import type { FieldDetailOut, FieldOut } from "@/types/api";
+import type { FieldDetailOut, FieldOut, LandUse } from "@/types/api";
 
 export function useFields() {
   return useQuery({
@@ -23,7 +23,7 @@ export function useField(fieldId: string, initialData?: FieldDetailOut) {
 export function useCreateField() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (body: FieldCreateForm & { feature: GeoJSON.Feature }) =>
+    mutationFn: (body: Omit<FieldCreateForm, "land_use"> & { land_use: LandUse | null; feature: GeoJSON.Feature }) =>
       apiFetch<FieldDetailOut>("/fields", { method: "POST", json: body }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["fields"] });
@@ -34,7 +34,7 @@ export function useCreateField() {
 export function useUpdateField(fieldId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (body: { name: string; district: string }) =>
+    mutationFn: (body: { name: string; district: string; land_use: LandUse | null }) =>
       apiFetch<FieldDetailOut>(`/fields/${fieldId}`, { method: "PATCH", json: body }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["fields"] });

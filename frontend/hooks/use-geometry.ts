@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
-import type { GeometryParseResponse } from "@/types/api";
+import type { GeometryParseResponse, LandUseResponse } from "@/types/api";
 
 export function useParseCoordinates() {
   return useMutation({
@@ -43,5 +43,19 @@ export function useDetectedDistrict(geojson: GeoJSON.Feature | GeoJSON.FeatureCo
     queryKey: ["detect-district", geojson ? JSON.stringify(geojson) : null],
     queryFn: () => apiFetch<{ district: string | null }>("/geometry/district", { method: "POST", json: geojson }),
     enabled: geojson !== null,
+  });
+}
+
+/** Observed land use ("Field Type") suggested on the backend from ESA
+ * WorldCover + Sentinel-1 (src/signals/land_use.py). Errors (503 when Earth
+ * Engine isn't configured, 502 when it fails) mean "enter it manually" —
+ * no retry, since each attempt is a multi-second Earth Engine call. */
+export function useDetectedLandUse(geojson: GeoJSON.Feature | GeoJSON.FeatureCollection | null) {
+  return useQuery({
+    queryKey: ["detect-land-use", geojson ? JSON.stringify(geojson) : null],
+    queryFn: () => apiFetch<LandUseResponse>("/geometry/land-use", { method: "POST", json: geojson }),
+    enabled: geojson !== null,
+    retry: false,
+    staleTime: Infinity,
   });
 }

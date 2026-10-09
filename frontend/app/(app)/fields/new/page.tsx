@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { PenSquare, Save } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { GeometryInputTabs } from "@/components/fields/GeometryInputTabs";
 import { GeometryPreviewMap } from "@/components/map";
 import { Alert } from "@/components/ui/Alert";
@@ -13,8 +13,10 @@ import { Card } from "@/components/ui/Card";
 import { ErrorText, FieldLabel, Select, TextInput } from "@/components/ui/Field";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { useCreateField } from "@/hooks/use-fields";
-import { useComputedArea, useDetectedDistrict } from "@/hooks/use-geometry";
-import { FIELD_TYPE_OPTIONS, fieldCreateSchema, type FieldCreateForm } from "@/lib/schemas/field";
+import { useComputedArea, useDetectedDistrict, useDetectedLandUse } from "@/hooks/use-geometry";
+import {
+  FIELD_TYPE_OPTIONS, LAND_USE_OPTIONS, SUGGESTED_METHODOLOGY, fieldCreateSchema, type FieldCreateForm,
+} from "@/lib/schemas/field";
 import { ApiError } from "@/lib/api";
 
 /**
@@ -29,6 +31,10 @@ export default function NewFieldPage() {
   const { data: areaData } = useComputedArea(pendingFeature);
   const { data: districtData, isFetching: detectingDistrict } = useDetectedDistrict(pendingFeature);
   const detectedDistrict = districtData?.district ?? null;
+  const {
+    data: landUseData, isFetching: detectingLandUse, isError: landUseFailed,
+  } = useDetectedLandUse(pendingFeature);
+  const detectedLandUse = landUseData?.land_use ?? null;
   const createField = useCreateField();
   const [serverError, setServerError] = useState<string | null>(null);
 
@@ -36,11 +42,16 @@ export default function NewFieldPage() {
     register,
     handleSubmit,
     setValue,
+    control,
+    getFieldState,
     formState: { errors, isSubmitting },
   } = useForm<FieldCreateForm>({
     resolver: zodResolver(fieldCreateSchema),
-    defaultValues: { field_type: "rice_awd" },
+    defaultValues: { field_type: "rice_awd", land_use: "" },
   });
+  const landUse = useWatch({ control, name: "land_use" });
+  const fieldType = useWatch({ control, name: "field_type" });
+  const suggestedMethodology = SUGGESTED_METHODOLOGY[landUse];
 
   // The district comes from the boundary and is read-only; manual entry is
   // only offered when the boundary lies outside Bangladesh (null).
@@ -48,11 +59,26 @@ export default function NewFieldPage() {
     setValue("district", detectedDistrict ?? "", { shouldValidate: !!detectedDistrict });
   }, [detectedDistrict, setValue]);
 
+  // Field Type (observed land use) is pre-filled from satellite detection
+  // but stays editable — unless the user already picked one themselves.
+  useEffect(() => {
+    if (!getFieldState("land_use").isDirty) setValue("land_use", detectedLandUse ?? "");
+  }, [detectedLandUse, setValue, getFieldState]);
+
+  // Field Type suggests a Methodology, without overriding an explicit choice.
+  useEffect(() => {
+    if (suggestedMethodology && !getFieldState("field_type").isDirty) {
+      setValue("field_type", suggestedMethodology);
+    }
+  }, [suggestedMethodology, setValue, getFieldState]);
+
   async function onSubmit(values: FieldCreateForm) {
     if (!pendingFeature) return;
     setServerError(null);
     try {
-      const field = await createField.mutateAsync({ ...values, feature: pendingFeature });
+      const field = await createField.mutateAsync({
+        ...values, land_use: values.land_use || null, feature: pendingFeature,
+      });
       // Mirrors Streamlit's tab order: rice_awd's first working tab is
       // Signal Analytics (you run the SAR pipeline before the ledger has
       // anything real to calculate from); ALM has no such step, so it
@@ -124,7 +150,34 @@ export default function NewFieldPage() {
               <ErrorText id="new-field-district-error">{errors.district?.message}</ErrorText>
             </div>
             <div>
-              <FieldLabel htmlFor="field-4">Field Type / Methodology</FieldLabel>
+              <FieldLabel htmlFor="field-5">Field Type</FieldLabel>
+              <Select id="field-5" {...register("land_use")}>
+                <option value="">{detectingLandUse ? "Detecting from satellite imagery…" : "Not set"}</option>
+                {LAND_USE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </Select>
+              {!detectingLandUse && (
+                <p className="ui-meta mt-1">
+                  {landUseFailed
+                    ? "Satellite detection is unavailable — choose the field type manually."
+                    : landUseData && (
+                        <>
+                          {landUseData.evidence.summary}{" "}
+                          {detectedLandUse
+                            ? landUse === detectedLandUse
+                              ? "Detected from satellite imagery — change it if it's wrong."
+                              : "Changed from the detected value — recorded as a manual entry."
+                            : "Choose the field type manually."}
+                        </>
+                      )}
+                </p>
+              )}
+            </div>
+            <div>
+              <FieldLabel htmlFor="field-4">Methodology</FieldLabel>
               <Select id="field-4" {...register("field_type")}>
                 {FIELD_TYPE_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
@@ -137,6 +190,18 @@ export default function NewFieldPage() {
                 data-entry tabs) this field uses.
               </p>
             </div>
+            {suggestedMethodology && suggestedMethodology !== fieldType && (
+              <Alert tone="warning">
+                This methodology doesn&apos;t match the field type (
+                {LAND_USE_OPTIONS.find((o) => o.value === landUse)?.label}), which usually uses{" "}
+                {FIELD_TYPE_OPTIONS.find((o) => o.value === suggestedMethodology)?.label}.
+              </Alert>
+            )}
+            {landUse === "non_cropland" && (
+              <Alert tone="warning">
+                This boundary doesn&apos;t look like cropland — check it before registering.
+              </Alert>
+            )}
             {serverError && <Alert tone="danger">{serverError}</Alert>}
             <Button type="submit" icon={Save} loading={isSubmitting} disabled={!areaData || detectingDistrict} className="w-full">
               Save Field

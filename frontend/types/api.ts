@@ -4,6 +4,21 @@
 
 export type FieldType = "rice_awd" | "cropland_alm_vm0042";
 
+// Observed land use — "Field Type" in the UI. Distinct from FieldType,
+// which (despite its name) is the methodology.
+export type LandUse = "rice_paddy" | "rice_rotation" | "upland_cropland" | "non_cropland";
+
+export interface LandUseEvidence {
+  method?: string;
+  summary?: string;
+  [key: string]: unknown;
+}
+
+export interface LandUseResponse {
+  land_use: LandUse | null;
+  evidence: LandUseEvidence;
+}
+
 export interface FieldOut {
   field_id: string;
   name: string;
@@ -11,11 +26,14 @@ export interface FieldOut {
   area_ha: number | null;
   field_type: FieldType;
   created_at: string | null;
+  land_use: LandUse | null;
+  land_use_source: "detected" | "manual" | null;
 }
 
 export interface FieldDetailOut extends FieldOut {
   geojson_geometry: GeoJSON.FeatureCollection;
   alm_cumulative_delta_co2_wp: number | null;
+  land_use_evidence: LandUseEvidence | null;
 }
 
 export interface GeometryParseResponse {
