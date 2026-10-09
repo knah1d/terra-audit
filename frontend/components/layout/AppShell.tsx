@@ -8,9 +8,15 @@ import { Sheet } from "@/components/ui/Sheet";
 import type { SessionClaims } from "@/lib/session";
 
 export function AppShell({ session, children }: { session: SessionClaims | null; children: React.ReactNode }) {
-  const [collapsed, setCollapsed] = useState(false);
   const [mobileRoute, setMobileRoute] = useState<string | null>(null);
   const pathname = usePathname();
+  // Inside a field or project workspace (pages with their own tab bar) the
+  // sidebar shrinks to icons to give the workspace room; it expands again on
+  // top-level pages. A manual toggle holds until the user moves between the two.
+  const inWorkspace = /^\/(fields|projects)\/[^/]+\/./.test(pathname);
+  const [override, setOverride] = useState<{ inWorkspace: boolean; collapsed: boolean } | null>(null);
+  const collapsed = override?.inWorkspace === inWorkspace ? override.collapsed : inWorkspace;
+  const setCollapsed = (value: boolean) => setOverride({ inWorkspace, collapsed: value });
   return (
     <div className="min-h-screen p-3 lg:flex lg:gap-4 lg:p-4">
       <a href="#main-content" className="glass-chrome-strong fixed left-4 top-4 z-50 -translate-y-32 rounded-xl p-3 focus:translate-y-0">Skip to content</a>
