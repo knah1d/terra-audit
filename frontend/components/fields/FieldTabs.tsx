@@ -43,12 +43,11 @@ export function FieldTabs({ fieldId, fieldType }: { fieldId: string; fieldType: 
 
   // Workflow order lives in lib/field-steps.ts (shared with every redirect into a field).
   const workflow = useFieldWorkflow(fieldId);
-  let stepNumber = 0;
   const options = fieldSteps(fieldType).map((step) => ({
     href: `/fields/${fieldId}/${step.segment}`,
     label: step.label,
     icon: STEP_ICONS[step.segment] ?? Paperclip,
-    number: step.numbered ? ++stepNumber : null,
+    inFlow: step.numbered,
     status: workflow.data?.steps[step.segment]?.status,
   }));
 
@@ -75,29 +74,25 @@ export function FieldTabs({ fieldId, fieldType }: { fieldId: string; fieldType: 
     <Toolbar className="relative mb-0 inline-flex max-w-full w-fit overflow-x-auto gap-1 px-1.5 py-1.5">
       <div ref={containerRef} role="navigation" aria-label="Field sections" className="relative flex shrink-0 gap-1">
         {pillStyle && (
-          // The sliding lens itself is glass, not a flat solid fill — a
-          // brand-tinted .liquid-active-bg with the same specular rim the
-          // per-item .liquid-hover material uses, so it reads as "one
-          // piece of glass sliding between positions" rather than a
-          // colored rectangle.
+          // Solid brand pill behind the current tab (slides between tabs), so
+          // the page you are on is unmistakable.
           <div
             aria-hidden
             className="absolute top-0 h-full rounded-full transition-[transform,width] duration-[var(--dur-base)] ease-[var(--curve-out)]"
             style={{
               width: pillStyle.width,
               transform: `translateX(${pillStyle.left}px)`,
-              background: "var(--liquid-active-bg)",
-              boxShadow:
-                "inset 0 1px 0 var(--glass-specular), inset 0 0 0 1px var(--glass-rim), inset 0 0 0 1px color-mix(in srgb, var(--brand-600) 30%, transparent)",
+              background: "var(--brand-600)",
+              boxShadow: "0 1px 3px color-mix(in srgb, var(--brand-600) 45%, transparent), inset 0 1px 0 rgb(255 255 255 / 0.18)",
             }}
           />
         )}
-        {options.map(({ href, label, icon: Icon, number, status }, i) => {
+        {options.map(({ href, label, icon: Icon, inFlow, status }, i) => {
           const active = pathname === href;
           return (
             <Fragment key={href}>
-            {/* Arrow between consecutive numbered steps shows the order to follow. */}
-            {i > 0 && number !== null && (
+            {/* Arrow between consecutive workflow steps shows the order to follow. */}
+            {i > 0 && inFlow && options[i - 1].inFlow && (
               <ChevronRight aria-hidden className="size-3.5 shrink-0 self-center text-text-tertiary" />
             )}
             <Link
@@ -108,18 +103,12 @@ export function FieldTabs({ fieldId, fieldType }: { fieldId: string; fieldType: 
               onPointerMove={trackLiquidPointer}
               onPointerLeave={resetLiquidPointer}
               className={`liquid-hover press relative z-10 flex min-h-10 shrink-0 items-center gap-2 whitespace-nowrap rounded-full px-3.5 text-sm font-medium transition-colors duration-[var(--dur-base)] ${
-                active ? "text-brand-700" : "text-text-secondary hover:text-text-primary"
+                active ? "font-semibold text-white" : "text-text-secondary hover:text-text-primary"
               }`}
             >
-              {number !== null ? (
-                <span aria-hidden className="flex size-5 items-center justify-center rounded-full border border-current text-[0.7rem] tabular-nums">
-                  {number}
-                </span>
-              ) : (
-                <Icon className="size-3.5" aria-hidden />
-              )}
-              <span>{number !== null && <span className="sr-only">Step {number}: </span>}{label}</span>
-              {status && <StepStatusDot status={status} />}
+              <Icon className="size-4" aria-hidden />
+              <span>{label}</span>
+              {status && <StepStatusDot status={status} className={active ? "ring-2 ring-white/80" : undefined} />}
             </Link>
             </Fragment>
           );

@@ -14,9 +14,9 @@ export function StepStatusBadge({ status }: { status: StepStatus }) {
   return <Badge tone={STATUS_META[status].tone}>{STATUS_META[status].label}</Badge>;
 }
 
-export function StepStatusDot({ status }: { status: StepStatus }) {
+export function StepStatusDot({ status, className = "" }: { status: StepStatus; className?: string }) {
   return (
-    <span title={STATUS_META[status].label} className={`inline-block size-2 shrink-0 rounded-full ${STATUS_META[status].dot}`}>
+    <span title={STATUS_META[status].label} className={`inline-block size-2 shrink-0 rounded-full ${STATUS_META[status].dot} ${className}`}>
       <span className="sr-only">{STATUS_META[status].label}</span>
     </span>
   );
