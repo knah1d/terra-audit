@@ -34,3 +34,14 @@ export function useComputedArea(feature: GeoJSON.Feature | null) {
     enabled: feature !== null,
   });
 }
+
+/** District detected on the backend from the boundary (detect_district);
+ * `district` is null when the boundary lies outside Bangladesh. Accepts a
+ * Feature or a stored FeatureCollection. */
+export function useDetectedDistrict(geojson: GeoJSON.Feature | GeoJSON.FeatureCollection | null) {
+  return useQuery({
+    queryKey: ["detect-district", geojson ? JSON.stringify(geojson) : null],
+    queryFn: () => apiFetch<{ district: string | null }>("/geometry/district", { method: "POST", json: geojson }),
+    enabled: geojson !== null,
+  });
+}

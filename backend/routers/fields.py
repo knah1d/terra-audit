@@ -2,11 +2,12 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
 
 from backend.deps import get_current_user, get_owned_field, require_admin, require_writer
 from backend.schemas.fields import (
-    AreaResponse, FieldCreate, FieldDetailOut, FieldOut, FieldUpdate,
+    AreaResponse, DistrictResponse, FieldCreate, FieldDetailOut, FieldOut, FieldUpdate,
     GeometryParseResponse, ParseContentRequest, ParseCoordinatesRequest,
 )
 from src.persistence.database import create_field, delete_field, get_field, list_fields, update_field_info
 from src.field_types.registry import FIELD_TYPES
+from src.signals.districts import detect_district
 from src.signals.geometry import (
     compute_area_ha, parse_coordinate_text, parse_geojson_upload, parse_kml_upload,
 )
@@ -14,6 +15,21 @@ from src.signals.geometry import (
 router = APIRouter(tags=["fields"])
 
 _field = get_owned_field()
+
+
+def _resolve_district(geojson: dict, submitted: str) -> str:
+    """The district detected from the boundary wins over whatever the client
+    sent, so the read-only input can't be bypassed via the API. Manual entry
+    is only accepted for boundaries outside Bangladesh."""
+    try:
+        detected = detect_district(geojson)
+    except Exception as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Invalid geometry: {exc}")
+    district = detected or submitted.strip()
+    if not district:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            "District is required for boundaries outside Bangladesh")
+    return district
 
 
 @router.post("/fields/parse/geojson", response_model=GeometryParseResponse)
@@ -59,6 +75,14 @@ def geometry_area(feature: dict, user: dict = Depends(get_current_user)):
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Invalid geometry: {exc}")
 
 
+@router.post("/geometry/district", response_model=DistrictResponse)
+def geometry_district(feature: dict, user: dict = Depends(get_current_user)):
+    try:
+        return DistrictResponse(district=detect_district(feature))
+    except Exception as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Invalid geometry: {exc}")
+
+
 @router.get("/fields", response_model=list[FieldOut])
 def list_org_fields(user: dict = Depends(get_current_user)):
     return [FieldOut(**f) for f in list_fields(user["org_id"])]
@@ -92,7 +116,8 @@ def register_field(body: FieldCreate, user: dict = Depends(require_writer)):
         area_ha = compute_area_ha(body.feature)
     except Exception as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Invalid geometry: {exc}")
-    create_field(org_id, body.field_id, body.name.strip(), body.district.strip(),
+    district = _resolve_district(body.feature, body.district)
+    create_field(org_id, body.field_id, body.name.strip(), district,
                  body.feature, area_ha, body.field_type)
     return FieldDetailOut(**get_field(org_id, body.field_id))
 
@@ -101,7 +126,8 @@ def register_field(body: FieldCreate, user: dict = Depends(require_writer)):
 def edit_field(field_id: str, body: FieldUpdate, user: dict = Depends(require_writer),
                field: dict = Depends(_field)):
     org_id = user["org_id"]
-    update_field_info(org_id, field_id, body.name.strip(), body.district.strip())
+    district = _resolve_district(field["geojson_geometry"], body.district)
+    update_field_info(org_id, field_id, body.name.strip(), district)
     return FieldDetailOut(**get_field(org_id, field_id))
 
 

@@ -28,17 +28,26 @@ class AreaResponse(BaseModel):
     area_ha: float
 
 
+class DistrictResponse(BaseModel):
+    # None when the boundary lies outside Bangladesh — the client then
+    # falls back to manual entry.
+    district: str | None
+
+
 class FieldCreate(BaseModel):
     field_id: str
     name: str
-    district: str
+    # Ignored when the district can be detected from `feature`; only used
+    # for boundaries outside Bangladesh.
+    district: str = ""
     field_type: str
     feature: dict[str, Any]
 
 
 class FieldUpdate(BaseModel):
     name: str
-    district: str
+    # Ignored when the district can be detected from the stored boundary.
+    district: str = ""
 
 
 class FieldOut(BaseModel):
