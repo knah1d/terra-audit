@@ -3,7 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { PenSquare, Save } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { GeometryInputTabs } from "@/components/fields/GeometryInputTabs";
 import { GeometryPreviewMap } from "@/components/map";
@@ -13,7 +13,7 @@ import { Card } from "@/components/ui/Card";
 import { ErrorText, FieldLabel, Select, TextInput } from "@/components/ui/Field";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { useCreateField } from "@/hooks/use-fields";
-import { useComputedArea } from "@/hooks/use-geometry";
+import { useComputedArea, useDetectedDistrict } from "@/hooks/use-geometry";
 import { FIELD_TYPE_OPTIONS, fieldCreateSchema, type FieldCreateForm } from "@/lib/schemas/field";
 import { ApiError } from "@/lib/api";
 
@@ -27,17 +27,26 @@ export default function NewFieldPage() {
   const router = useRouter();
   const [pendingFeature, setPendingFeature] = useState<GeoJSON.Feature | null>(null);
   const { data: areaData } = useComputedArea(pendingFeature);
+  const { data: districtData, isFetching: detectingDistrict } = useDetectedDistrict(pendingFeature);
+  const detectedDistrict = districtData?.district ?? null;
   const createField = useCreateField();
   const [serverError, setServerError] = useState<string | null>(null);
 
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<FieldCreateForm>({
     resolver: zodResolver(fieldCreateSchema),
     defaultValues: { field_type: "rice_awd" },
   });
+
+  // The district comes from the boundary and is read-only; manual entry is
+  // only offered when the boundary lies outside Bangladesh (null).
+  useEffect(() => {
+    if (detectedDistrict) setValue("district", detectedDistrict, { shouldValidate: true });
+  }, [detectedDistrict, setValue]);
 
   async function onSubmit(values: FieldCreateForm) {
     if (!pendingFeature) return;
@@ -104,7 +113,14 @@ export default function NewFieldPage() {
             </div>
             <div>
               <FieldLabel htmlFor="field-3">District</FieldLabel>
-              <TextInput id="field-3" aria-invalid={!!errors.district} aria-describedby={errors.district ? "new-field-district-error" : undefined} {...register("district")} />
+              <TextInput id="field-3" readOnly={detectingDistrict || !!detectedDistrict} placeholder={detectingDistrict ? "Detecting from boundary…" : undefined} aria-invalid={!!errors.district} aria-describedby={errors.district ? "new-field-district-error" : undefined} {...register("district")} />
+              {!detectingDistrict && districtData && (
+                <p className="ui-meta mt-1">
+                  {detectedDistrict
+                    ? "Detected from the field boundary."
+                    : "Boundary is outside Bangladesh — enter the district manually."}
+                </p>
+              )}
               <ErrorText id="new-field-district-error">{errors.district?.message}</ErrorText>
             </div>
             <div>
@@ -122,7 +138,7 @@ export default function NewFieldPage() {
               </p>
             </div>
             {serverError && <Alert tone="danger">{serverError}</Alert>}
-            <Button type="submit" icon={Save} loading={isSubmitting} disabled={!areaData} className="w-full">
+            <Button type="submit" icon={Save} loading={isSubmitting} disabled={!areaData || detectingDistrict} className="w-full">
               Save Field
             </Button>
           </form>
