@@ -64,8 +64,7 @@ def test_alm_snapshot_commit_retry_preserves_one_draft_and_external_cumulative_s
     assert calc["result"]["leakage"]["computable"] is True
     assert calc["result"]["leakage"]["selected_record_ids"]
     assert calc["result"]["final_issuance"] > 0
-    assert any(row["requirement_id"] == "common.additionality" and row["status"] == "unsupported"
-               for row in calc["readiness"])
+    assert not any(row["requirement_id"] == "common.additionality" for row in calc["readiness"])
     second = client.post(f"/fields/{alm_field}/calculations", json=alm_calculation_context, headers=headers)
     assert second.status_code == 201, second.text
     assert second.json()["already_committed"] is True

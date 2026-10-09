@@ -36,8 +36,6 @@ from src.carbon.calculations import PATHWAYS, latest_determinations
 from src.persistence.database import get_alm_livestock_schedule, get_alm_practice_schedule, get_soc_measurements
 from src.field_types.alm_vm0042 import AlmPracticeValidator
 
-EXPERT_REQUIREMENTS = {"common.additionality"}  # always needs_review unless a human recorded a determination
-
 # Static, project-state-independent rows straight from the requirements
 # matrix — "this equation/scope is not implemented," true regardless of
 # what any specific project has recorded. Surfaced automatically for
@@ -695,14 +693,6 @@ def build_readiness_checklist(org_id, field, accounting_pathway, season_ids, mon
         checks += _rice_checks(org_id, field_id, engine_inputs, preview_result, bundle_id)
     elif accounting_pathway == "vm0042_alm":
         checks += _alm_checks(org_id, field_id, season_ids, monitoring_period_start, engine_inputs, preview_result, bundle_id)
-
-    for requirement_id in EXPERT_REQUIREMENTS:
-        checks.append(_check(
-            requirement_id, "needs_review",
-            "Additionality is an expert determination, not something this implementation can check "
-            "automatically — a reviewer must record a decision explicitly.",
-            bundle_id=bundle_id, determination="expert",
-        ))
 
     evidence_fingerprint = compute_evidence_fingerprint(org_id, field_id, accounting_pathway, season_ids, project_id)
     checks = _apply_manual_overrides(checks, org_id, field_id, accounting_pathway, bundle_id,

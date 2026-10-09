@@ -159,8 +159,8 @@ DOCUMENTS = [
      "source_url": "https://verra.org/methodologies/vmd0053-model-calibration-validation-and-uncertainty-guidance-for-the-methodology-for-improved-agricultural-land-management-v2-1/"},
     {"document_id": "vt0008", "methodology_key": "VT0008", "title": "VT0008: Additionality Assessment",
      "document_type": "tool",
-     "notes": "Additionality procedures are not ingested or automated — always requires an expert reviewer "
-              "decision (see EXPERT_REQUIREMENTS in src/methodology/readiness.py).",
+     "notes": "Additionality procedures are not ingested or automated, and additionality is not a "
+              "per-calculation readiness check — it is assessed for the project outside this system.",
      "source_url": "https://verra.org/methodologies/vt0008-additionality-assessment/"},
 ]
 
@@ -199,6 +199,10 @@ BUNDLES = [
 # manually overridden to 'satisfied' (enforced in src/projects/reviews.py's
 # record_determination and src/methodology/readiness.py's _apply_manual_overrides) —
 # see docs/RESEARCH_IMPLEMENTATION_PLAN_2026-09-23.md Phase 1, gap #2/#5.
+# Requirements removed from REQUIREMENTS; their previously seeded rows are
+# deleted at seed time (the upsert below never deletes on its own).
+RETIRED_REQUIREMENT_IDS = {"common.additionality"}
+
 REQUIREMENTS = [
     # --- Common to both pathways ---
     {"requirement_id": "common.methodology_applicability", "bundle_id": "",  # applies under both bundles
@@ -223,11 +227,6 @@ REQUIREMENTS = [
      "source_document_id": None, "source_section": None,
      "required_evidence": "Each field observation accepted by a team member other than its author.",
      "implementation_support": "implemented", "reviewer_authority": "reviewable", "blocking": True},
-    {"requirement_id": "common.additionality", "bundle_id": "",
-     "title": "Additionality assessment",
-     "source_document_id": "vt0008", "source_section": None,
-     "required_evidence": "VT0008 procedures applied by an expert reviewer — not automated by this system.",
-     "implementation_support": "unsupported", "reviewer_authority": "expert_required", "blocking": True},
     # --- VM0051 rice AWD ---
     {"requirement_id": "vm0051.required_measurement_inputs", "bundle_id": "vm0051-2026-07",
      "title": "Satellite-derived AWD event count and season length are supplied",
@@ -541,6 +540,8 @@ def _seed(conn):
                "source_section": req.get("source_section"), "required_evidence": req["required_evidence"],
                "implementation_support": req["implementation_support"],
                "reviewer_authority": req["reviewer_authority"], "blocking": int(req["blocking"])})
+    for requirement_id in RETIRED_REQUIREMENT_IDS:
+        conn.execute(text("DELETE FROM methodology_requirements WHERE requirement_id = :rid"), {"rid": requirement_id})
 
 
 # --------------------------------------------------------------------------

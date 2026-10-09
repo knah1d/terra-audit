@@ -38,13 +38,15 @@ const READINESS_TONE: Record<string, "success" | "warning" | "danger" | "neutral
 const FIX_TAB: Record<string, string> = {
   "common.monitoring_period_coverage": "crop-seasons", "common.evidence_review_status": "crop-seasons",
   "vm0042.historical_lookback": "crop-seasons", "vm0042.rotation_completeness": "crop-seasons",
-  "common.methodology_applicability": "enrollment", "common.additionality": "enrollment",
   "vm0051.required_measurement_inputs": "signal-analytics",
   "vm0042.project_practice_schedule": "practice-data", "vm0042.baseline_documentation": "practice-data",
   "vm0042.soc_measurements": "practice-data", "vm0042.soc_sampling_traceability": "soil-evidence",
   "vm0042.soc_uncertainty_annualization": "soil-evidence",
   "vm0042.leakage_evidence_review": "production-records", "vm0042.other_leakage_scope": "production-records",
 };
+// Items no tab can fix: only a project lead's recorded decision clears them,
+// in the evidence-review form under Advanced on this page.
+const DECISION_ITEMS = new Set(["common.methodology_applicability"]);
 const isBlocking = (c: ReadinessCheck) => ["missing", "needs_review", "unsupported"].includes(c.status) && (c as { blocking?: boolean }).blocking !== false;
 
 type Run = { job_id: string; window_start: string; window_end: string; total_awd: number; season_length_days: number };
@@ -315,7 +317,10 @@ function CalculationsView() {
                 {blocking.map((c) => (
                   <li key={c.requirement_id} className="flex flex-wrap items-center justify-between gap-2">
                     <span>{c.explanation}</span>
-                    {FIX_TAB[c.requirement_id] && <Link className="font-medium underline" href={`${base}/${FIX_TAB[c.requirement_id]}`}>Fix</Link>}
+                    {DECISION_ITEMS.has(c.requirement_id) ? (canReview && projectId
+                      ? <Link className="font-medium underline" href={`${base}/calculations?requirement=${encodeURIComponent(c.requirement_id)}#evidence-review`}>Review</Link>
+                      : <span className="ui-meta">{projectId ? "Decided by a project lead" : "Add the field to a project first"}</span>)
+                      : FIX_TAB[c.requirement_id] && <Link className="font-medium underline" href={`${base}/${FIX_TAB[c.requirement_id]}`}>Fix</Link>}
                   </li>
                 ))}
               </ul>
@@ -395,7 +400,7 @@ function CalculationsView() {
             </section>
           )}
           {canReview && projectId && result && context && (
-            <form className="space-y-2" onSubmit={(e) => {
+            <form id="evidence-review" key={highlighted} className="scroll-mt-6 space-y-2" onSubmit={(e) => {
               e.preventDefault();
               const data = new FormData(e.currentTarget);
               void perform("Couldn't save review", async () => {
