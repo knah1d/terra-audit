@@ -17,13 +17,39 @@ import { useJobPoll } from "@/hooks/use-job-poll";
 import { isSignalRunAccepted, useActiveSignalRuns, useCancelSignalRun, useLatestSignalRun, useRunSignalAnalysis } from "@/hooks/use-signal";
 import type { SignalDetector, SignalResult } from "@/types/api";
 
-const SEASON_PRESETS: Record<string, { start: string; end: string } | null> = {
-  "Boro 2026 (Jan–May)": { start: "2026-01-01", end: "2026-05-31" },
-  "Aman 2025 (Jul–Nov)": { start: "2025-07-01", end: "2025-11-30" },
-  "Pre-Kharif 2025 (Mar–Jun)": { start: "2025-03-01", end: "2025-06-30" },
-  "Boro 2025 (Jan–May)": { start: "2025-01-01", end: "2025-05-31" },
-  "Custom Range": null,
-};
+type SeasonPreset = { start: string; end: string; inProgress: boolean };
+
+// Bangladesh rice seasons (start/end month, 1-based).
+const SEASONS = [
+  { name: "Boro", startMonth: 1, endMonth: 5, months: "Jan–May" },
+  { name: "Pre-Kharif", startMonth: 3, endMonth: 6, months: "Mar–Jun" },
+  { name: "Aman", startMonth: 7, endMonth: 11, months: "Jul–Nov" },
+];
+
+function isoDate(year: number, month: number, day: number) {
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+/** The most recent occurrence of each season relative to `today` — the
+ * one in progress, else the last completed one — newest first. An
+ * in-progress season ends today rather than at its calendar end: signal
+ * observations are cached by exact window, so a future end date would
+ * cache a partial season and keep reusing it. */
+function buildSeasonPresets(today: Date): Record<string, SeasonPreset | null> {
+  const todayIso = isoDate(today.getFullYear(), today.getMonth() + 1, today.getDate());
+  const presets = SEASONS.map(({ name, startMonth, endMonth, months }) => {
+    let year = today.getFullYear();
+    if (todayIso < isoDate(year, startMonth, 1)) year -= 1;
+    const start = isoDate(year, startMonth, 1);
+    const end = isoDate(year, endMonth, new Date(year, endMonth, 0).getDate());
+    const inProgress = todayIso <= end;
+    return {
+      label: inProgress ? `${name} ${year} (in progress)` : `${name} ${year} (${months})`,
+      preset: { start, end: inProgress ? todayIso : end, inProgress },
+    };
+  }).sort((a, b) => b.preset.start.localeCompare(a.preset.start));
+  return { ...Object.fromEntries(presets.map((p) => [p.label, p.preset])), "Custom Range": null };
+}
 
 const DETECTOR_OPTIONS: Array<{ value: SignalDetector; label: string }> = [
   { value: "threshold", label: "Threshold Gate (rule-based)" },
@@ -49,6 +75,7 @@ function SignalAnalyticsView() {
   const field = useFieldContext();
   const seasons = useCropSeasons(field.field_id);
   const currentSeasons = seasons.data ?? [];
+  const [seasonPresets] = useState(() => buildSeasonPresets(new Date()));
   const [preset, setPreset] = useState<string>("Custom Range");
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
@@ -74,7 +101,7 @@ function SignalAnalyticsView() {
     const active = activeRuns.data[0];
     if (active) {
       const request = active.request;
-      const savedPreset = Object.entries(SEASON_PRESETS).find(([, range]) => range?.start === request.window_start && range.end === request.window_end)?.[0];
+      const savedPreset = Object.entries(seasonPresets).find(([, range]) => range?.start === request.window_start && range.end === request.window_end)?.[0];
       setPreset(savedPreset || "Custom Range");
       setCustomStart(request.window_start);
       setCustomEnd(request.window_end);
@@ -85,7 +112,7 @@ function SignalAnalyticsView() {
   }
 
   const selectedSeason = currentSeasons.find(s => `season:${s.season_id || s.id}` === preset);
-  const window = selectedSeason ? { start: selectedSeason.payload.start_date, end: selectedSeason.payload.end_date } : preset === "Custom Range" ? { start: customStart, end: customEnd } : SEASON_PRESETS[preset] ?? { start: "", end: "" };
+  const window = selectedSeason ? { start: selectedSeason.payload.start_date, end: selectedSeason.payload.end_date } : preset === "Custom Range" ? { start: customStart, end: customEnd } : seasonPresets[preset] ?? { start: "", end: "" };
   const rangeInvalid = !window.start || !window.end || window.end <= window.start;
 
   // Async path's result lives in the poll query, not local state — no
@@ -145,10 +172,16 @@ function SignalAnalyticsView() {
             <FieldLabel htmlFor="field-1">Analysis window</FieldLabel>
             <Select id="field-1" value={preset} onChange={(e) => setPreset(e.target.value)}>
               {currentSeasons.map(s => <option key={s.season_id || s.id} value={`season:${s.season_id || s.id}`}>{s.payload.name} · {formatDate(s.payload.start_date)} to {formatDate(s.payload.end_date)}</option>)}
-              {Object.keys(SEASON_PRESETS).map((p) => (
+              {Object.keys(seasonPresets).map((p) => (
                 <option key={p} value={p}>{p === "Custom Range" ? p : `Preset: ${p}`}</option>
               ))}
             </Select>
+            {seasonPresets[preset]?.inProgress && (
+              <p className="ui-meta mt-1">
+                Season in progress — the window ends today, so results cover only the observations so far
+                and will change as the season continues.
+              </p>
+            )}
           </div>
 
           {preset === "Custom Range" && (
