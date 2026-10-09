@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { apiFetch, ApiError } from "@/lib/api";
 import type { SignalResult, SignalRunAccepted, SignalRunRequest } from "@/types/api";
 
@@ -53,13 +53,24 @@ export function useActiveSignalRuns(fieldId: string) {
  * SignalAnalyticsPage for the branch.
  */
 export function useRunSignalAnalysis(fieldId: string) {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body: SignalRunRequest) =>
       apiFetch<SignalResult | SignalRunAccepted>(`/fields/${fieldId}/signal-runs`, {
         method: "POST",
         json: body,
       }),
+    // A cache hit is saved as a completed run immediately; a queued run is
+    // refreshed again when its job finishes (see the Signal Analytics page).
+    onSuccess: () => invalidateSignalViews(queryClient, fieldId),
   });
+}
+
+/** Everything that shows "the latest/saved signal runs" for this field. */
+export function invalidateSignalViews(queryClient: QueryClient, fieldId: string) {
+  for (const queryKey of [["signal-run", "latest", fieldId], ["signal-evidence", fieldId], ["external-awd-comparison", fieldId]]) {
+    void queryClient.invalidateQueries({ queryKey });
+  }
 }
 
 export function isSignalRunAccepted(body: SignalResult | SignalRunAccepted): body is SignalRunAccepted {

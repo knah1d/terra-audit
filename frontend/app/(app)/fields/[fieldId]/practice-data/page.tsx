@@ -242,9 +242,7 @@ function SocMeasurementsFormBody({
         <FlaskConical className="size-4 text-brand-600" />
         Soil Organic Carbon Samples
       </h3>
-      <p className="mb-3 text-sm text-text-secondary">
-        Paired lab measurements (tCO2e/ha) — at least 3 samples per cell required (Eqs. 46-47, 70-71).
-      </p>
+      <p className="mb-3 text-sm text-text-secondary">tCO2e/ha · at least 3 samples per cell.</p>
       <div className="grid grid-cols-2 gap-4">
         {SOC_LABELS.map((l) => {
           const count = (texts[l.key] ?? "").split("\n").filter((s) => s.trim() && !Number.isNaN(parseFloat(s))).length;

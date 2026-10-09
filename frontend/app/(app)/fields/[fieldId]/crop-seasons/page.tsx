@@ -86,7 +86,6 @@ function CropSeasonsView() {
   return <div className="ui-container space-y-6">
     <div>
       <h2 className="ui-section-title">Crop seasons & evidence</h2>
-      <p className="mt-1 text-sm text-text-secondary">Record any crop or crop mixture, collect observations, and explore satellite coverage. These records support both accounting pathways; they do not change the field’s carbon methodology.</p>
     </div>
     {(error || seasons.error || evidence.error || corpus.error || job.error || job.data?.error) && <p role="alert" className="rounded-lg bg-danger-50 p-3 text-danger-700">{error || seasons.error?.message || evidence.error?.message || corpus.error?.message || job.error?.message || job.data?.error}</p>}
     {notice && <p role="status" className="text-sm text-success-700">{notice}</p>}
@@ -165,17 +164,8 @@ function CropSeasonsView() {
             >
               Add {seasonType === "rotation" ? "cycle" : "commodity"}
             </Button>
-            <p className="ui-meta">
-              For a rotation, list each sequential crop cycle with its own start/end dates — recording the
-              same crop again after other cycles is the evidence a reviewer uses to confirm a complete
-              rotation (see the Historical Look-Back / Rotation Completeness readiness check).
-            </p>
           </div>
         )}
-        <p className="ui-meta sm:col-span-2">
-          Grouped-project eligibility areas are not yet editable here — see the field&apos;s Quantification
-          Enrollment tab for quantification units.
-        </p>
         <div><Button loading={busy} type="submit">Save season</Button></div>
       </form>
     </Card>}
@@ -192,7 +182,6 @@ function CropSeasonsView() {
             const accepted = await apiFetch<{ job_id: string }>(`${path}/monitoring-runs`, { method: "POST" }); setJobId(accepted.job_id);
           })}>Collect completed-season observations</Button>}
         </div>
-        <p className="mt-2 text-sm text-text-secondary">Sentinel-1 radar and Sentinel-2 vegetation, moisture, and residue-related indices. Coverage checks are exploratory and do not verify a crop or practice.</p>
         {running && <p role="status" className="mt-3 text-sm">Processing… This may take a few minutes.</p>}
         {latest ? <div className="mt-3 space-y-2 text-sm">
           <p>{latest.payload.quality.status === "insufficient_evidence" ? "Insufficient observation coverage" : "Ready for exploration"} · {latest.payload.processing_version}</p>
@@ -224,7 +213,6 @@ function CropSeasonsView() {
           {numeric && <label className="text-sm">{kind === "water_level" ? "Water level, cm (negative below soil surface)" : "Residue cover, %"}<TextInput name="numeric_value" type="number" step="any" required min={kind === "residue_cover" ? 0 : undefined} max={kind === "residue_cover" ? 100 : undefined} /></label>}
           <label className="text-sm">Evidence reference<TextInput name="evidence_reference" required maxLength={1000} placeholder="Survey record ID, photo reference, or document page" /></label>
           <label className="text-sm">Notes<TextInput name="notes" maxLength={2000} /></label>
-          <p className="text-xs text-text-secondary sm:col-span-2">Only crop identities from field measurements or expert observations, accepted by a different team member, enter the benchmark. Evidence files remain in your existing storage; record their reference here.</p>
           <div><Button type="submit" loading={busy}>Save observation</Button></div>
         </form>
       </Card>}
@@ -255,8 +243,8 @@ function CropSeasonsView() {
       </Card>
     </>}
     <Card>
-      <h3 className="ui-subsection-title">Multi-crop benchmark · your organization</h3>
-      <p className="mt-2 text-sm text-text-secondary">Compare Random Forest and XGBoost on reviewed single-crop seasons across your fields. Mixed crops remain in your records but need a separate multi-label model. Models are evaluated here, not deployed.</p>
+      <details>
+        <summary className="ui-subsection-title cursor-pointer">Multi-crop benchmark · your organization</summary>
       <p className="mt-3 text-sm">{corpus.data?.examples.length ?? 0} eligible seasons · {corpus.data?.excluded.length ?? 0} excluded seasons</p>
       {!!corpus.data?.excluded.length && <details className="mt-2 text-sm"><summary>Why seasons are excluded</summary><ul className="mt-2 list-disc pl-5">{corpus.data.excluded.map(r => <li key={r.season_id}>{seasons.data?.find(s => s.id === r.season_id)?.payload.name ?? r.season_id}: {r.reason}</li>)}</ul></details>}
       <div className="mt-3 flex flex-wrap gap-3">
@@ -266,7 +254,6 @@ function CropSeasonsView() {
         })}>Run comparison</Button>}
         {corpus.data && <Button variant="ghost" onClick={() => download(corpus.data, "crop-benchmark-dataset.json")}>Export benchmark dataset</Button>}
       </div>
-      <p className="ui-meta mt-2">Needs at least four eligible seasons, two crops, and enough independent groups to represent each held-out crop in training. WorldCereal/Presto remains a follow-up experiment.</p>
       {!!history.data?.length && <label className="mt-3 block text-sm">Saved comparisons<Select value={history.data.some(h => h.job_id === jobId) ? jobId! : ""} onChange={e => { if (e.target.value) setJobId(e.target.value); }} disabled={running}>
         <option value="">Choose a completed comparison</option>
         {history.data.map((h, i) => <option value={h.job_id} key={h.job_id}>{i === 0 ? "Latest" : `Run ${history.data.length - i}`} · hold out {h.split} · dataset {h.dataset_sha256.slice(0, 8)}</option>)}
@@ -276,6 +263,7 @@ function CropSeasonsView() {
         <p>Research results only. Probabilities are not calibrated.</p>
         <Button variant="secondary" onClick={() => download(job.data?.result, "crop-benchmark-results.json")}>Download results and frozen dataset</Button>
       </div>}
+      </details>
     </Card>
   </div>;
 }

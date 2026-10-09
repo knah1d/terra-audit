@@ -18,6 +18,7 @@ import {
   FIELD_TYPE_OPTIONS, LAND_USE_OPTIONS, SUGGESTED_METHODOLOGY, fieldCreateSchema, type FieldCreateForm,
 } from "@/lib/schemas/field";
 import { ApiError } from "@/lib/api";
+import { firstStepPath } from "@/lib/field-steps";
 
 /**
  * The "pending geometry" concept — the direct client-side replacement for
@@ -79,16 +80,7 @@ export default function NewFieldPage() {
       const field = await createField.mutateAsync({
         ...values, land_use: values.land_use || null, feature: pendingFeature,
       });
-      // Mirrors Streamlit's tab order: rice_awd's first working tab is
-      // Signal Analytics (you run the SAR pipeline before the ledger has
-      // anything real to calculate from); ALM has no such step, so it
-      // goes straight to the ledger, which itself gates on Practice &
-      // Soil Data completeness.
-      router.push(
-        field.field_type === "rice_awd"
-          ? `/fields/${field.field_id}/signal-analytics`
-          : `/fields/${field.field_id}/ledger`,
-      );
+      router.push(firstStepPath(field.field_id, field.field_type));
     } catch (err) {
       setServerError(err instanceof ApiError ? err.detail : "Failed to save field");
     }

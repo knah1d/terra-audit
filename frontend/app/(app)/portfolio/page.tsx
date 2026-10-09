@@ -102,7 +102,7 @@ export default function PortfolioPage() {
                 {sortedEntries.map((e) => (
                   <tr key={e.field_id} className="border-t border-border/60">
                     <td className="px-4 py-3">
-                      <Link href={`/fields/${e.field_id}/ledger`} className="flex items-center gap-2 text-text-primary hover:underline">
+                      <Link href={`/fields/${encodeURIComponent(e.field_id)}`} className="flex items-center gap-2 text-text-primary hover:underline">
                         <IconTile icon={LayoutGrid} size="sm" />
                         {e.name}
                       </Link>

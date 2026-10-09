@@ -151,8 +151,8 @@ export function LedgerRiceForm({
           <span className="flex items-center gap-1.5">
             <Satellite className="size-3.5" />
             AWD Events and Season Length below were carried over from your latest signal-analytics run
-            ({latestSignal.data.n_observations} observations, {latestSignal.data.detector_used}). Edit them
-            below if the verified events differ.
+            ({latestSignal.data.window_start} – {latestSignal.data.window_end}, {latestSignal.data.n_observations} observations,{" "}
+            {latestSignal.data.detector_used}). Edit them below if the verified events differ or the season is different.
           </span>
         </Alert>
       ) : latestSignal.isError ? (

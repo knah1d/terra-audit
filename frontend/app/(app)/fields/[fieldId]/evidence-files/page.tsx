@@ -43,7 +43,7 @@ function EvidenceFilesView() {
     } catch (e) { setError(e instanceof Error ? e.message : "Download failed"); }
   }
   return <div className="ui-container space-y-6">
-    <Card><h2 className="ui-section-title mb-3">Evidence files</h2><p className="ui-secondary mb-4">Upload original documents and photographs. Uploading a file does not confirm its contents or satisfy readiness automatically.</p>
+    <Card><h2 className="ui-section-title mb-3">Evidence files</h2>
       <label className="ui-label">Attach to<Select value={season} onChange={e => { setSeason(e.target.value); setNotice(""); }} disabled={busy || seasons.isLoading}>
         <option value="">This field</option>{seasons.data?.map(s => <option key={s.id} value={s.id}>{s.payload.name}</option>)}
       </Select></label>

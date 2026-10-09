@@ -91,12 +91,8 @@ export default function ExternalAWDValidationPage() {
   return (
     <main className="ui-container space-y-6">
       <div>
-        <h2 className="ui-section-title">AWD practice classification</h2>
+        <h2 className="ui-section-title">AWD Check (ML)</h2>
       </div>
-      {/* <Alert tone="warning" title="Practice classification, not a verified AWD cycle count">
-        The model labels a whole season as AWD-like or PTR-like (conventional puddled transplanting). It does
-        not count drying events, and it has not been validated on Bangladesh fields.
-      </Alert> */}
       {isPending && <Alert tone="info">Loading model metrics and last signal run…</Alert>}
       {error && <Alert tone="danger" title="Unable to load comparison">
         {error.message} <button type="button" className="underline" onClick={() => void refetch()}>Retry</button>
@@ -104,7 +100,7 @@ export default function ExternalAWDValidationPage() {
       {data && <>
         <div className="grid gap-4 lg:grid-cols-2">
           <section className="ui-card space-y-3">
-            <h3 className="ui-subsection-title">Rule-based detector (existing)</h3>
+            <h3 className="ui-subsection-title">Latest Signal Analytics run</h3>
             {detector ? <>
               <p className="text-sm">Candidate drydowns: <strong>{detector.candidate_drydowns ?? "—"}</strong></p>
               {detector.candidate_drydowns !== null && (
@@ -129,11 +125,7 @@ export default function ExternalAWDValidationPage() {
               <Button type="button" onClick={() => prediction.mutate()} loading={prediction.isPending} disabled={!detector}>
                 {result ? "Run again" : "Run ML classification"}
               </Button>
-              <p className="ui-meta">
-                {detector
-                  ? `Uses the same field and window as the latest Signal Analytics run (${detector.window_start} – ${detector.window_end}).`
-                  : "Run Signal Analytics first — the ML classification uses the same window."}
-              </p>
+              {!detector && <p className="ui-meta">Run Signal Analytics first.</p>}
               {prediction.error && <Alert tone={predictionWarning ? "warning" : "danger"}>
                 {prediction.error instanceof ApiError ? prediction.error.detail : prediction.error.message}
               </Alert>}
@@ -148,8 +140,6 @@ export default function ExternalAWDValidationPage() {
                     <p className="text-xl font-semibold tabular-nums">{pct(result.awd_score)}</p>
                   </div>
                 </div>
-                <p className="ui-meta">AWD when the score is 50% or more. The score is the share of the model&apos;s trees
-                  voting AWD, not a calibrated probability.</p>
                 <p className="text-xs text-text-secondary">
                   Window {result.window_start} – {result.window_end} · {result.observations} ascending Sentinel-1
                   observations (largest gap {result.max_gap_days} days) · relative orbit {result.relative_orbit ?? "—"} ·
@@ -173,8 +163,8 @@ export default function ExternalAWDValidationPage() {
         </div>
 
         {metrics && (
-          <section className="ui-card space-y-3">
-            <h3 className="ui-subsection-title">Model performance on real research data</h3>
+          <details className="ui-card space-y-3">
+            <summary className="ui-subsection-title cursor-pointer">Model performance</summary>
             <p className="text-sm text-text-secondary">
               {metrics.rows_awd_ptr} labelled plots (AWD vs PTR, Punjab, India, Kharif 2024;{" "}
               {metrics.duplicate_rows_removed} duplicate rows removed) · {metrics.train_rows} train / {metrics.test_rows} held-out test.
@@ -223,7 +213,7 @@ export default function ExternalAWDValidationPage() {
               </a>
               <ul className="mt-2 list-disc space-y-1 pl-5 text-xs">{metrics.limitations.map((s) => <li key={s}>{s}</li>)}</ul>
             </details>
-          </section>
+          </details>
         )}
       </>}
     </main>

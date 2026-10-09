@@ -3,7 +3,8 @@
 import { useCropSeasons } from "@/hooks/use-crop-seasons";
 import { formatDate, parseQueueTimestamp } from "@/lib/format";
 import { Play, Satellite } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
 import { AuditTrailTable } from "@/components/signal/AuditTrailTable";
 import { SignalTimeseriesChart } from "@/components/signal/SignalTimeseriesChart";
 import { useFieldContext } from "@/components/fields/FieldContext";
@@ -14,7 +15,7 @@ import { FieldLabel, Select, TextInput } from "@/components/ui/Field";
 import { IconTile } from "@/components/ui/IconTile";
 import { Switch } from "@/components/ui/Switch";
 import { useJobPoll } from "@/hooks/use-job-poll";
-import { isSignalRunAccepted, useActiveSignalRuns, useCancelSignalRun, useLatestSignalRun, useRunSignalAnalysis } from "@/hooks/use-signal";
+import { invalidateSignalViews, isSignalRunAccepted, useActiveSignalRuns, useCancelSignalRun, useLatestSignalRun, useRunSignalAnalysis } from "@/hooks/use-signal";
 import type { SignalDetector, SignalResult } from "@/types/api";
 
 type SeasonPreset = { start: string; end: string; inProgress: boolean };
@@ -87,6 +88,12 @@ function SignalAnalyticsView() {
   const run = useRunSignalAnalysis(field.field_id);
   const cancel = useCancelSignalRun(field.field_id);
   const jobPoll = useJobPoll(jobId ? `/signal-runs/${jobId}` : null);
+  const queryClient = useQueryClient();
+  const jobDone = jobId !== null && jobPoll.data?.status === "done";
+  // A queued run became the field's latest saved run: refresh views that show it.
+  useEffect(() => {
+    if (jobDone) invalidateSignalViews(queryClient, field.field_id);
+  }, [jobDone, queryClient, field.field_id]);
   // Previously completed run for this field, if any — shown on first
   // visit so a field you already analyzed doesn't come up blank; a fresh
   // handleRun() (below) always overwrites `result` with the new one.
@@ -163,7 +170,7 @@ function SignalAnalyticsView() {
     <div className="ui-container-wide flex flex-col gap-6">
       <h2 className="ui-section-title flex items-center gap-3">
         <IconTile icon={Satellite} size="sm" />
-        Statistical Signal Analytics
+        Signal Analytics
       </h2>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[320px_1fr]">
@@ -177,10 +184,7 @@ function SignalAnalyticsView() {
               ))}
             </Select>
             {seasonPresets[preset]?.inProgress && (
-              <p className="ui-meta mt-1">
-                Season in progress — the window ends today, so results cover only the observations so far
-                and will change as the season continues.
-              </p>
+              <p className="ui-meta mt-1">In progress — results so far.</p>
             )}
           </div>
 
@@ -205,10 +209,7 @@ function SignalAnalyticsView() {
               ))}
             </Select>
             {detector !== "threshold" && (
-              <p className="ui-meta mt-1">
-                Trained to reproduce the Threshold Gate&apos;s own labels — a proof-of-concept baseline,
-                not an independently validated detector.
-              </p>
+              <p className="ui-meta mt-1">Baseline only — not independently validated.</p>
             )}
           </div>
 
@@ -227,8 +228,8 @@ function SignalAnalyticsView() {
           {activeRuns.isError && <Alert tone="danger" title="Unable to restore analysis status">{activeRuns.error.message} <button className="underline" onClick={() => void activeRuns.refetch()}>Retry</button></Alert>}
           {run.isPending && <Alert tone="info" title="Submitting analysis">Checking cached observations and preparing the request.</Alert>}
           {jobStatus === "pending" && !pendingStalled && <Alert tone="info" title="Analysis queued">Waiting for a worker to start processing.</Alert>}
-          {pendingStalled && <Alert tone="warning" title="Still waiting for a worker">Processing has not started. Your worker must accept satellite analytics jobs; an AI-explanation-only worker cannot process this request. Check Worker &amp; queue, and keep your worker computer awake. Your selected season and detector are preserved.</Alert>}
-          {jobStatus === "running" && <Alert tone="info" title={STAGES[jobPoll.data?.progress?.stage ?? ""] || "Analysis in progress"}>Results will update when processing finishes. You can reopen this field to resume checking the active job.</Alert>}
+          {pendingStalled && <Alert tone="warning" title="Still waiting for a worker">Check that a worker is running.</Alert>}
+          {jobStatus === "running" && <Alert tone="info" title={STAGES[jobPoll.data?.progress?.stage ?? ""] || "Analysis in progress"}>Results appear when finished.</Alert>}
           {jobStatus === "cancel_requested" && <Alert tone="info" title="Cancellation requested">The worker will stop at its next cancellation checkpoint.</Alert>}
           {jobStatus === "cancelled" && <Alert tone="info" title="Analysis cancelled">You can submit a new analysis when ready.</Alert>}
           {jobPoll.isError && <Alert tone="danger" title="Unable to check analysis status">{jobPoll.error.message}</Alert>}
@@ -246,7 +247,6 @@ function SignalAnalyticsView() {
           {effectiveResult && (
             <>
               <p className="text-xs text-text-secondary">Showing {!result && !jobResult && "your most recent run · "}{effectiveResult.window_start} – {effectiveResult.window_end} · {effectiveResult.detector_used} · Source: {effectiveResult.cache_source}{!effectiveResult.from_phenology && " · Phenology markers not detected, season length uses the 120-day default"}</p>
-              {effectiveResult.timings_seconds && <details className="text-xs text-text-secondary"><summary className="cursor-pointer">Worker processing times</summary><div className="mt-2 space-y-1">{Object.entries(effectiveResult.timings_seconds).map(([stage, seconds]) => <p key={stage}>{STAGES[stage] || stage.replaceAll("_", " ")}: {seconds.toFixed(2)} s</p>)}<p>These timings exclude queue waiting and the final result write.</p></div></details>}
               {effectiveResult.model_fallback_msg && <Alert tone="info">{effectiveResult.model_fallback_msg}</Alert>}
 
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">

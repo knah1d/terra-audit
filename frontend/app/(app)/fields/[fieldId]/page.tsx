@@ -1,12 +1,11 @@
 import { notFound, redirect } from "next/navigation";
 import { backendFetch, BackendError } from "@/lib/backend";
+import { firstStepPath } from "@/lib/field-steps";
 import { getSessionToken } from "@/lib/session";
 import type { FieldDetailOut } from "@/types/api";
 
-// The field's "home" tab, mirroring Streamlit's tab order: rice_awd fields
-// land on Signal Analytics (you run the SAR pipeline before the ledger has
-// real data to calculate from); ALM fields go straight to the ledger,
-// which itself gates on Practice & Soil Data completeness.
+// A field opens on its first workflow step (lib/field-steps.ts), so the
+// tab order and every entry point agree on where work starts.
 export default async function FieldIndexPage({
   params,
 }: {
@@ -23,7 +22,5 @@ export default async function FieldIndexPage({
     throw err;
   }
 
-  redirect(
-    field.field_type === "rice_awd" ? `/fields/${fieldId}/signal-analytics` : `/fields/${fieldId}/ledger`,
-  );
+  redirect(firstStepPath(fieldId, field.field_type));
 }

@@ -1,8 +1,11 @@
+import { Pencil } from "lucide-react";
 import { notFound } from "next/navigation";
 import { DeleteFieldButton } from "@/components/fields/DeleteFieldButton";
 import { FieldProvider } from "@/components/fields/FieldContext";
 import { FieldTabs } from "@/components/fields/FieldTabs";
+import { StepNav } from "@/components/fields/StepNav";
 import { Badge } from "@/components/ui/Badge";
+import { ButtonLink } from "@/components/ui/Button";
 import { backendFetch, BackendError } from "@/lib/backend";
 import { getSessionToken } from "@/lib/session";
 import type { FieldDetailOut } from "@/types/api";
@@ -47,13 +50,19 @@ export default async function FieldLayout({
               <span className="font-mono tabular-nums">{field.area_ha?.toFixed(2)} ha</span>
             </div>
           </div>
-          <DeleteFieldButton fieldId={field.field_id} fieldName={field.name} />
+          <div className="flex flex-wrap items-center gap-2">
+            <ButtonLink href={`/fields/${field.field_id}/edit`} variant="secondary" size="sm" icon={Pencil}>
+              Edit
+            </ButtonLink>
+            <DeleteFieldButton fieldId={field.field_id} fieldName={field.name} />
+          </div>
         </div>
         <div className="mt-4">
           <FieldTabs fieldId={field.field_id} fieldType={field.field_type} />
         </div>
       </div>
       {children}
+      <StepNav fieldId={field.field_id} fieldType={field.field_type} />
     </FieldProvider>
   );
 }

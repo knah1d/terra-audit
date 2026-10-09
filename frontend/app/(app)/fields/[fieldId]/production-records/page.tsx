@@ -57,7 +57,6 @@ function LeakageCalculator({ fieldId, commodities, writable }: { fieldId: string
   const initial = saved.data?.find((a) => a.assessment_id === selected);
   return <Card>
     <h3 className="ui-subsection-title">Saved leakage assessments</h3>
-    <p className="my-2 text-sm text-text-secondary">Each revision belongs to a project, methodology bundle and reporting period. Calculations use the latest matching revision and freeze its evidence. Saving inputs does not approve them.</p>
     {saved.error && <p role="alert">Unable to load saved assessments.</p>}
     <Select value={selected} onChange={(e) => setSelected(e.target.value)}>
       <option value="">New assessment</option>
@@ -121,7 +120,6 @@ function LeakageAssessmentForm({ fieldId, commodities, initial }: { fieldId: str
       <label>Accounting mode<Select name="accounting_mode" defaultValue={defaultText("accounting_mode") || "leakage_only"}><option value="leakage_only">Leakage only</option><option value="cross_commodity">Cross-commodity production</option></Select></label>
       <label>Step 2 mitigation<Select name="mitigation_choice" defaultValue={defaultText("mitigation_choice")} required><option value="">Select explicitly</option><option value="none">No mitigation activity or claim</option><option value="claimed">Mitigation claimed (currently unsupported)</option></Select></label>
     </div>
-    <p className="text-xs text-text-secondary">Use complete anniversary-year periods. Sum multiple harvest cycles within the same annual label. Every commodity needs an explicit record in every selected year, including zero or not-applicable observations.</p>
     <label className="block">Step 2 declaration and reason<TextArea name="mitigation_reason" defaultValue={defaultText("mitigation_reason")} required /></label>
     <label className="block">Scope and completeness evidence<TextArea name="scope_evidence" defaultValue={defaultText("scope_evidence")} placeholder="Complete historical rotation, affected commodities, non-overlapping field scope and consistent project-wide accounting choices" required /></label>
     <h4 className="font-medium">Commodity parameters</h4>
@@ -180,10 +178,6 @@ export default function ProductionRecordsPage() {
     <div className="ui-container-wide space-y-6">
       <div>
         <h2 className="ui-section-title">Production records</h2>
-        <p className="mt-1 text-sm text-text-secondary">
-          Commodity-level, multi-year harvest records feeding VMD0054&apos;s leakage Steps 1/3/4/5. The
-          legacy scalar crop yield field on Practice &amp; Soil Data remains as a separate, legacy input.
-        </p>
       </div>
       {error && <p role="alert" className="rounded-lg bg-danger-50 p-3 text-danger-700">{error}</p>}
 
@@ -242,10 +236,7 @@ export default function ProductionRecordsPage() {
       {writable && (
         <Card>
           <h3 className="ui-subsection-title mb-2">Bulk import</h3>
-          <p className="ui-meta mb-2">
-            Paste a JSON array of records (same fields as the form above). Imports stop at the first
-            invalid row and report exactly how far it got.
-          </p>
+          <p className="ui-meta mb-2">Paste a JSON array of records.</p>
           <TextArea value={importText} onChange={(e) => setImportText(e.target.value)} rows={4} placeholder='[{"commodity": "maize", "period_type": "historical_year", "period_label": "2022", "production_status": "produced", "production_quantity": 5, "unit": "t"}]' />
           <Button
             className="mt-2"

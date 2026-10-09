@@ -197,11 +197,7 @@ function CalculationsView() {
     <div className="ui-container-wide space-y-6">
       <div>
         <h2 className="ui-section-title">Evidence-linked calculations</h2>
-        <p className="mt-1 text-sm text-text-secondary">
-          Save a versioned calculation with its field boundary, crop seasons, practices and measurements frozen as evidence.
-          Run readiness first, supply evidence-backed inputs, then prepare the calculation for internal review.
-          Older ledger results remain available as legacy estimates; neither a saved result nor internal review is registry issuance.
-        </p>
+        <Link className="ui-meta mt-1 inline-block underline" href={`/fields/${encodeURIComponent(field.field_id)}/ledger`}>Quick preview (not saved)</Link>
       </div>
 
       {requestedRequirement && <p role="status" className="ui-body">Review requested for <strong>{requestedRequirement}</strong>. Check the selected context, click Check readiness, then use Record an evidence review below. Only an authorized reviewer can record a decision.</p>}
@@ -235,7 +231,7 @@ function CalculationsView() {
                 {(projects.data ?? []).map((p) => <option key={p.project_id} value={p.project_id}>{p.name}</option>)}
               </Select>
             </label>
-            <p className="ui-meta">Accounting pathway: <span className="font-mono">{pathway}</span> (fixed by this field&apos;s registered methodology — never inferred from a crop declaration).</p>
+            <p className="ui-meta">Pathway: <span className="font-mono">{pathway}</span></p>
             <Button
               variant="secondary" loading={readiness.isPending}
               disabled={!!contextIssue || busy}
@@ -253,10 +249,6 @@ function CalculationsView() {
       {currentReadiness && (
         <Card>
           <h3 className="ui-subsection-title mb-3">Readiness checklist</h3>
-          <p className="ui-meta mb-3">
-            This reflects what this implementation can check automatically, plus any recorded expert
-            determinations — it is not a certification of full methodology compliance.
-          </p>
           <ReadinessList checklist={currentReadiness.checklist} explain={explainRequirement} highlightedRequirement={requestedRequirement} />
         </Card>
       )}
@@ -288,7 +280,6 @@ function CalculationsView() {
               await queryClient.invalidateQueries({ queryKey: ["calculations", field.field_id] });
             });
           }}>
-            <p className="ui-secondary sm:col-span-2">Manual evidence entry for this monitoring period. No measurements are assumed. Use zero only when the evidence records zero; amendment rates may be zero when no material was applied.</p>
             {pathway === "vm0051_rice_awd" ? (
               <>
                 <SignalEvidenceInputs fieldId={field.field_id} area={field.area_ha ?? null} start={periodStart} end={periodEnd} disabled={busy} onSelect={id => { setSignalSource({ context: contextKey, id }); setInputRevision(revision => revision + 1); setPreviewContext(null); }} />
@@ -309,7 +300,7 @@ function CalculationsView() {
                 <label className="text-sm">Non-permanence risk (%)<TextInput name="non_permanence_risk_pct" type="number" step="any" required min={0} max={100} /></label>
               </>
             )}
-            <p className="text-xs text-text-secondary sm:col-span-2">Field area used is always this field&apos;s registered area_ha ({field.area_ha?.toFixed(2)} ha) — it is frozen from the field record, not re-entered here.</p>
+            <p className="text-xs text-text-secondary sm:col-span-2">Area: {field.area_ha?.toFixed(2)} ha (registered field area)</p>
             {!!openCalculations.length && (
               <label className="text-sm sm:col-span-2">Correct an existing calculation (optional)
                 <Select value={supersedes} onChange={(e) => setSupersedes(e.target.value)}>
@@ -349,7 +340,6 @@ function CalculationsView() {
       {canReview && projectId && !contextIssue && (currentPreview || currentReadiness) && (
         <Card>
           <h3 id="evidence-review" className="ui-subsection-title scroll-mt-28">Record an evidence review</h3>
-          <p className="my-2 text-sm text-text-secondary">Project leads and administrators can decide reviewable requirements. Decisions apply to the selected project, dates and current evidence. Changed leakage inputs or production records require a new review.</p>
           <form key={`${contextKey}:${reviewableRequirements.map((item) => item.requirement_id).join()}`} className="space-y-2" onSubmit={(e) => {
             e.preventDefault();
             const data = new FormData(e.currentTarget);

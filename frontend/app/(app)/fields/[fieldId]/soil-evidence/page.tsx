@@ -134,10 +134,7 @@ function SocEvidenceReviewPanel({ fieldId }: { fieldId: string }) {
   return (
     <Card>
       <h3 className="ui-subsection-title mb-1">Reviewed SOC evidence mapping</h3>
-      <p className="mb-3 text-sm text-text-secondary">
-        For each cell, adopt a specific set of sample rows as the calculation input, or view why the legacy
-        aggregate is still governing. Adopting requires at least 3 sample rows with a recorded SOC value.
-      </p>
+      <p className="mb-3 text-sm text-text-secondary">Adopt at least 3 samples with a SOC value per cell.</p>
       {error && <p role="alert" className="mb-2 rounded bg-danger-50 p-2 text-xs text-danger-700">{error}</p>}
       <div className="grid gap-3 sm:grid-cols-2">
         {SITE_TYPES.flatMap((siteType) =>
@@ -213,11 +210,7 @@ export default function SoilEvidencePage() {
   return (
     <div className="ui-container space-y-6">
       <div>
-        <h2 className="ui-section-title">Soil evidence</h2>
-        <p className="mt-1 text-sm text-text-secondary">
-          Sampling plans, strata, geolocated samples, per-analyte lab results, and chain of custody. Adopting a
-          reviewed sample set below is what actually feeds the SOC calculation — recording samples alone does not.
-        </p>
+        <h2 className="ui-section-title">Soil Sampling</h2>
       </div>
       {error && <p role="alert" className="rounded-lg bg-danger-50 p-3 text-danger-700">{error}</p>}
 

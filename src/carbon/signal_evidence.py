@@ -5,13 +5,22 @@ from sqlalchemy import text
 from src.persistence.database import get_db_connection, get_job
 
 
+# Only the rule-based detector may supply calculation inputs. The ML-baseline
+# detectors (random_forest/xgboost) are trained on this detector's own output
+# (src/ai/ml/dataset_builder.py), so their drydown counts are not independent
+# evidence and must never reach a carbon calculation.
+THRESHOLD_DETECTOR = "Threshold Gate (rule-based)"
+
+
 def candidates(org_id, field_id):
+    # No row LIMIT before the field filter: in a busy org an org-wide cap could
+    # hide this field's runs entirely.
     with get_db_connection() as conn:
-        rows = conn.execute(text("SELECT job_id, finished_at, result_json FROM background_jobs WHERE org_id=:org AND job_type='signal_run' AND status='done' ORDER BY finished_at DESC LIMIT 200"), {"org": org_id}).mappings().all()
+        rows = conn.execute(text("SELECT job_id, finished_at, result_json FROM background_jobs WHERE org_id=:org AND job_type='signal_run' AND status='done' ORDER BY finished_at DESC"), {"org": org_id}).mappings().all()
     output = []
     for row in rows:
         result = json.loads(row['result_json'] or '{}')
-        if result.get('field_id') != field_id:
+        if result.get('field_id') != field_id or result.get('detector_used') != THRESHOLD_DETECTOR:
             continue
         output.append({"job_id": row['job_id'], "finished_at": str(row['finished_at']) if row['finished_at'] else None,
                        **{key: result.get(key) for key in ('window_start', 'window_end', 'area_ha', 'total_awd', 'season_length_days', 'detector_used', 'sowing_date', 'harvest_date')}})
@@ -29,6 +38,9 @@ def provenance(org_id, field, body, inputs):
     result = (job or {}).get('result') or {}
     if not job or job['job_type'] != 'signal_run' or job['status'] != 'done' or result.get('field_id') != field['field_id']:
         raise ValueError('Saved signal evidence is unavailable on this field.')
+    if result.get('detector_used') != THRESHOLD_DETECTOR:
+        raise ValueError('Only rule-based (Threshold Gate) signal runs can supply calculation inputs; '
+                         'ML-baseline detector runs are trained on that detector\'s own output.')
     if result.get('window_start') != body.monitoring_period_start.isoformat() or result.get('window_end') != body.monitoring_period_end.isoformat():
         raise ValueError('Saved signal evidence must match both monitoring dates exactly.')
     try:

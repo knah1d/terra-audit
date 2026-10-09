@@ -1,24 +1,13 @@
-import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 
 from backend.deps import get_current_user, get_owned_field, get_spatial_engine
 from backend.job_handlers import _run_signal_pipeline
 from backend.schemas.signal import JobStatusOut, SignalRunAccepted, SignalResult, SignalRunRequest
 from src.persistence.database import check_cache, get_job, get_latest_signal_result
+from src.jobs.queue import record_completed_job
 from src.jobs.signals import active_jobs, create_or_reuse, matching_active_job
 
 router = APIRouter(tags=["signal-analytics"])
-
-
-def _run_pipeline(org_id: str, field_id: str, district: str, area_ha: float,
-                   df_processed: pd.DataFrame, req: SignalRunRequest, cache_source: str) -> SignalResult:
-    """Synchronous cache-hit path only (never touches GEE) — the
-    cache-miss path now runs through the durable worker
-    (backend/job_handlers.handle_signal_run), which calls the SAME
-    underlying _run_signal_pipeline so both paths stay identical."""
-    return SignalResult(**_run_signal_pipeline(
-        org_id, field_id, district, area_ha, df_processed, req.model_dump(), cache_source,
-    ))
 
 
 @router.post("/fields/{field_id}/signal-runs")
@@ -42,11 +31,15 @@ def submit_signal_run(
     if not body.force_refresh:
         df_processed = check_cache(org_id, field_id, body.window_start, body.window_end)
         if not df_processed.empty:
-            result = _run_pipeline(
+            raw = _run_signal_pipeline(
                 org_id, field_id, field["district"], field["area_ha"] or 1.0,
-                df_processed, body, cache_source="Local relational data store",
+                df_processed, body.model_dump(), "Local relational data store",
             )
-            return result  # 200 (default) — fast path, never touched GEE, never queued
+            # Saved like a worker-completed run, so "latest run" (AWD Check,
+            # ledger prefill, exports) and the calculation evidence list
+            # include it instead of silently showing an older run.
+            record_completed_job(org_id, "signal_run", payload, raw)
+            return SignalResult(**raw)  # 200 (default) — fast path, never touched GEE, never queued
 
     # Cache-miss: hand off to the durable worker instead of an in-process
     # BackgroundTask (Phase 4) — survives a web-process restart, has

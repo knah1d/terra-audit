@@ -1,12 +1,26 @@
 "use client";
 
-import { Paperclip, Calculator, ClipboardList, FlaskConical, Microscope, Pencil, Satellite, ShieldCheck, Wallet, Sprout, Wheat } from "lucide-react";
+import { Paperclip, Calculator, ChevronRight, ClipboardList, FlaskConical, Microscope, Satellite, ShieldCheck, Sprout, Wheat, type LucideIcon } from "lucide-react";
+import { Fragment } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { resetLiquidPointer, trackLiquidPointer } from "@/components/ui/liquid-pointer";
 import { revealNavigationItem } from "@/lib/reveal-navigation";
 import { Toolbar } from "@/components/ui/Toolbar";
+import { fieldSteps } from "@/lib/field-steps";
+
+const STEP_ICONS: Record<string, LucideIcon> = {
+  "crop-seasons": Sprout,
+  enrollment: ClipboardList,
+  "signal-analytics": Satellite,
+  "awd-validation": ShieldCheck,
+  calculations: Calculator,
+  "practice-data": FlaskConical,
+  "soil-evidence": Microscope,
+  "production-records": Wheat,
+  "evidence-files": Paperclip,
+};
 
 /** Floating tab bar for the field-detail sub-nav — each option is a real
  * route rather than local state, but visually reads as one glass toolbar
@@ -24,27 +38,14 @@ export function FieldTabs({ fieldId, fieldType }: { fieldId: string; fieldType: 
   const containerRef = useRef<HTMLDivElement>(null);
   const [pillStyle, setPillStyle] = useState<{ left: number; width: number } | null>(null);
 
-  const options = [
-    { href: `/fields/${fieldId}/crop-seasons`, label: "Crop Seasons", icon: Sprout },
-    { href: `/fields/${fieldId}/enrollment`, label: "Enrollment", icon: ClipboardList },
-    ...(fieldType === "rice_awd"
-      ? [
-          { href: `/fields/${fieldId}/signal-analytics`, label: "Signal Analytics", icon: Satellite },
-          { href: `/fields/${fieldId}/awd-validation`, label: "AWD Validation", icon: ShieldCheck },
-        ]
-      : []),
-    { href: `/fields/${fieldId}/ledger`, label: "Carbon Asset Ledger", icon: Wallet },
-    { href: `/fields/${fieldId}/calculations`, label: "Calculations", icon: Calculator },
-    ...(fieldType === "cropland_alm_vm0042"
-      ? [
-          { href: `/fields/${fieldId}/practice-data`, label: "Practice & Soil Data", icon: FlaskConical },
-          { href: `/fields/${fieldId}/soil-evidence`, label: "Soil Evidence", icon: Microscope },
-          { href: `/fields/${fieldId}/production-records`, label: "Production Records", icon: Wheat },
-        ]
-      : []),
-    { href: `/fields/${fieldId}/evidence-files`, label: "Evidence Files", icon: Paperclip },
-    { href: `/fields/${fieldId}/edit`, label: "Edit", icon: Pencil },
-  ];
+  // Workflow order lives in lib/field-steps.ts (shared with every redirect into a field).
+  let stepNumber = 0;
+  const options = fieldSteps(fieldType).map((step) => ({
+    href: `/fields/${fieldId}/${step.segment}`,
+    label: step.label,
+    icon: STEP_ICONS[step.segment] ?? Paperclip,
+    number: step.numbered ? ++stepNumber : null,
+  }));
 
   useEffect(() => {
     function measure() {
@@ -86,11 +87,15 @@ export function FieldTabs({ fieldId, fieldType }: { fieldId: string; fieldType: 
             }}
           />
         )}
-        {options.map(({ href, label, icon: Icon }) => {
+        {options.map(({ href, label, icon: Icon, number }, i) => {
           const active = pathname === href;
           return (
+            <Fragment key={href}>
+            {/* Arrow between consecutive numbered steps shows the order to follow. */}
+            {i > 0 && number !== null && (
+              <ChevronRight aria-hidden className="size-3.5 shrink-0 self-center text-text-tertiary" />
+            )}
             <Link
-              key={href}
               href={href}
               data-active={active}
               aria-current={active ? "page" : undefined}
@@ -101,9 +106,16 @@ export function FieldTabs({ fieldId, fieldType }: { fieldId: string; fieldType: 
                 active ? "text-brand-700" : "text-text-secondary hover:text-text-primary"
               }`}
             >
-              <Icon className="size-3.5" aria-hidden />
-              <span>{label}</span>
+              {number !== null ? (
+                <span aria-hidden className="flex size-5 items-center justify-center rounded-full border border-current text-[0.7rem] tabular-nums">
+                  {number}
+                </span>
+              ) : (
+                <Icon className="size-3.5" aria-hidden />
+              )}
+              <span>{number !== null && <span className="sr-only">Step {number}: </span>}{label}</span>
             </Link>
+            </Fragment>
           );
         })}
       </div>

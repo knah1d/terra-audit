@@ -30,11 +30,6 @@ export default function EnrollmentPage() {
     <div className="ui-container space-y-6">
       <div>
         <h2 className="ui-section-title">Guided enrollment</h2>
-        <p className="mt-1 text-sm text-text-secondary">
-          Shows which pathway this field&apos;s type maps to, what this codebase does and does not implement for it,
-          and the most basic missing-evidence flags — not a substitute for the full readiness checklist run at
-          calculation time.
-        </p>
       </div>
       {error && <p role="alert" className="rounded-lg bg-danger-50 p-3 text-danger-700">{error}</p>}
 
@@ -76,9 +71,6 @@ export default function EnrollmentPage() {
               </div>
             )}
             {enrollment.data.declared_crops.some(c => !c.recognized || (field.field_type === "rice_awd" ? !c.vm0051_eligible : !c.alm_eligible)) && <p role="status" className="mt-3 text-warning-700">Some declared crops are outside this pathway&apos;s usual taxonomy scope. Confirm actual applicability with a reviewer before preparing an issuance claim. The field&apos;s registered methodology is unchanged.</p>}
-            <p className="ui-meta mt-2">
-              These are indicative signals only — never a full applicability determination by themselves.
-            </p>
           </Card>
 
           <Card>
@@ -101,7 +93,7 @@ export default function EnrollmentPage() {
           <Card>
             <h3 className="ui-subsection-title mb-2">Missing evidence</h3>
             {!enrollment.data.missing_evidence.length ? (
-              <p className="ui-secondary">No basic evidence gaps flagged. This does not establish pathway applicability. <Link className="underline text-brand-700" href={`/fields/${field.field_id}/calculations`}>Run the full readiness checklist</Link>.</p>
+              <p className="ui-secondary">No evidence gaps flagged. <Link className="underline text-brand-700" href={`/fields/${field.field_id}/calculations`}>Run the full readiness checklist</Link>.</p>
             ) : (
               <ul className="list-disc space-y-1 pl-5 text-sm">
                 {enrollment.data.missing_evidence.map((m, i) => <li key={i}>{m}</li>)}
@@ -114,12 +106,11 @@ export default function EnrollmentPage() {
       <Card>
         <h3 className="ui-subsection-title mb-2">Quantification units</h3>
         <p className="ui-meta mb-3">
-          Named subdivisions of this field&apos;s registered area for eligibility purposes — this never resizes the
-          field itself, only records how much of it is currently considered eligible and why. Field area:{" "}
+          Field area:{" "}
           {field.area_ha?.toFixed(2)} ha · allocated so far: {totalUnitArea.toFixed(2)} ha.
         </p>
         {units.isLoading ? <Skeleton className="h-16" /> : !units.data?.length ? (
-          <p className="ui-secondary">No quantification units recorded — the whole field is treated as needs_review by default.</p>
+          <p className="ui-secondary">No quantification units recorded.</p>
         ) : (
           <div className="mb-3 space-y-1 text-sm">
             {units.data.map((u) => (

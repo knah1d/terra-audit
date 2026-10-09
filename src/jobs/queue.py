@@ -249,6 +249,24 @@ def create_job(org_id: str, job_type: str, payload: dict, batch_id: str | None =
     return job_id
 
 
+def record_completed_job(org_id: str, job_type: str, payload: dict, result: dict) -> str:
+    """Records work that finished synchronously in the API (never queued) as
+    an already-'done' job, so every reader of completed jobs ("latest run",
+    saved evidence lists) sees it. Inserted directly as done, so no worker
+    can ever claim it."""
+    job_id = uuid.uuid4().hex
+    with get_db_connection() as conn:
+        conn.execute(text("""
+            INSERT INTO background_jobs (job_id, org_id, job_type, status, payload_json, result_json,
+                                          max_attempts, finished_at)
+            VALUES (:job_id, :org_id, :job_type, 'done', :payload_json, :result_json, 1, CURRENT_TIMESTAMP)
+        """), {"job_id": job_id, "org_id": org_id, "job_type": job_type,
+               "payload_json": json.dumps(payload, default=str),
+               "result_json": json.dumps(result, default=str)})
+        conn.commit()
+    return job_id
+
+
 # --------------------------------------------------------------------------
 # Worker-side: claim / heartbeat / complete / fail / cancel
 # --------------------------------------------------------------------------

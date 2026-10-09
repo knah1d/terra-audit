@@ -13,6 +13,7 @@ import { ErrorText, FieldLabel, Select, TextInput } from "@/components/ui/Field"
 import { useUpdateField } from "@/hooks/use-fields";
 import { useDetectedDistrict, useDetectedLandUse } from "@/hooks/use-geometry";
 import { ApiError } from "@/lib/api";
+import { firstStepPath } from "@/lib/field-steps";
 import { LAND_USE_OPTIONS, fieldUpdateSchema, type FieldUpdateForm } from "@/lib/schemas/field";
 
 export default function EditFieldPage() {
@@ -73,7 +74,8 @@ export default function EditFieldPage() {
     setServerError(null);
     try {
       await updateField.mutateAsync({ ...values, land_use: values.land_use || null });
-      router.push(`/fields/${field.field_id}/ledger`);
+      router.push(firstStepPath(field.field_id, field.field_type));
+      router.refresh(); // the field header/context come from the server layout
     } catch (err) {
       setServerError(err instanceof ApiError ? err.detail : "Failed to save");
     }
