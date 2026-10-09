@@ -3,15 +3,15 @@ import { formatQueueTimestamp } from "@/lib/format";
 
 import { UserPlus, Users } from "lucide-react";
 import { useState } from "react";
+import { useToast } from "@/components/ui/Toast";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { ErrorText, FieldLabel, Select, TextInput } from "@/components/ui/Field";
+import { FieldLabel, Select, TextInput } from "@/components/ui/Field";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { RoleGate } from "@/components/ui/RoleGate";
 import { Sheet } from "@/components/ui/Sheet";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { ApiError } from "@/lib/api";
 import { useCreateTeamUser, useTeamUsers } from "@/hooks/use-team";
 import type { UserRole } from "@/types/api";
 
@@ -21,17 +21,16 @@ function InviteSheet({ open, onClose }: { open: boolean; onClose: () => void }) 
   const [email, setEmail] = useState("");
   const [inviteUrl, setInviteUrl] = useState("");
   const [role, setRole] = useState<UserRole>("analyst");
-  const [error, setError] = useState<string | null>(null);
+  const toast = useToast();
   const create = useCreateTeamUser();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setError(null);
     try {
       const result = await create.mutateAsync({ email, role });
       setInviteUrl(result.invitation_url);
     } catch (err) {
-      setError(err instanceof ApiError ? err.detail : "Could not invite teammate");
+      toast.error(err, "Could not invite teammate");
     }
   }
 
@@ -51,7 +50,6 @@ function InviteSheet({ open, onClose }: { open: boolean; onClose: () => void }) 
             ))}
           </Select>
         </div>
-        <ErrorText>{error ?? undefined}</ErrorText>
         <Button type="submit" loading={create.isPending} className="mt-1">
           Create invitation link
         </Button>

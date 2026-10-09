@@ -4,6 +4,7 @@ import { formatDate, formatQueueTimestamp, formatNumber } from "@/lib/format";
 import { ExplainButton } from "@/components/ai/ExplainDrawer";
 
 import { useState } from "react";
+import { useToast } from "@/components/ui/Toast";
 import { useSession } from "@/app/providers";
 import { useFieldContext } from "@/components/fields/FieldContext";
 import { Badge } from "@/components/ui/Badge";
@@ -14,7 +15,6 @@ import { useCreateProductionRecord, useImportProductionRecords, useProductionRec
 import { useProjects } from "@/hooks/use-projects";
 import { useProjectApplicability } from "@/hooks/use-methodology";
 import type { LeakageAssessment } from "@/hooks/use-production-records";
-import { ApiError } from "@/lib/api";
 import type { ProductionRecordOut } from "@/types/api";
 
 function RecordsTable({ records }: { records: ProductionRecordOut[] }) {
@@ -74,14 +74,13 @@ function LeakageAssessmentForm({ fieldId, commodities, initial }: { fieldId: str
   const p = initial?.payload ?? {};
   const [projectId, setProjectId] = useState(String(p.project_id ?? ""));
   const applicability = useProjectApplicability(projectId, projectId ? "vm0042_alm" : undefined);
-  const [error, setError] = useState("");
+  const toast = useToast();
   const params = (p.commodity_params ?? {}) as Record<string, Record<string, unknown>>;
   const region = (p.new_land_carbon_stock_params ?? {}) as Record<string, unknown>;
   const defaultText = (key: string) => Array.isArray(p[key]) ? (p[key] as string[]).join(", ") : String(p[key] ?? "");
   const result = save.data?.result;
   return <form className="mt-4 space-y-4" onSubmit={(e) => {
-    e.preventDefault(); setError("");
-    const d = new FormData(e.currentTarget);
+    e.preventDefault();     const d = new FormData(e.currentTarget);
     const number = (key: string) => d.get(key) === "" ? null : Number(d.get(key));
     const text = (key: string) => String(d.get(key) ?? "").trim();
     const commodityParams: Record<string, unknown> = {};
@@ -107,9 +106,8 @@ function LeakageAssessmentForm({ fieldId, commodities, initial }: { fieldId: str
       prior_verification_reference: text("prior_verification_reference"),
     };
     for (const key of ["monitoring_period_start", "monitoring_period_end", "project_start", "historical_start", "historical_end", "mitigation_choice", "mitigation_reason", "scope_evidence", "regional_land_cover_evidence"]) body[key] = text(key);
-    save.mutate(body, { onError: (err) => setError(err instanceof ApiError ? err.detail : "Unable to save assessment") });
+    save.mutate(body, { onError: (err) => toast.error(err, "Couldn't save assessment"), onSuccess: () => toast.success("Leakage assessment saved") });
   }}>
-    {error && <p role="alert" className="text-sm text-danger-700">{error}</p>}
     <div className="grid gap-3 sm:grid-cols-2">
       <label>Project<Select required value={projectId} onChange={(e) => setProjectId(e.target.value)}><option value="">Select project</option>{projects.data?.map((project) => <option key={project.project_id} value={project.project_id}>{project.name}</option>)}</Select></label>
       <p className="text-sm">Methodology: {applicability.data?.resolved_bundle?.bundle_version ?? "Select a project with an applicable bundle"}</p>
@@ -166,7 +164,7 @@ export default function ProductionRecordsPage() {
   const session = useSession();
   const writable = session?.role === "admin" || session?.role === "analyst";
   const fieldId = field.field_id;
-  const [error, setError] = useState("");
+  const toast = useToast();
   const [importText, setImportText] = useState("");
 
   const records = useProductionRecords(fieldId);
@@ -179,7 +177,6 @@ export default function ProductionRecordsPage() {
       <div>
         <h2 className="ui-section-title">Production records</h2>
       </div>
-      {error && <p role="alert" className="rounded-lg bg-danger-50 p-3 text-danger-700">{error}</p>}
 
       {writable && (
         <Card>
@@ -204,7 +201,7 @@ export default function ProductionRecordsPage() {
                   unit: status === "produced" ? data.get("unit") : "",
                   evidence_ref: data.get("evidence_ref") || "", notes: "",
                 },
-                { onError: (err) => setError(err instanceof ApiError ? err.detail : "Failed to save"), onSuccess: () => form.reset() },
+                { onError: (err) => toast.error(err, "Couldn't save"), onSuccess: () => { toast.success("Saved"); form.reset(); } },
               );
             }}
           >
@@ -244,9 +241,9 @@ export default function ProductionRecordsPage() {
             onClick={() => {
               try {
                 const parsed = JSON.parse(importText);
-                importRecords.mutate(parsed, { onError: (err) => setError(err instanceof ApiError ? err.detail : "Import failed"), onSuccess: () => setImportText("") });
+                importRecords.mutate(parsed, { onError: (err) => toast.error(err, "Import failed"), onSuccess: () => { toast.success("Records imported"); setImportText(""); } });
               } catch {
-                setError("Invalid JSON");
+                toast.error("Paste a valid JSON array of records.", "Invalid JSON");
               }
             }}
           >

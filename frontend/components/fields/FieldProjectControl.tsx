@@ -5,6 +5,7 @@ import { FolderPlus } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useToast } from "@/components/ui/Toast";
 import { useSession } from "@/app/providers";
 import { NewProjectSheet } from "@/components/projects/NewProjectSheet";
 import { Badge } from "@/components/ui/Badge";
@@ -12,7 +13,7 @@ import { Button } from "@/components/ui/Button";
 import { Select, TextInput } from "@/components/ui/Field";
 import { Sheet } from "@/components/ui/Sheet";
 import { useProjects } from "@/hooks/use-projects";
-import { apiFetch, ApiError } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 import type { CurrentProject } from "@/types/api";
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -23,26 +24,27 @@ export function FieldProjectControl({ fieldId, project }: { fieldId: string; pro
   const router = useRouter();
   const queryClient = useQueryClient();
   const session = useSession();
+  const toast = useToast();
   const projects = useProjects();
   const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [projectId, setProjectId] = useState("");
   const [start, setStart] = useState(today);
-  const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const canEdit = session?.role === "admin" || session?.role === "analyst";
 
   async function assign() {
-    setBusy(true); setError("");
+    setBusy(true);
     try {
       await apiFetch(`/projects/${encodeURIComponent(projectId)}/fields`, {
         method: "POST", json: { field_id: fieldId, effective_start_date: start },
       });
       setOpen(false);
+      toast.success("Added to project");
       for (const key of [["fields"], ["field-workflow", fieldId], ["dashboard-summary"]]) void queryClient.invalidateQueries({ queryKey: key });
       router.refresh();
     } catch (err) {
-      setError(err instanceof ApiError ? err.detail : "Could not add the field to the project");
+      toast.error(err, "Couldn't add to project");
     } finally {
       setBusy(false);
     }
@@ -71,7 +73,6 @@ export function FieldProjectControl({ fieldId, project }: { fieldId: string; pro
           <label className="text-sm">In the project from
             <TextInput type="date" value={start} onChange={(e) => setStart(e.target.value)} />
           </label>
-          {error && <p role="alert" className="text-sm text-danger-700">{error}</p>}
           <Button loading={busy} disabled={!projectId || !start} onClick={() => void assign()}>Add to project</Button>
           <Button variant="secondary" onClick={() => setOpen(false)}>Cancel</Button>
         </div>

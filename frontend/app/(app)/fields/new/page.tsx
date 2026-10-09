@@ -5,6 +5,7 @@ import { PenSquare, Save } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useToast } from "@/components/ui/Toast";
 import { useForm, useWatch } from "react-hook-form";
 import { GeometryInputTabs } from "@/components/fields/GeometryInputTabs";
 import { GeometryPreviewMap } from "@/components/map";
@@ -20,7 +21,7 @@ import { useComputedArea, useDetectedDistrict, useDetectedLandUse } from "@/hook
 import {
   FIELD_TYPE_OPTIONS, LAND_USE_OPTIONS, SUGGESTED_METHODOLOGY, fieldCreateSchema, type FieldCreateForm,
 } from "@/lib/schemas/field";
-import { apiFetch, ApiError } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 import { firstStepPath } from "@/lib/field-steps";
 
 /**
@@ -40,7 +41,7 @@ export default function NewFieldPage() {
   } = useDetectedLandUse(pendingFeature);
   const detectedLandUse = landUseData?.land_use ?? null;
   const createField = useCreateField();
-  const [serverError, setServerError] = useState<string | null>(null);
+  const toast = useToast();
   // Project or standalone. "?mode=project" asks for a project; "?project=<id>"
   // (from a project page) pre-selects it.
   const search = useSearchParams();
@@ -87,7 +88,6 @@ export default function NewFieldPage() {
 
   async function onSubmit(values: FieldCreateForm) {
     if (!pendingFeature) return;
-    setServerError(null);
     try {
       const field = await createField.mutateAsync({
         ...values, land_use: values.land_use || null, feature: pendingFeature,
@@ -100,13 +100,14 @@ export default function NewFieldPage() {
           });
         } catch (err) {
           setSavedFieldPath(fieldPath);
-          setServerError(`The field was saved, but adding it to the project failed: ${err instanceof ApiError ? err.detail : "unknown error"}. You can add it from the field page.`);
+          toast.error(err, "Field saved, but not added to the project", { label: "Open the field", href: fieldPath });
           return;
         }
       }
+      toast.success("Field registered", { description: field.name });
       router.push(fieldPath);
     } catch (err) {
-      setServerError(err instanceof ApiError ? err.detail : "Failed to save field");
+      toast.error(err, "Couldn't register field");
     }
   }
 
@@ -231,7 +232,7 @@ export default function NewFieldPage() {
                 </label>
               )}
             </div>
-            {serverError && <Alert tone="danger">{serverError}{savedFieldPath && <> <Link className="underline" href={savedFieldPath}>Open the field</Link></>}</Alert>}
+            {savedFieldPath && <Alert tone="warning">The field was saved. <Link className="underline" href={savedFieldPath}>Open the field</Link> to add it to a project.</Alert>}
             <Button type="submit" icon={Save} loading={isSubmitting} disabled={!areaData || detectingDistrict || (projectMode && !projectId) || !!savedFieldPath} className="w-full">
               Save Field
             </Button>

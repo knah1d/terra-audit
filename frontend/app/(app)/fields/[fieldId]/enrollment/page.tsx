@@ -2,6 +2,7 @@
 import Link from "next/link";
 
 import { useState } from "react";
+import { useToast } from "@/components/ui/Toast";
 import { useFieldContext } from "@/components/fields/FieldContext";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -21,7 +22,7 @@ export default function EnrollmentPage() {
   const enrollment = useGuidedEnrollment(field.field_id);
   const units = useQuantificationUnits(field.field_id);
   const createUnit = useCreateQuantificationUnit(field.field_id);
-  const [error, setError] = useState("");
+  const toast = useToast();
   const [eligibility, setEligibility] = useState("needs_review");
 
   const totalUnitArea = (units.data ?? []).reduce((sum, u) => sum + u.area_ha, 0);
@@ -31,7 +32,6 @@ export default function EnrollmentPage() {
       <div>
         <h2 className="ui-section-title">Guided enrollment</h2>
       </div>
-      {error && <p role="alert" className="rounded-lg bg-danger-50 p-3 text-danger-700">{error}</p>}
 
       {enrollment.isLoading ? <Skeleton className="h-64" /> : enrollment.data && (
         <>
@@ -125,14 +125,13 @@ export default function EnrollmentPage() {
         )}
         <form className="grid gap-2 sm:grid-cols-2" onSubmit={(e) => {
           e.preventDefault();
-          setError("");
           const data = new FormData(e.currentTarget);
           createUnit.mutateAsync({
             name: String(data.get("name")), area_ha: Number(data.get("area_ha")),
             eligibility_status: eligibility,
             exclusion_reason: eligibility === "excluded" ? String(data.get("exclusion_reason")) : undefined,
           }).then(() => (e.target as HTMLFormElement).reset())
-            .catch((err) => setError(err instanceof Error ? err.message : "Failed to add unit"));
+            .catch((err) => toast.error(err, "Couldn't add unit"));
         }}>
           <TextInput aria-label="Quantification unit name" name="name" placeholder="Unit name" required maxLength={200} />
           <TextInput aria-label="Quantification unit area in hectares" name="area_ha" type="number" step="any" placeholder="Area (ha)" required min={0.01} />

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useToast } from "@/components/ui/Toast";
 import { useSession } from "@/app/providers";
 import { useFieldContext } from "@/components/fields/FieldContext";
 import { Badge } from "@/components/ui/Badge";
@@ -11,14 +12,13 @@ import {
   useCreateCustodyEvent, useCreateLabResult, useCreatePlan, useCreateSample, useCreateSocEvidenceReview,
   useCreateStratum, useCustodyEvents, useLabResults, useSocEvidence, useSoilPlans, useSoilSamples, useSoilStrata,
 } from "@/hooks/use-soil-evidence";
-import { ApiError } from "@/lib/api";
 
 const SITE_TYPES = ["project", "control"] as const;
 const TIMEPOINTS = ["t_start", "t_final"] as const;
 
 function SampleRow({ fieldId, planId, sample }: { fieldId: string; planId: string; sample: { sample_id: string; site_type: string; timepoint: string; sample_date: string; depth_top_cm: number; depth_bottom_cm: number; soc_value_tco2e_ha: number | null; lab_name: string; chain_of_custody_ref: string } }) {
   const [open, setOpen] = useState(false);
-  const [error, setError] = useState("");
+  const toast = useToast();
   const labResults = useLabResults(fieldId, open ? sample.sample_id : "");
   const custodyEvents = useCustodyEvents(fieldId, open ? sample.sample_id : "");
   const createLabResult = useCreateLabResult(fieldId, sample.sample_id);
@@ -42,7 +42,6 @@ function SampleRow({ fieldId, planId, sample }: { fieldId: string; planId: strin
       </button>
       {open && (
         <div className="space-y-4 border-t border-border p-3">
-          {error && <p role="alert" className="rounded bg-danger-50 p-2 text-xs text-danger-700">{error}</p>}
           <div>
             <h4 className="ui-meta mb-2 font-semibold uppercase tracking-wide">Lab results</h4>
             <ul className="mb-2 space-y-1 text-sm">
@@ -65,7 +64,7 @@ function SampleRow({ fieldId, planId, sample }: { fieldId: string; planId: strin
                     value: Number(data.get("value")), lab_name: data.get("lab_name"),
                     analyzed_at: data.get("analyzed_at") || null, notes: "",
                   },
-                  { onError: (err) => setError(err instanceof ApiError ? err.detail : "Failed to save"), onSuccess: () => e.currentTarget.reset() },
+                  { onError: (err) => toast.error(err, "Couldn't save"), onSuccess: () => { toast.success("Saved"); e.currentTarget?.reset(); } },
                 );
               }}
             >
@@ -101,7 +100,7 @@ function SampleRow({ fieldId, planId, sample }: { fieldId: string; planId: strin
                 const data = new FormData(e.currentTarget);
                 createCustodyEvent.mutate(
                   { event_type: data.get("event_type"), event_at: data.get("event_at"), actor: data.get("actor"), location: data.get("location"), notes: "" },
-                  { onError: (err) => setError(err instanceof ApiError ? err.detail : "Failed to save"), onSuccess: () => e.currentTarget.reset() },
+                  { onError: (err) => toast.error(err, "Couldn't save"), onSuccess: () => { toast.success("Saved"); e.currentTarget?.reset(); } },
                 );
               }}
             >
@@ -129,13 +128,12 @@ function SampleRow({ fieldId, planId, sample }: { fieldId: string; planId: strin
 function SocEvidenceReviewPanel({ fieldId }: { fieldId: string }) {
   const evidence = useSocEvidence(fieldId);
   const review = useCreateSocEvidenceReview(fieldId);
-  const [error, setError] = useState("");
+  const toast = useToast();
 
   return (
     <Card>
       <h3 className="ui-subsection-title mb-1">Reviewed SOC evidence mapping</h3>
       <p className="mb-3 text-sm text-text-secondary">Adopt at least 3 samples with a SOC value per cell.</p>
-      {error && <p role="alert" className="mb-2 rounded bg-danger-50 p-2 text-xs text-danger-700">{error}</p>}
       <div className="grid gap-3 sm:grid-cols-2">
         {SITE_TYPES.flatMap((siteType) =>
           TIMEPOINTS.map((timepoint) => {
@@ -160,7 +158,7 @@ function SocEvidenceReviewPanel({ fieldId }: { fieldId: string }) {
                     const selectedIds = data.getAll("sample_id").map(String);
                     review.mutate(
                       { site_type: siteType, timepoint, sample_ids: selectedIds, status: String(data.get("status")), reason: String(data.get("reason")) },
-                      { onError: (err) => setError(err instanceof ApiError ? err.detail : "Failed to save review") },
+                      { onError: (err) => toast.error(err, "Couldn't save review"), onSuccess: () => toast.success("Review saved") },
                     );
                   }}
                 >
@@ -197,7 +195,7 @@ export default function SoilEvidencePage() {
   const writable = session?.role === "admin" || session?.role === "analyst";
   const fieldId = field.field_id;
   const [selectedPlan, setSelectedPlan] = useState("");
-  const [error, setError] = useState("");
+  const toast = useToast();
 
   const plans = useSoilPlans(fieldId);
   const planId = selectedPlan || plans.data?.[0]?.plan_id || "";
@@ -212,7 +210,6 @@ export default function SoilEvidencePage() {
       <div>
         <h2 className="ui-section-title">Soil Sampling</h2>
       </div>
-      {error && <p role="alert" className="rounded-lg bg-danger-50 p-3 text-danger-700">{error}</p>}
 
       {writable && (
         <Card>
@@ -228,7 +225,7 @@ export default function SoilEvidencePage() {
                   measurement_method: String(data.get("measurement_method")),
                   remeasurement_interval_years: data.get("remeasurement_interval_years") ? Number(data.get("remeasurement_interval_years")) : null,
                 },
-                { onError: (err) => setError(err instanceof ApiError ? err.detail : "Failed to save"), onSuccess: () => e.currentTarget.reset() },
+                { onError: (err) => toast.error(err, "Couldn't save"), onSuccess: () => { toast.success("Saved"); e.currentTarget?.reset(); } },
               );
             }}
           >
@@ -284,7 +281,7 @@ export default function SoilEvidencePage() {
                   const data = new FormData(e.currentTarget);
                   createStratum.mutate(
                     { name: String(data.get("name")), description: "", area_ha: data.get("area_ha") ? Number(data.get("area_ha")) : null },
-                    { onError: (err) => setError(err instanceof ApiError ? err.detail : "Failed to save"), onSuccess: () => e.currentTarget.reset() },
+                    { onError: (err) => toast.error(err, "Couldn't save"), onSuccess: () => { toast.success("Saved"); e.currentTarget?.reset(); } },
                   );
                 }}
               >
@@ -320,7 +317,7 @@ export default function SoilEvidencePage() {
                       lab_name: data.get("lab_name") || "", lab_method: data.get("lab_method") || "",
                       chain_of_custody_ref: data.get("chain_of_custody_ref") || "", notes: "",
                     },
-                    { onError: (err) => setError(err instanceof ApiError ? err.detail : "Failed to save"), onSuccess: () => e.currentTarget.reset() },
+                    { onError: (err) => toast.error(err, "Couldn't save"), onSuccess: () => { toast.success("Saved"); e.currentTarget?.reset(); } },
                   );
                 }}
               >

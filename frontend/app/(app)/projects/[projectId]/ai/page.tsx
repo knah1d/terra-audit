@@ -3,6 +3,7 @@
 import { formatQueueTimestamp } from "@/lib/format";
 import Link from "next/link";
 import { useState } from "react";
+import { useToast } from "@/components/ui/Toast";
 import { apiFetchBlob } from "@/lib/api";
 import { useProjectContext } from "@/components/projects/ProjectContext";
 import { Button } from "@/components/ui/Button";
@@ -20,26 +21,24 @@ export default function AIWorkspacePage() {
   const query = useAIWorkspace(project.project_id);
   const corpus = useAICorpus(project.project_id);
   const action = useAIAction(project.project_id);
-  const [error, setError] = useState(""); const [notice, setNotice] = useState("");
+  const toast = useToast();
   const [name, setName] = useState(""); const [model, setModel] = useState("random_forest"); const [split, setSplit] = useState("field");
   const [chosenModel, setChosenModel] = useState(""); const [threshold, setThreshold] = useState("0.8"); const [reason, setReason] = useState("");
   const [seasonId, setSeasonId] = useState(""); const [attachmentId, setAttachmentId] = useState(""); const [question, setQuestion] = useState("");
   const [extractionMode, setExtractionMode] = useState("auto");
   const data = query.data;
   async function run(path: string, body?: unknown, method = "POST") {
-    setError(""); setNotice("");
-    try { await action.mutateAsync({ path, body, method }); setNotice(path.includes("review") || path === "/deployment" ? "Saved." : "Request queued. Progress appears below."); }
-    catch (e) { setError(e instanceof Error ? e.message : "Request failed"); throw e; }
+    try { await action.mutateAsync({ path, body, method }); toast.success(path.includes("review") || path === "/deployment" ? "Saved." : "Request queued. Progress appears below."); }
+    catch (e) { toast.error(e, "Request failed"); throw e; }
   }
   const dispatch = (path: string, body?: unknown, method?: string) => { void run(path, body, method).catch(() => {}); };
   async function downloadOriginal(id: string, filename: string) {
-    setError("");
     try {
       const blob = await apiFetchBlob(`/projects/${project.project_id}/ai/documents/${id}/source`);
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a"); link.href = url; link.download = filename; link.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
-    } catch (e) { setError(e instanceof Error ? e.message : "Original document could not be downloaded"); }
+    } catch (e) { toast.error(e, "Original document could not be downloaded"); }
   }
   if (query.isLoading) return <p>Loading AI workspace…</p>;
   if (query.error || !data) return <p role="alert">{query.error?.message ?? "Workspace unavailable"}</p>;
@@ -53,8 +52,6 @@ export default function AIWorkspacePage() {
   return <div className="ui-container space-y-6">
     <p className="ui-secondary">Multi-crop AI supports monitoring and evidence preparation. Model scores are uncalibrated; outputs require human review and do not authorize carbon credits.</p>
     {!data.can_manage && <p className="text-sm">Project leads and organization admins can run AI workflows. You can view saved results.</p>}
-    {(error || query.error) && <p role="alert" className="text-danger-700">{error}</p>}
-    {notice && <p role="status" className="text-success-700">{notice}</p>}
     <Card><h2 className="ui-section-title mb-3">AI provider</h2><p className="ui-secondary">{data.provider_status?.provider ?? "Unknown"} · {data.provider_status?.model || "No model configured"}. Configuration presence does not verify worker connectivity. Drafts still require human review.</p></Card>
     <Card><h2 className="ui-section-title mb-3">Train a crop model</h2>
       <p className="mb-3 text-sm text-text-secondary">Requires at least four eligible field-seasons, two crops, and independently reviewed labels. Training uses only active project fields and reserves independent groups for evaluation.</p>

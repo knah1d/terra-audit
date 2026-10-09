@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useToast } from "@/components/ui/Toast";
 import { Button } from "@/components/ui/Button";
 import { TextArea, TextInput } from "@/components/ui/Field";
 import { Sheet } from "@/components/ui/Sheet";
@@ -15,23 +15,21 @@ export function NewProjectSheet({ open, onClose, onCreated }: {
   onCreated?: (project: ProjectOut) => void;
 }) {
   const create = useCreateProject();
-  const [error, setError] = useState("");
+  const toast = useToast();
 
   return (
     <Sheet open={open} onClose={onClose} title="New project">
       <form className="flex flex-col gap-3" onSubmit={(e) => {
         e.preventDefault();
-        setError("");
         const data = new FormData(e.currentTarget);
         create.mutateAsync({
           name: data.get("name"), description: data.get("description"), geography: data.get("geography"),
-        }).then((project) => { onClose(); onCreated?.(project); })
-          .catch((err) => setError(err instanceof Error ? err.message : "Failed to create project"));
+        }).then((project) => { onClose(); toast.success("Project created", { description: project.name }); onCreated?.(project); })
+          .catch((err) => toast.error(err, "Couldn't create project"));
       }}>
         <label className="text-sm">Name<TextInput name="name" required maxLength={200} /></label>
         <label className="text-sm">Description<TextArea name="description" maxLength={4000} /></label>
         <label className="text-sm">Geography<TextInput name="geography" placeholder="e.g. Rajshahi division" maxLength={2000} /></label>
-        {error && <p role="alert" className="text-sm text-danger-700">{error}</p>}
         <Button type="submit" loading={create.isPending}>Create project</Button>
         <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
       </form>

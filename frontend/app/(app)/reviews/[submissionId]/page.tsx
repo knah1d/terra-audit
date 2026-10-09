@@ -4,6 +4,7 @@ import { formatDate, formatNumber, formatQueueTimestamp } from "@/lib/format";
 
 import { useParams } from "next/navigation";
 import { useState } from "react";
+import { useToast } from "@/components/ui/Toast";
 import { InputProvenance } from "@/components/calculations/InputProvenance";
 import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
@@ -77,7 +78,7 @@ function FindingCard({ finding, submissionId }: { finding: FindingOut; submissio
   const comments = useFindingComments(expanded ? finding.finding_id : null);
   const close = useCloseFinding(submissionId);
   const addComment = useAddComment(finding.finding_id, submissionId);
-  const [error, setError] = useState("");
+  const toast = useToast();
 
   return (
     <div className="border-t border-border py-3 text-sm first:border-t-0">
@@ -90,7 +91,6 @@ function FindingCard({ finding, submissionId }: { finding: FindingOut; submissio
       <p className="mt-1">{finding.description}</p>
       {finding.requested_action && <p className="text-text-secondary">Requested: {finding.requested_action}</p>}
       {finding.status === "closed" && <p className="text-text-secondary">Closed: {finding.close_reason}</p>}
-      {error && <p role="alert" className="text-danger-700">{error}</p>}
       <button className="mt-1 text-xs underline" onClick={() => setExpanded((v) => !v)}>
         {expanded ? "Hide discussion" : "Show discussion"}
       </button>
@@ -101,10 +101,9 @@ function FindingCard({ finding, submissionId }: { finding: FindingOut; submissio
           ))}
           <form className="flex gap-2" onSubmit={(e) => {
             e.preventDefault();
-            setError("");
             addComment.mutateAsync({ body: commentBody, is_proposed_resolution: proposed })
               .then(() => setCommentBody(""))
-              .catch((err) => setError(err instanceof Error ? err.message : "Failed to add comment"));
+              .catch((err) => toast.error(err, "Failed to add comment"));
           }}>
             <TextInput value={commentBody} onChange={(e) => setCommentBody(e.target.value)} placeholder="Reply…" required className="flex-1" />
             <label className="flex items-center gap-1 text-xs"><input type="checkbox" checked={proposed} onChange={(e) => setProposed(e.target.checked)} />Proposed resolution</label>
@@ -113,10 +112,9 @@ function FindingCard({ finding, submissionId }: { finding: FindingOut; submissio
           {finding.status === "open" && (
             <form className="flex gap-2" onSubmit={(e) => {
               e.preventDefault();
-              setError("");
               close.mutateAsync({ findingId: finding.finding_id, reason: closeReason })
                 .then(() => setCloseReason(""))
-                .catch((err) => setError(err instanceof Error ? err.message : "Failed to close finding"));
+                .catch((err) => toast.error(err, "Failed to close finding"));
             }}>
               <TextInput value={closeReason} onChange={(e) => setCloseReason(e.target.value)} placeholder="Reason for closing (reviewer only)" required className="flex-1" />
               <Button type="submit" variant="secondary" size="sm" loading={close.isPending}>Close finding</Button>
@@ -132,8 +130,7 @@ export default function SubmissionDetailPage() {
   const { submissionId } = useParams<{ submissionId: string }>();
   const detail = useSubmissionDetail(submissionId);
   const team = useTeamUsers();
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const toast = useToast();
   const [reviewerId, setReviewerId] = useState("");
   const [assignReason, setAssignReason] = useState("");
   const [newMemberId, setNewMemberId] = useState("");
@@ -162,8 +159,7 @@ export default function SubmissionDetailPage() {
   const openBlockers = findings.filter((f) => f.severity === "blocking" && f.status === "open");
 
   async function perform(action: () => Promise<void>) {
-    setError(""); setNotice("");
-    try { await action(); } catch (e) { setError(e instanceof Error ? e.message : "Action failed"); }
+    try { await action(); } catch (e) { toast.error(e, "Action failed"); }
   }
 
   return (
@@ -172,8 +168,6 @@ export default function SubmissionDetailPage() {
         title={<span className="flex items-center gap-2">Submission <Badge tone={STATUS_TONE[submission.status]}>{submission.status.replace(/_/g, " ")}</Badge></span>}
         subtitle="Internal approval only. This never sets or implies external verification or registry issuance."
       />
-      {error && <p role="alert" className="rounded-lg bg-danger-50 p-3 text-danger-700">{error}</p>}
-      {notice && <p role="status" className="text-sm text-success-700">{notice}</p>}
 
       <Card>
         <h3 className="ui-subsection-title mb-2">Calculation</h3>
@@ -222,7 +216,7 @@ export default function SubmissionDetailPage() {
           e.preventDefault();
           void perform(async () => {
             await assign.mutateAsync({ reviewer_id: reviewerId || null, reason: assignReason });
-            setAssignReason(""); setNotice("Reviewer assignment updated.");
+            setAssignReason(""); toast.success("Reviewer assignment updated.");
           });
         }}>
           <Select value={reviewerId} onChange={(e) => setReviewerId(e.target.value)} className="max-w-xs">
@@ -241,7 +235,7 @@ export default function SubmissionDetailPage() {
             e.preventDefault();
             void perform(async () => {
               await addMember.mutateAsync({ user_id: newMemberId, project_role: "contributor", reason: newMemberReason });
-              setNewMemberId(""); setNewMemberReason(""); setNotice("Project member added.");
+              setNewMemberId(""); setNewMemberReason(""); toast.success("Project member added.");
             });
           }}>
             <Select value={newMemberId} onChange={(e) => setNewMemberId(e.target.value)} className="max-w-xs" required>
@@ -268,7 +262,7 @@ export default function SubmissionDetailPage() {
             e.preventDefault();
             void perform(async () => {
               await transitionMutation.mutateAsync({ if_version: submission.version, to_status: toStatus, reason: reason || null });
-              setReason(""); setToStatus(""); setNotice(`Submission moved to ${toStatus.replace(/_/g, " ")}.`);
+              setReason(""); setToStatus(""); toast.success(`Submission moved to ${toStatus.replace(/_/g, " ")}.`);
             });
           }}>
             <Select value={toStatus} onChange={(e) => setToStatus(e.target.value)} required className="max-w-xs">
@@ -291,7 +285,7 @@ export default function SubmissionDetailPage() {
             await createFinding.mutateAsync({
               severity: findingSeverity, description: findingDescription, requested_action: findingAction,
             });
-            setFindingDescription(""); setFindingAction(""); setNotice("Finding recorded.");
+            setFindingDescription(""); setFindingAction(""); toast.success("Finding recorded.");
           });
         }}>
           <Select value={findingSeverity} onChange={(e) => setFindingSeverity(e.target.value)}>

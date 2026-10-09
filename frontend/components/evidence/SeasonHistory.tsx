@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { useToast } from "@/components/ui/Toast";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/Card";
 import { Sheet } from "@/components/ui/Sheet";
@@ -26,13 +27,14 @@ export function SeasonHistory({ fieldId, seasonId, writable }: { fieldId: string
   </Card>;
 }
 function CorrectionForm({ prior, base, onSaved, onCancel }: { prior: SeasonDetails; base: string; onSaved: () => Promise<void>; onCancel: () => void }) {
-  const [type, setType] = useState(prior.season_type ?? "single_crop"); const [sequence, setSequence] = useState(prior.crop_sequence ?? []); const [error, setError] = useState(""); const [busy, setBusy] = useState(false);
+  const [type, setType] = useState(prior.season_type ?? "single_crop"); const [sequence, setSequence] = useState(prior.crop_sequence ?? []); const toast = useToast(); const [busy, setBusy] = useState(false);
   const gap = type === "fallow" || type === "missing_period";
   return <form className="space-y-3" onSubmit={async e => {
-    e.preventDefault(); const data = new FormData(e.currentTarget); setBusy(true); setError("");
+    e.preventDefault(); const data = new FormData(e.currentTarget); setBusy(true);
     try {
       await apiFetch(`${base}/corrections`, { method: "POST", json: { name: data.get("name"), crops: gap ? [] : String(data.get("crops")).split(",").map(c => c.trim()).filter(Boolean), start_date: data.get("start_date"), end_date: data.get("end_date"), notes: data.get("notes"), season_type: type, is_historical: data.has("is_historical"), crop_sequence: ["rotation", "intercrop"].includes(type) ? sequence : [], intercrop_arrangement: String(data.get("intercrop_arrangement") ?? ""), fallow_reason: type === "fallow" ? data.get("gap_reason") : "", missing_period_reason: type === "missing_period" ? data.get("gap_reason") : "", reason: data.get("reason") } }); await onSaved();
-    } catch (e) { setError(e instanceof Error ? e.message : "Correction failed"); } finally { setBusy(false); }
+      toast.success("Corrected version saved");
+    } catch (e) { toast.error(e, "Correction failed"); } finally { setBusy(false); }
   }}>
     <fieldset disabled={busy} className="space-y-3"><label className="ui-label">Name<TextInput name="name" required maxLength={120} defaultValue={prior.name} /></label><label className="ui-label">Season type<Select value={type} onChange={e => setType(e.target.value)}>{["single_crop", "rotation", "intercrop", "cover_crop", "fallow", "missing_period"].map(t => <option key={t} value={t}>{t.replaceAll("_", " ")}</option>)}</Select></label>
     {!gap && <label className="ui-label">Crops, separated by commas<TextInput name="crops" required defaultValue={prior.crops.join(", ")} /></label>}
@@ -42,6 +44,6 @@ function CorrectionForm({ prior, base, onSaved, onCancel }: { prior: SeasonDetai
     {type === "intercrop" && <label className="ui-label">Intercrop arrangement<TextInput name="intercrop_arrangement" maxLength={200} defaultValue={prior.intercrop_arrangement} /></label>}
     {["rotation", "intercrop"].includes(type) && <div className="space-y-3"><h4 className="ui-label">Crop sequence</h4>{sequence.map((entry, i) => <div key={i} className="grid gap-2 sm:grid-cols-3">{(["crop", "start_date", "end_date"] as const).map(key => <label key={key} className="ui-label">{key.replaceAll("_", " ")} {i + 1}<TextInput type={key === "crop" ? "text" : "date"} required value={entry[key]} onChange={e => setSequence(rows => rows.map((r, n) => n === i ? { ...r, [key]: e.target.value } : r))} /></label>)}<Button type="button" variant="ghost" onClick={() => setSequence(rows => rows.filter((_, n) => n !== i))}>Remove entry {i + 1}</Button></div>)}<Button type="button" variant="secondary" disabled={sequence.length >= 20} onClick={() => setSequence(rows => [...rows, { crop: "", start_date: prior.start_date, end_date: prior.end_date }])}>Add sequence entry</Button></div>}
     <label className="ui-label">Notes<TextArea name="notes" maxLength={2000} defaultValue={prior.notes} /></label><label className="ui-label">Correction reason<TextArea name="reason" required minLength={5} maxLength={2000} /></label></fieldset>
-    {error && <p role="alert" className="text-danger-700">{error}</p>}<div className="flex gap-3"><Button type="submit" loading={busy}>Save corrected version</Button><Button type="button" variant="secondary" disabled={busy} onClick={onCancel}>Cancel</Button></div>
+    <div className="flex gap-3"><Button type="submit" loading={busy}>Save corrected version</Button><Button type="button" variant="secondary" disabled={busy} onClick={onCancel}>Cancel</Button></div>
   </form>;
 }

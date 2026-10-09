@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 
 import { useMemo, useState } from "react";
+import { useToast } from "@/components/ui/Toast";
 import { useProjectContext } from "@/components/projects/ProjectContext";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -33,8 +34,7 @@ export default function ProjectMonitoringPage() {
   const [forceRefresh, setForceRefresh] = useState(false);
   const search = useSearchParams();
   const [activeBatchId, setActiveBatchId] = useState<string | null>(search.get("batch"));
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const toast = useToast();
 
   const filtered = useMemo(() => (dashboard.data?.fields ?? []).filter((r) =>
     (!cropFilter || r.crops.includes(cropFilter.toLowerCase())) &&
@@ -51,8 +51,6 @@ export default function ProjectMonitoringPage() {
 
   return (
     <div className="ui-container-wide space-y-6">
-      {error && <p role="alert" className="rounded-lg bg-danger-50 p-3 text-danger-700">{error}</p>}
-      {notice && <p role="status" className="text-sm text-success-700">{notice}</p>}
 
       {dashboard.isLoading ? <Skeleton className="h-40" /> : dashboard.data && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -119,14 +117,13 @@ export default function ProjectMonitoringPage() {
           <Button
             disabled={!selected.size} loading={bulkRun.isPending}
             onClick={() => {
-              setError(""); setNotice("");
               const field_seasons = Array.from(selected).map((k) => {
                 const [field_id, season_id] = k.split(":");
                 return { field_id, season_id };
               });
               bulkRun.mutateAsync({ field_seasons, force_refresh: forceRefresh })
-                .then((r) => { setActiveBatchId(r.batch_id); setNotice(`Started batch with ${field_seasons.length} job(s).`); setSelected(new Set()); })
-                .catch((e) => setError(e instanceof Error ? e.message : "Failed to start monitoring"));
+                .then((r) => { setActiveBatchId(r.batch_id); toast.success(`Started batch with ${field_seasons.length} job(s).`); setSelected(new Set()); })
+                .catch((e) => toast.error(e, "Failed to start monitoring"));
             }}
           >
             Start monitoring ({selected.size})

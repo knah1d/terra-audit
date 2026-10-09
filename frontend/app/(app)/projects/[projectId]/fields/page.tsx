@@ -3,6 +3,7 @@
 import { formatDate } from "@/lib/format";
 import Link from "next/link";
 import { useState } from "react";
+import { useToast } from "@/components/ui/Toast";
 import { useProjectContext } from "@/components/projects/ProjectContext";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -19,7 +20,7 @@ export default function ProjectFieldsPage() {
   const endMembership = useEndFieldMembership(project.project_id);
   const [fieldId, setFieldId] = useState("");
   const [effectiveDate, setEffectiveDate] = useState("");
-  const [error, setError] = useState("");
+  const toast = useToast();
 
   const openMemberships = (memberships.data ?? []).filter((m) => m.removed_at === null);
   const assignedFieldIds = new Set(openMemberships.map((m) => m.field_id));
@@ -28,7 +29,6 @@ export default function ProjectFieldsPage() {
 
   return (
     <div className="ui-container space-y-6">
-      {error && <p role="alert" className="rounded-lg bg-danger-50 p-3 text-danger-700">{error}</p>}
       <Card>
         <h3 className="ui-subsection-title mb-3">Assign an existing field</h3>
         <p className="ui-meta mb-3">
@@ -37,9 +37,8 @@ export default function ProjectFieldsPage() {
         </p>
         <form className="flex flex-wrap gap-2" onSubmit={(e) => {
           e.preventDefault();
-          setError("");
-          assign.mutateAsync({ field_id: fieldId, effective_start_date: effectiveDate }).then(() => setFieldId(""))
-            .catch((err) => setError(err instanceof Error ? err.message : "Failed to assign field"));
+          assign.mutateAsync({ field_id: fieldId, effective_start_date: effectiveDate }).then(() => { setFieldId(""); toast.success("Field assigned"); })
+            .catch((err) => toast.error(err, "Failed to assign field"));
         }}>
           <Select aria-label="Field to assign" value={fieldId} onChange={(e) => setFieldId(e.target.value)} required className="max-w-xs">
             <option value="">Choose a field…</option>
@@ -71,7 +70,7 @@ function EndMembershipRow({ membershipId, fieldId, name, start, onEnd, projectId
 }) {
   const [reason, setReason] = useState("");
   const [open, setOpen] = useState(false);
-  const [error, setError] = useState("");
+  const toast = useToast();
   const changeStart = useChangeFieldMembershipStart(projectId);
   const [editingStart, setEditingStart] = useState(false);
   const [newStart, setNewStart] = useState(start);
@@ -85,24 +84,21 @@ function EndMembershipRow({ membershipId, fieldId, name, start, onEnd, projectId
         ) : (
           <form className="mt-2 flex flex-wrap items-center gap-2" onSubmit={(e) => {
             e.preventDefault();
-            setError("");
-            changeStart.mutateAsync({ membershipId, start: newStart }).then(() => setEditingStart(false))
-              .catch((err) => setError(err instanceof Error ? err.message : "Could not change the start date"));
+            changeStart.mutateAsync({ membershipId, start: newStart }).then(() => { setEditingStart(false); toast.success("Start date updated"); })
+              .catch((err) => toast.error(err, "Could not change the start date"));
           }}>
             <TextInput aria-label="New start date" type="date" value={newStart} onChange={(e) => setNewStart(e.target.value)} required className="max-w-44" />
             <Button type="submit" size="sm" loading={changeStart.isPending}>Save</Button>
             <Button type="button" variant="secondary" size="sm" onClick={() => { setEditingStart(false); setNewStart(start); }}>Cancel</Button>
           </form>
         )}
-        {error && <p role="alert" className="mt-1 text-danger-700">{error}</p>}
       </div>
       {!open ? (
         <Button variant="ghost" size="sm" onClick={() => setOpen(true)}>End membership</Button>
       ) : (
         <form className="flex gap-2" onSubmit={(e) => {
           e.preventDefault();
-          setError("");
-          onEnd.mutateAsync({ membershipId, reason }).then(() => setOpen(false)).catch(e => setError(e instanceof Error ? e.message : "Could not end membership"));
+          onEnd.mutateAsync({ membershipId, reason }).then(() => { setOpen(false); toast.success("Membership ended"); }).catch(e => toast.error(e, "Could not end membership"));
         }}>
           <TextInput aria-label="Reason for ending membership" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason" required className="max-w-xs" />
           <Button type="submit" variant="danger" size="sm" loading={onEnd.isPending}>Confirm</Button>

@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { SeasonHistory } from "@/components/evidence/SeasonHistory";
 import { formatDate, formatQueueTimestamp } from "@/lib/format";
 import { useEffect, useState } from "react";
+import { useToast } from "@/components/ui/Toast";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSession } from "@/app/providers";
 import { useFieldContext } from "@/components/fields/FieldContext";
@@ -47,8 +48,7 @@ function CropSeasonsView() {
   const base = `/fields/${encodeURIComponent(field.field_id)}/crop-seasons`;
   const search = useSearchParams();
   const [selected, setSelected] = useState(search.get("season") ?? "");
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const toast = useToast();
   const [busy, setBusy] = useState(false);
   const [jobId, setJobId] = useState<string | null>(null);
   const [kind, setKind] = useState("crop_identity");
@@ -74,8 +74,8 @@ function CropSeasonsView() {
   }, [job.data?.status, queryClient]);
 
   async function perform(action: () => Promise<void>) {
-    setBusy(true); setError(""); setNotice("");
-    try { await action(); } catch (e) { setError(e instanceof Error ? e.message : "Unable to complete this action"); }
+    setBusy(true);
+    try { await action(); } catch (e) { toast.error(e, "Couldn't save"); }
     finally { setBusy(false); }
   }
 
@@ -87,8 +87,7 @@ function CropSeasonsView() {
     <div>
       <h2 className="ui-section-title">Crop seasons & evidence</h2>
     </div>
-    {(error || seasons.error || evidence.error || corpus.error || job.error || job.data?.error) && <p role="alert" className="rounded-lg bg-danger-50 p-3 text-danger-700">{error || seasons.error?.message || evidence.error?.message || corpus.error?.message || job.error?.message || job.data?.error}</p>}
-    {notice && <p role="status" className="text-sm text-success-700">{notice}</p>}
+    {(seasons.error || evidence.error || corpus.error || job.error || job.data?.error) && <p role="alert" className="rounded-lg bg-danger-50 p-3 text-danger-700">{seasons.error?.message || evidence.error?.message || corpus.error?.message || job.error?.message || job.data?.error}</p>}
     {writable && <Card>
       <h3 className="ui-subsection-title mb-3">Add a crop season</h3>
       <form className="grid gap-3 sm:grid-cols-2" onSubmit={e => {
@@ -106,7 +105,7 @@ function CropSeasonsView() {
           } });
           setSelected(row.id); form.reset(); setSeasonType("single_crop"); setIsHistorical(false); setCropSequence([]);
           await queryClient.invalidateQueries({ queryKey: ["crop-seasons", field.field_id] });
-          await queryClient.invalidateQueries({ queryKey: ["crop-corpus"] }); setNotice("Crop season saved.");
+          await queryClient.invalidateQueries({ queryKey: ["crop-corpus"] }); toast.success("Crop season saved");
         });
       }}>
         <label className="text-sm">Season name<TextInput name="name" required maxLength={120} placeholder="Winter 2025–26" /></label>
@@ -199,7 +198,7 @@ function CropSeasonsView() {
               kind, source: data.get("source"), observed_at: new Date(String(data.get("observed_at"))).toISOString(),
               value: data.get("value"), numeric_value: numeric ? Number(data.get("numeric_value")) : null,
               evidence_reference: data.get("evidence_reference"), notes: data.get("notes"),
-            } }); form.reset(); await evidence.refetch(); setNotice("Observation saved for another team member to review.");
+            } }); form.reset(); await evidence.refetch(); toast.success("Observation saved", { description: "Another team member must review it." });
           });
         }}>
           <label className="text-sm">Observation type<Select value={kind} onChange={e => setKind(e.target.value)}>
@@ -231,7 +230,7 @@ function CropSeasonsView() {
               e.preventDefault(); const data = new FormData(e.currentTarget);
               void perform(async () => {
                 await apiFetch(`${path}/observations/${o.id}/reviews`, { method: "POST", json: { decision: data.get("decision"), reason: data.get("reason") } });
-                await evidence.refetch(); await corpus.refetch(); setNotice("Review saved.");
+                await evidence.refetch(); await corpus.refetch(); toast.success("Review saved");
               });
             }}>
               <Select name="decision" aria-label="Review decision" className="max-w-40"><option value="accepted">Accept</option><option value="rejected">Reject</option></Select>

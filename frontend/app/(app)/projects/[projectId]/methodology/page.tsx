@@ -3,6 +3,7 @@
 import { formatDate } from "@/lib/format";
 
 import { useState } from "react";
+import { useToast } from "@/components/ui/Toast";
 import { useProjectContext } from "@/components/projects/ProjectContext";
 import { MethodologyCoverage } from "@/components/ai/MethodologyCoverage";
 import { Badge } from "@/components/ui/Badge";
@@ -26,7 +27,7 @@ function PathwaySection({ projectId, pathway, label }: { projectId: string; path
   const setApplicability = useSetProjectApplicability(projectId);
   const [bundleId, setBundleId] = useState("");
   const [reason, setReason] = useState("");
-  const [error, setError] = useState("");
+  const toast = useToast();
 
   const resolved = applicability.data?.resolved_bundle;
   const explicit = applicability.data?.explicit_decision as { bundle_id: string; reason: string; decided_at: string } | null;
@@ -54,10 +55,9 @@ function PathwaySection({ projectId, pathway, label }: { projectId: string; path
         <summary className="cursor-pointer text-sm underline">Pin this project to a specific bundle (project lead/admin only)</summary>
         <form className="mt-2 flex flex-wrap gap-2" onSubmit={(e) => {
           e.preventDefault();
-          setError("");
           setApplicability.mutateAsync({ accounting_pathway: pathway, bundle_id: bundleId, reason })
             .then(() => { setBundleId(""); setReason(""); })
-            .catch((err) => setError(err instanceof Error ? err.message : "Failed to set applicability"));
+            .catch((err) => toast.error(err, "Failed to set applicability"));
         }}>
           <Select aria-label="Methodology bundle to pin" value={bundleId} onChange={(e) => setBundleId(e.target.value)} required className="max-w-sm">
             <option value="">Choose a bundle…</option>
@@ -70,7 +70,6 @@ function PathwaySection({ projectId, pathway, label }: { projectId: string; path
           <TextInput aria-label="Reason for pinning the methodology bundle" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason (e.g. transition eligibility)" required className="flex-1" />
           <Button type="submit" variant="secondary" size="sm" loading={setApplicability.isPending}>Pin bundle</Button>
         </form>
-        {error && <p role="alert" className="mt-2 text-sm text-danger-700">{error}</p>}
       </details>
     </Card>
   );

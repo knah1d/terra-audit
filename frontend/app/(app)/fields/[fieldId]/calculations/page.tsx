@@ -5,6 +5,7 @@ import { Calculator, CheckCircle2, Save, Satellite, Sprout, TriangleAlert } from
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useState } from "react";
+import { useToast } from "@/components/ui/Toast";
 import { useSession } from "@/app/providers";
 import { ExplainButton } from "@/components/ai/ExplainDrawer";
 import { useFieldContext } from "@/components/fields/FieldContext";
@@ -119,8 +120,7 @@ function CalculationsView() {
   const [dirty, setDirty] = useState(true);
   const [lastBody, setLastBody] = useState<Record<string, unknown> | null>(null);
   const [saved, setSaved] = useState<{ id: string; status: string; version: number; projectId: string | null } | null>(null);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const toast = useToast();
 
   const members = useProjectMembers(projectId || undefined);
   const canReview = session?.role === "admin" || (session?.role === "analyst" &&
@@ -152,9 +152,14 @@ function CalculationsView() {
 
   function markDirty() { setDirty(true); setSaved(null); }
 
-  async function perform(action: () => Promise<void>) {
-    setError(""); setNotice("");
-    try { await action(); } catch (e) { setError(e instanceof Error ? e.message : "Unable to complete this action"); }
+  async function perform(title: string, action: () => Promise<void>) {
+    try {
+      await action();
+    } catch (e) {
+      // The membership-period error has a direct fix: correct the join date.
+      const membership = e instanceof Error && e.message.includes("not a member of the selected project") && projectId;
+      toast.error(e, title, membership ? { label: "Change start date", href: `/projects/${encodeURIComponent(projectId)}/fields` } : undefined);
+    }
   }
 
   function readInputs(form: HTMLFormElement): Record<string, unknown> {
@@ -195,8 +200,6 @@ function CalculationsView() {
   return (
     <div className="ui-container space-y-6">
       <h2 className="ui-section-title">Calculations</h2>
-      {error && <p role="alert" className="rounded-lg bg-danger-50 p-3 text-danger-700">{error}</p>}
-      {notice && <p role="status" className="text-sm text-success-700">{notice}</p>}
 
       {writable && <Card>
         <div className="mb-4 space-y-1 text-sm">
@@ -222,7 +225,7 @@ function CalculationsView() {
         <form key={`${run?.job_id}:${manual}`} className="grid gap-3 sm:grid-cols-2" onChange={markDirty} onSubmit={(e) => {
           e.preventDefault();
           const form = e.currentTarget;
-          void perform(async () => {
+          void perform("Couldn't calculate", async () => {
             if (!context || contextIssue) throw new Error(contextIssue || "Choose a period first.");
             const body = { project_id: projectId || null, accounting_pathway: pathway, season_ids: context.seasons,
               monitoring_period_start: context.start, monitoring_period_end: context.end,
@@ -283,19 +286,20 @@ function CalculationsView() {
           )}
 
           <div className="flex flex-wrap items-center gap-2">
-            {!saved && <Button icon={Save} loading={commit.isPending} disabled={busy || !lastBody} onClick={() => void perform(async () => {
+            {!saved && <Button icon={Save} loading={commit.isPending} disabled={busy || !lastBody} onClick={() => void perform("Couldn't save calculation", async () => {
               const out = await commit.mutateAsync({ body: { ...lastBody, monitoring_run_ids: [], attachment_ids: [],
                 supersedes_calculation_id: supersedes || null }, idempotencyKey: crypto.randomUUID() });
               setSaved({ id: out.calculation.calculation_id, status: out.calculation.status, version: out.calculation.version,
                 projectId: (lastBody?.project_id as string | null) ?? null });
-              setNotice(`Saved (version ${out.calculation.version}, ${out.calculation.status.replace("_", " ")}).`);
+              toast.success("Calculation saved", { description: out.calculation.status === "ready_for_review"
+                ? `Version ${out.calculation.version} · ready for review` : `Version ${out.calculation.version} · draft — fix the listed items before review` });
               await queryClient.invalidateQueries({ queryKey: ["calculations", field.field_id] });
               await queryClient.invalidateQueries({ queryKey: ["field-workflow", field.field_id] });
             })}>Save calculation</Button>}
             {saved?.status === "ready_for_review" && saved.projectId && (
-              <Button variant="secondary" loading={createSubmission.isPending} onClick={() => void perform(async () => {
+              <Button variant="secondary" loading={createSubmission.isPending} onClick={() => void perform("Couldn't submit for review", async () => {
                 const sub = await createSubmission.mutateAsync({ project_id: saved.projectId!, calculation_id: saved.id });
-                setNotice(`Submitted for review (${sub.submission_id.slice(0, 8)}…).`);
+                toast.success("Submitted for review", { action: { label: "Open review", href: `/reviews/${encodeURIComponent(sub.submission_id)}` } });
                 await queryClient.invalidateQueries({ queryKey: ["field-workflow", field.field_id] });
               })}>Submit for review</Button>
             )}
@@ -355,12 +359,12 @@ function CalculationsView() {
             <form className="space-y-2" onSubmit={(e) => {
               e.preventDefault();
               const data = new FormData(e.currentTarget);
-              void perform(async () => {
+              void perform("Couldn't save review", async () => {
                 await determination.mutateAsync({ project_id: projectId, accounting_pathway: pathway, season_ids: context.seasons,
                   monitoring_period_start: context.start, monitoring_period_end: context.end,
                   requirement_id: String(data.get("requirement")), status: String(data.get("decision")), reason: String(data.get("reason")) });
                 preview.reset(); markDirty();
-                setNotice("Review saved. Click Calculate again.");
+                toast.success("Review saved", { description: "Click Calculate again to update the result." });
               });
             }}>
               <p className="font-medium">Record an evidence review</p>
@@ -395,13 +399,13 @@ function CalculationsView() {
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {!row.legacy && row.status === "ready_for_review" && row.project_id && writable && (
-                    <Button variant="secondary" size="sm" loading={createSubmission.isPending} onClick={() => void perform(async () => {
+                    <Button variant="secondary" size="sm" loading={createSubmission.isPending} onClick={() => void perform("Couldn't submit for review", async () => {
                       const sub = await createSubmission.mutateAsync({ project_id: row.project_id!, calculation_id: row.calculation_id! });
-                      setNotice(`Submitted for review (${sub.submission_id.slice(0, 8)}…).`);
+                      toast.success("Submitted for review", { action: { label: "Open review", href: `/reviews/${encodeURIComponent(sub.submission_id)}` } });
                     })}>Submit for review</Button>
                   )}
                   <Button variant="ghost" size="sm" onClick={() => download(row, row.legacy ? `credit-history-${row.credit_history_id}.json` : `calculation-${row.calculation_id}.json`)}>JSON</Button>
-                  {!row.legacy && pathway === "vm0042_alm" && <Button variant="ghost" size="sm" onClick={() => void perform(async () => {
+                  {!row.legacy && pathway === "vm0042_alm" && <Button variant="ghost" size="sm" onClick={() => void perform("Download failed", async () => {
                     downloadBlob(await apiFetchBlob(`/calculations/${row.calculation_id}/evidence/pdf`), `calculation-${row.calculation_id}.pdf`);
                   })}>PDF</Button>}
                 </div>
