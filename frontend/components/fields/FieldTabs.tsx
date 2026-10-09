@@ -66,8 +66,15 @@ export function FieldTabs({ fieldId, fieldType }: { fieldId: string; fieldType: 
     }
     revealNavigationItem(containerRef.current?.parentElement ?? null, containerRef.current?.querySelector<HTMLElement>('[data-active="true"]') ?? null);
     measure();
-    window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
+    // Tabs shift after the first measure (status dots arrive with the
+    // workflow query, fonts load, the sidebar collapses) — re-measure on
+    // any size change of the bar or a tab so the pill never lags behind.
+    const observer = new ResizeObserver(measure);
+    if (containerRef.current) {
+      observer.observe(containerRef.current);
+      for (const tab of containerRef.current.querySelectorAll("a")) observer.observe(tab);
+    }
+    return () => observer.disconnect();
   }, [pathname, fieldType]);
 
   return (
