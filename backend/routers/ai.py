@@ -154,11 +154,12 @@ def predict_external_awd(
     geometry, same dates as the rule-based detector it is compared with):
     ascending Sentinel-1 gamma0 plus the window year's Satellite Embedding (or
     the latest earlier year if that one is not published yet), the same 125
-    features and preprocessing as training, then the random forest. Too few
-    observations give a 422 instead of a score. Nothing is stored and no calculation input changes."""
+    features and preprocessing as training, then the random forest. Only a
+    window with too few observations to fit the radar curve (fewer than 2)
+    gives a 422 instead of a score. Nothing is stored and no calculation input changes."""
     from src.ai.ml.external_awd import load_bundle, predict
     from src.ai.ml.ricemapper_features import (
-        FEATURE_VERSION, MAX_GAP_DAYS, MIN_OBSERVATIONS, embedding_year_for,
+        FEATURE_VERSION, embedding_year_for,
         extract_ascending_gamma0, extract_satellite_embedding, handcrafted_features,
         latest_embedding_year, observation_quality,
     )
@@ -184,12 +185,6 @@ def predict_external_awd(
                                 "No prediction: no Satellite Embedding is published for this field.")
         series, relative_orbit = extract_ascending_gamma0(geometry, *window)
         n_obs, max_gap = observation_quality(series, *window)
-        if n_obs < MIN_OBSERVATIONS or max_gap > MAX_GAP_DAYS:
-            raise HTTPException(
-                status.HTTP_422_UNPROCESSABLE_ENTITY,
-                f"No prediction: only {n_obs} ascending Sentinel-1 observations in {window[0]} – {window[1]} "
-                f"(largest gap {max_gap} days). At least {MIN_OBSERVATIONS} observations and no gap over "
-                f"{MAX_GAP_DAYS} days are needed for a reliable classification.")
         embedding = extract_satellite_embedding(geometry, year)
     except HTTPException:
         raise

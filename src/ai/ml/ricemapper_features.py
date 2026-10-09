@@ -43,8 +43,7 @@ K = 3
 SPLINE_SIGMA = 0.5
 RATIO_SMOOTHING_SIGMA = 10
 TRAINING_WINDOW_DAYS = 97  # Jun 1 - Sep 5 inclusive
-MIN_OBSERVATIONS = 6       # inference quality screens, not research parameters
-MAX_GAP_DAYS = 30
+MIN_OBSERVATIONS = 2       # technical floor: the cubic spline needs at least 2 points
 VARIABLES = [f"VV_{ORBIT}_mean_spline", f"VH_{ORBIT}_mean_spline", f"{ORBIT}_spline_ratio"]
 EMBEDDING_COLLECTION = "GOOGLE/SATELLITE_EMBEDDING/V1/ANNUAL"
 SE_NAMES = [f"sat_emb_{i}" for i in range(64)]  # research column sat_emb_i = band A{i:02d}
