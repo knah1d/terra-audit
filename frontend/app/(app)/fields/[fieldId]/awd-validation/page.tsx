@@ -131,11 +131,10 @@ export default function ExternalAWDValidationPage() {
                 {prediction.error instanceof ApiError ? prediction.error.detail : prediction.error.message}
               </Alert>}
               {result && <>
-                <div className="grid grid-cols-2 gap-3">
-                  <div><p className="ui-meta">Prediction</p>
-                    <p className="text-xl font-semibold">{result.predicted_class === "AWD" ? "AWD-like" : "PTR-like (conventional)"}</p></div>
-                  <div><p className="ui-meta">AWD score (uncalibrated)</p>
-                    <p className="text-xl font-semibold tabular-nums">{pct(result.awd_score)}</p></div>
+                <div>
+                  <p className="ui-meta">AWD score</p>
+                  <p className="text-xl font-semibold tabular-nums">{pct(result.awd_score)}</p>
+                  <p className="ui-meta">Share of the model&apos;s trees voting AWD — not a calibrated probability.</p>
                 </div>
                 <p className="text-xs text-text-secondary">
                   Window {result.window_start} – {result.window_end} · {result.observations} ascending observations ·
@@ -146,7 +145,7 @@ export default function ExternalAWDValidationPage() {
                   {result.comparison.status === "no_detector_run" ? "no detector run to compare."
                     : <>
                       {result.comparison.agrees ? "agrees" : "disagrees"} at practice level
-                      (AWD-like ↔ multiple drainage).
+                      (AWD score ≥ 50% ↔ multiple drainage).
                       {result.comparison.status === "different_windows" &&
                         " Caution: the detector run covers a different date window."}
                     </>}
