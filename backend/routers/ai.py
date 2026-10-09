@@ -152,15 +152,15 @@ def predict_external_awd(
     """Experimental, read-only AWD practice classification for one field, on
     exactly the window of the field's latest Signal Analytics run (same field
     geometry, same dates as the rule-based detector it is compared with):
-    ascending Sentinel-1 gamma0 plus the same year's Satellite Embedding, the
-    same 125 features and preprocessing as training, then the random forest.
-    Too few observations or a missing embedding year give a 422 warning
-    instead of a score. Nothing is stored and no calculation input changes."""
+    ascending Sentinel-1 gamma0 plus the window year's Satellite Embedding (or
+    the latest earlier year if that one is not published yet), the same 125
+    features and preprocessing as training, then the random forest. Too few
+    observations give a 422 instead of a score. Nothing is stored and no calculation input changes."""
     from src.ai.ml.external_awd import load_bundle, predict
     from src.ai.ml.ricemapper_features import (
-        FEATURE_VERSION, MAX_GAP_DAYS, MIN_OBSERVATIONS, TRAINING_WINDOW_DAYS, embedding_year_for,
+        FEATURE_VERSION, MAX_GAP_DAYS, MIN_OBSERVATIONS, embedding_year_for,
         extract_ascending_gamma0, extract_satellite_embedding, handcrafted_features,
-        latest_embedding_year, observation_quality, window_for_year,
+        latest_embedding_year, observation_quality,
     )
 
     bundle = load_bundle()
@@ -175,14 +175,13 @@ def predict_external_awd(
                             "the same window as its latest run.")
     window = (detector["window_start"], detector["window_end"])
     geometry = field["geojson_geometry"]
-    year = embedding_year_for(*window)
     try:
-        if latest_embedding_year(geometry, up_to=year) != year:
-            raise HTTPException(
-                status.HTTP_422_UNPROCESSABLE_ENTITY,
-                f"No prediction: Google's Satellite Embedding for {year} is not published yet (it is "
-                "released after the year ends), and the model needs the same year's embedding, as in "
-                "training. Choose a window in an earlier year in Signal Analytics.")
+        # The window's own year, or the latest earlier year when Google has not
+        # published that year's embedding yet.
+        year = latest_embedding_year(geometry, up_to=embedding_year_for(*window))
+        if year is None:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY,
+                                "No prediction: no Satellite Embedding is published for this field.")
         series, relative_orbit = extract_ascending_gamma0(geometry, *window)
         n_obs, max_gap = observation_quality(series, *window)
         if n_obs < MIN_OBSERVATIONS or max_gap > MAX_GAP_DAYS:
@@ -203,13 +202,6 @@ def predict_external_awd(
     features.update(embedding)
     score = predict(bundle, features)
     is_awd = score >= 0.5
-    warnings = []
-    if window != window_for_year(year):
-        days = (date.fromisoformat(window[1]) - date.fromisoformat(window[0])).days + 1
-        warnings.append(
-            f"This window ({days} days) is not the model's training window (Jun 1 – Sep 5, "
-            f"{TRAINING_WINDOW_DAYS} days). Features are computed exactly as in training, but the model "
-            "has never seen this period, so treat the score as indicative only.")
     return {
         "field_id": field_id,
         "experimental": True,
@@ -225,7 +217,6 @@ def predict_external_awd(
         "embedding_year": year,
         "model_version": bundle["version"],
         "feature_version": FEATURE_VERSION,
-        "warnings": warnings,
         "comparison": _compare(detector, is_awd),
         "affects_carbon_calculation": False,
     }

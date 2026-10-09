@@ -54,7 +54,6 @@ type Prediction = {
   relative_orbit: number | null;
   embedding_year: number;
   model_version: string;
-  warnings: string[];
   // Always the same Signal Analytics run (same field, same window) as the detector card.
   comparison: {
     status: "compared" | "no_detector_run";
@@ -156,7 +155,6 @@ export default function ExternalAWDValidationPage() {
                   observations (largest gap {result.max_gap_days} days) · relative orbit {result.relative_orbit ?? "—"} ·
                   Satellite Embedding {result.embedding_year}
                 </p>
-                {result.warnings.map((w) => <Alert key={w} tone="warning">{w}</Alert>)}
                 <p className="text-sm">
                   <strong>Compared with detector: </strong>
                   {result.comparison.status === "no_detector_run" ? "no detector run to compare." : <>
