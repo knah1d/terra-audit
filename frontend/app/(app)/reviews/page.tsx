@@ -44,7 +44,8 @@ export default function ReviewsPage() {
   const router = useRouter();
   const search = useSearchParams();
   const requestedProject = search.get("project") ?? "";
-  const projectId = projects.data?.some(p => p.project_id === requestedProject) ? requestedProject : "";
+  // Defaults to the first project so the queue is never hidden behind an empty picker.
+  const projectId = projects.data?.some(p => p.project_id === requestedProject) ? requestedProject : projects.data?.[0]?.project_id ?? "";
   function setProjectId(value: string) {
     const params = new URLSearchParams(search.toString());
     if (value) params.set("project", value); else params.delete("project");
@@ -94,7 +95,6 @@ export default function ReviewsPage() {
         <h3 className="ui-subsection-title mb-3">Project review queue</h3>
         <div className="ui-filters mb-4">
           <Select value={projectId} onChange={(e) => setProjectId(e.target.value)} aria-label="Project">
-            <option value="">Select a project…</option>
             {(projects.data ?? []).map((p) => <option key={p.project_id} value={p.project_id}>{p.name}</option>)}
           </Select>
           {projectId && (
@@ -106,8 +106,8 @@ export default function ReviewsPage() {
             </Select>
           )}
         </div>
-        {!projectId ? (
-          <p className="ui-secondary">Select a project to see its submissions.</p>
+        {!projectId ? (projects.isLoading ? <Skeleton className="h-24" /> :
+          <p className="ui-secondary">Create a project to see its submissions.</p>
         ) : queue.isLoading ? <Skeleton className="h-24" /> : queue.error ? (
           <Alert tone="danger" title="Could not load submissions">{queue.error.message}</Alert>
         ) : !queue.data?.length ? (

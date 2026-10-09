@@ -17,7 +17,7 @@ import { Select, TextInput } from "@/components/ui/Field";
 import { useCalculationHistory, useCommitCalculation, usePreviewCalculation, useRecordDetermination } from "@/hooks/use-calculations";
 import { useCropSeasons } from "@/hooks/use-crop-seasons";
 import { useProjectMembers, useProjects } from "@/hooks/use-projects";
-import { useCreateSubmission } from "@/hooks/use-reviews";
+import { useCreateSubmission, useProjectSubmissions } from "@/hooks/use-reviews";
 import { apiFetch, apiFetchBlob } from "@/lib/api";
 import { downloadBlob } from "@/lib/download";
 import { formatDate, formatNumber, formatQueueTimestamp } from "@/lib/format";
@@ -176,6 +176,9 @@ function CalculationsView() {
   const accounted = context && !supersedes ? openCalculations.find((c): c is Extract<CalculationHistoryRow, { legacy: false }> =>
     !c.legacy && c.status === "ready_for_review" && !!c.project_id && c.accounting_pathway === pathway
     && c.monitoring_period_start <= context.end && context.start <= c.monitoring_period_end) : undefined;
+  // Saving a calculation does not send it to review — submitting does.
+  const submissions = useProjectSubmissions(projectId);
+  const submissionFor = (calculationId: string) => submissions.data?.find((s) => s.calculation_id === calculationId && s.status !== "withdrawn");
   // The remembered request applies only while the page still shows the same context.
   const lastMatches = !!last && !!context && !contextIssue && last.body.monitoring_period_start === context.start
     && last.body.monitoring_period_end === context.end && JSON.stringify(last.body.season_ids) === JSON.stringify(context.seasons);
@@ -223,6 +226,14 @@ function CalculationsView() {
     }
     return { verification_years: number("verification_years", "verification years"),
       non_permanence_risk_pct: number("non_permanence_risk_pct", "non-permanence risk") };
+  }
+
+  function submitForReview(project: string, calculationId: string) {
+    return perform("Couldn't submit for review", async () => {
+      const sub = await createSubmission.mutateAsync({ project_id: project, calculation_id: calculationId });
+      toast.success("Submitted for review", { description: "A project lead now assigns a reviewer.", action: { label: "Open review", href: `/reviews/${encodeURIComponent(sub.submission_id)}` } });
+      await queryClient.invalidateQueries({ queryKey: ["field-workflow", field.field_id] });
+    });
   }
 
   function saveCalculation(supersedesId: string | null) {
@@ -351,20 +362,24 @@ function CalculationsView() {
             {!saved && (accounted ? (
               <>
                 <p className="w-full text-sm text-text-secondary">
-                  This period is already saved as v{accounted.version} (ready for review{accounted.project_id === projectId ? "" : " in another project"}).
+                  This period is already saved as v{accounted.version}{accounted.project_id !== projectId ? " in another project"
+                    : submissionFor(accounted.calculation_id) ? " and submitted for review" : " but not yet submitted for review"}.
                   Saving it again would count the same reductions twice.
                 </p>
+                {accounted.project_id === projectId && (submissionFor(accounted.calculation_id) ? (
+                  <ButtonLink href={`/reviews/${encodeURIComponent(submissionFor(accounted.calculation_id)!.submission_id)}`}>Open review</ButtonLink>
+                ) : (
+                  <Button loading={createSubmission.isPending} disabled={busy || submissions.isLoading} onClick={() => void submitForReview(projectId, accounted.calculation_id)}>Submit v{accounted.version} for review</Button>
+                ))}
                 {accounted.project_id === projectId && (
-                  <Button icon={Save} loading={commit.isPending} disabled={busy || !lastBody} onClick={() => void saveCalculation(accounted.calculation_id)}>Save as a correction of v{accounted.version}</Button>
+                  <Button variant="secondary" icon={Save} loading={commit.isPending} disabled={busy || !lastBody} onClick={() => void saveCalculation(accounted.calculation_id)}>Save as a correction of v{accounted.version}</Button>
                 )}
               </>
             ) : <Button icon={Save} loading={commit.isPending} disabled={busy || !lastBody} onClick={() => void saveCalculation(supersedes || null)}>Save calculation</Button>)}
             {saved?.status === "ready_for_review" && saved.projectId && (
-              <Button variant="secondary" loading={createSubmission.isPending} onClick={() => void perform("Couldn't submit for review", async () => {
-                const sub = await createSubmission.mutateAsync({ project_id: saved.projectId!, calculation_id: saved.id });
-                toast.success("Submitted for review", { action: { label: "Open review", href: `/reviews/${encodeURIComponent(sub.submission_id)}` } });
-                await queryClient.invalidateQueries({ queryKey: ["field-workflow", field.field_id] });
-              })}>Submit for review</Button>
+              submissionFor(saved.id)
+                ? <ButtonLink href={`/reviews/${encodeURIComponent(submissionFor(saved.id)!.submission_id)}`}>Open review</ButtonLink>
+                : <Button loading={createSubmission.isPending} onClick={() => void submitForReview(saved.projectId!, saved.id)}>Submit for review</Button>
             )}
             {saved && !saved.projectId && <span className="ui-meta">Standalone calculation — add the field to a project to submit it for review.</span>}
           </div>
@@ -461,12 +476,9 @@ function CalculationsView() {
                   <span className="ml-2 font-mono">{row.final_issuance == null ? "—" : formatNumber(row.final_issuance, "tco2e")} tCO2e</span>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {!row.legacy && row.status === "ready_for_review" && row.project_id && writable && (
-                    <Button variant="secondary" size="sm" loading={createSubmission.isPending} onClick={() => void perform("Couldn't submit for review", async () => {
-                      const sub = await createSubmission.mutateAsync({ project_id: row.project_id!, calculation_id: row.calculation_id! });
-                      toast.success("Submitted for review", { action: { label: "Open review", href: `/reviews/${encodeURIComponent(sub.submission_id)}` } });
-                    })}>Submit for review</Button>
-                  )}
+                  {!row.legacy && row.status === "ready_for_review" && row.project_id && (submissionFor(row.calculation_id)
+                    ? <ButtonLink variant="secondary" size="sm" href={`/reviews/${encodeURIComponent(submissionFor(row.calculation_id)!.submission_id)}`}>Open review</ButtonLink>
+                    : writable && row.project_id === projectId && <Button variant="secondary" size="sm" loading={createSubmission.isPending} onClick={() => void submitForReview(row.project_id!, row.calculation_id)}>Submit for review</Button>)}
                   <Button variant="ghost" size="sm" onClick={() => download(row, row.legacy ? `credit-history-${row.credit_history_id}.json` : `calculation-${row.calculation_id}.json`)}>JSON</Button>
                   {!row.legacy && pathway === "vm0042_alm" && <Button variant="ghost" size="sm" onClick={() => void perform("Download failed", async () => {
                     downloadBlob(await apiFetchBlob(`/calculations/${row.calculation_id}/evidence/pdf`), `calculation-${row.calculation_id}.pdf`);
