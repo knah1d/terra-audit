@@ -28,7 +28,7 @@ def test_research_training_is_disjoint_and_excludes_leakage():
     data = research_rows()
     X, y, groups, group_col = prepare_data(data)
     assert group_col == "plot_id"
-    assert len(X) == len(y) == 80
+    assert len(X) == len(y) == 60  # DSR rows are excluded from the AWD-vs-PTR task
     assert "Latitude" not in X.columns
     assert "drydown_event" not in X.columns
     assert "plot_id" not in X.columns

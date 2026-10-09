@@ -1,0 +1,150 @@
+{
+  "benchmark_version": "external-ricemapper-practice-v2",
+  "source_url": "https://github.com/microsoft/rice-irrigation-mapping-s1s2",
+  "source_sha256": "33cb92e003f7573a5754fe5edabd55e10d3c49773dd149623516dd914ec55de7",
+  "target": "AWD vs PTR (puddled transplanted rice) research practice labels \u2014 not measured CF, not drydown counts",
+  "sklearn_version": "1.9.1",
+  "rows_awd_ptr": 863,
+  "duplicate_rows_removed": 13,
+  "model": "random_forest",
+  "seed": 42,
+  "split_strategy": "stratified_row_holdout_plot_independence_unverified",
+  "group_column": null,
+  "train_rows": 680,
+  "test_rows": 170,
+  "train_groups": null,
+  "test_groups": null,
+  "feature_names": [
+    "ASCENDING_ratio_gaussian_a",
+    "ASCENDING_ratio_gaussian_b",
+    "ASCENDING_ratio_gaussian_c",
+    "ASCENDING_ratio_gaussian_r2",
+    "VV_ASCENDING_mean_spline_troughs_values_1",
+    "VV_ASCENDING_mean_spline_troughs_values_2",
+    "VV_ASCENDING_mean_spline_troughs_values_3",
+    "VV_ASCENDING_mean_spline_crests_values_1",
+    "VV_ASCENDING_mean_spline_crests_values_2",
+    "VV_ASCENDING_mean_spline_crests_values_3",
+    "VV_ASCENDING_mean_spline_trough_days_1",
+    "VV_ASCENDING_mean_spline_trough_days_2",
+    "VV_ASCENDING_mean_spline_trough_days_3",
+    "VV_ASCENDING_mean_spline_crest_days_1",
+    "VV_ASCENDING_mean_spline_crest_days_2",
+    "VV_ASCENDING_mean_spline_crest_days_3",
+    "VV_ASCENDING_mean_spline_num_troughs",
+    "VV_ASCENDING_mean_spline_num_crests",
+    "VH_ASCENDING_mean_spline_troughs_values_1",
+    "VH_ASCENDING_mean_spline_troughs_values_2",
+    "VH_ASCENDING_mean_spline_troughs_values_3",
+    "VH_ASCENDING_mean_spline_crests_values_1",
+    "VH_ASCENDING_mean_spline_crests_values_2",
+    "VH_ASCENDING_mean_spline_crests_values_3",
+    "VH_ASCENDING_mean_spline_trough_days_1",
+    "VH_ASCENDING_mean_spline_trough_days_2",
+    "VH_ASCENDING_mean_spline_trough_days_3",
+    "VH_ASCENDING_mean_spline_crest_days_1",
+    "VH_ASCENDING_mean_spline_crest_days_2",
+    "VH_ASCENDING_mean_spline_crest_days_3",
+    "VH_ASCENDING_mean_spline_num_troughs",
+    "VH_ASCENDING_mean_spline_num_crests",
+    "ASCENDING_spline_ratio_troughs_values_1",
+    "ASCENDING_spline_ratio_troughs_values_2",
+    "ASCENDING_spline_ratio_troughs_values_3",
+    "ASCENDING_spline_ratio_crests_values_1",
+    "ASCENDING_spline_ratio_crests_values_2",
+    "ASCENDING_spline_ratio_crests_values_3",
+    "ASCENDING_spline_ratio_trough_days_1",
+    "ASCENDING_spline_ratio_trough_days_2",
+    "ASCENDING_spline_ratio_trough_days_3",
+    "ASCENDING_spline_ratio_crest_days_1",
+    "ASCENDING_spline_ratio_crest_days_2",
+    "ASCENDING_spline_ratio_crest_days_3",
+    "ASCENDING_spline_ratio_num_troughs",
+    "ASCENDING_spline_ratio_num_crests",
+    "inflection_points_VV_ASCENDING_mean_spline",
+    "min_VV_ASCENDING_mean_spline",
+    "max_VV_ASCENDING_mean_spline",
+    "mean_VV_ASCENDING_mean_spline",
+    "std_VV_ASCENDING_mean_spline",
+    "inflection_points_VH_ASCENDING_mean_spline",
+    "min_VH_ASCENDING_mean_spline",
+    "max_VH_ASCENDING_mean_spline",
+    "mean_VH_ASCENDING_mean_spline",
+    "std_VH_ASCENDING_mean_spline",
+    "inflection_points_ASCENDING_spline_ratio",
+    "min_ASCENDING_spline_ratio",
+    "max_ASCENDING_spline_ratio",
+    "mean_ASCENDING_spline_ratio",
+    "std_ASCENDING_spline_ratio"
+  ],
+  "accuracy": 0.6647058823529411,
+  "balanced_accuracy": 0.6636640798226164,
+  "confusion_matrix_labels": [
+    "PTR",
+    "AWD"
+  ],
+  "confusion_matrix": [
+    [
+      52,
+      30
+    ],
+    [
+      27,
+      61
+    ]
+  ],
+  "precision": {
+    "not_awd": 0.6582278481012658,
+    "awd": 0.6703296703296703
+  },
+  "recall": {
+    "not_awd": 0.6341463414634146,
+    "awd": 0.6931818181818182
+  },
+  "f1": {
+    "not_awd": 0.6459627329192547,
+    "awd": 0.6815642458100558
+  },
+  "support": {
+    "not_awd": 82,
+    "awd": 88
+  },
+  "roc_auc": 0.7189578713968958,
+  "brier_score": 0.21613121124145954,
+  "repeated_cv_5x5": {
+    "accuracy_mean": 0.6068235294117647,
+    "accuracy_std": 0.0427976651046328,
+    "roc_auc_mean": 0.6520223100497377,
+    "roc_auc_std": 0.048251533350229636
+  },
+  "limitations": [
+    "Data from Punjab, India, in 2024; not Bangladesh accuracy.",
+    "Labels are AWD vs PTR (a sowing method used as the conventional-flooding comparison); no measured CF labels.",
+    "Model score is an uncalibrated random-forest vote share, not a calibrated probability.",
+    "Practice classification does not establish the count of AWD drydown events.",
+    "Inference uses Earth Engine S1_GRD_FLOAT gamma0 (sigma0/cos \u03b8) without SNAP's multi-temporal speckle filter; training used SNAP gamma0.",
+    "Research window Jun 1 \u2013 Sep 5 follows the Punjab Kharif calendar; Bangladesh Boro (Jan\u2013May) is outside it.",
+    "No use in carbon calculation, readiness, or credit issuance.",
+    "No verified plot identifier in input; row holdout may contain correlated plots."
+  ],
+  "source_file": "06-01_09-05_f4d/train_HC.parquet",
+  "model_selection": {
+    "method": "Nested CV: outer RepeatedStratifiedKFold(5x3), inner StratifiedKFold(3) grid over min_samples_leaf {2,10}, max_features {sqrt,0.5}, drop gaussian features {no,yes}, SelectFromModel(median) {no,yes}",
+    "rule": "Keep a change only if repeated CV improves beyond noise",
+    "results": {
+      "may_dec": {
+        "baseline_mean": 0.5655,
+        "baseline_std": 0.0328,
+        "nested_mean": 0.5694,
+        "nested_std": 0.0437
+      },
+      "jun_sep": {
+        "baseline_mean": 0.6055,
+        "baseline_std": 0.0277,
+        "nested_mean": 0.6067,
+        "nested_std": 0.0347
+      }
+    },
+    "decision": "Jun 1 - Sep 5 window kept (+4.0 points vs May-Dec baseline on identical folds); tuned hyperparameters and feature selection not kept (+0.2 to +0.4 points, within noise)"
+  }
+}

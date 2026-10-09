@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 
-from backend.deps import get_current_user, get_owned_field, require_writer
+from backend.deps import get_current_user, get_owned_field, get_spatial_engine, require_writer
 from backend.schemas.ai import DatasetBuildResult, TrainAccepted, TrainRequest
 from src.ai.ml.dataset_builder import build_dataset, save_dataset, load_dataset
 from src.persistence.database import get_job, list_completed_jobs
@@ -81,46 +81,109 @@ def get_last_validation(model_key: str, user: dict = Depends(get_current_user)):
     raise HTTPException(status.HTTP_404_NOT_FOUND, f"No completed training run found for '{model_key}'")
 
 
+def _detector_summary(org_id: str, field_id: str) -> dict | None:
+    from src.persistence.database import get_latest_signal_result
+    signal = get_latest_signal_result(org_id, field_id)
+    if signal is None:
+        return None
+    return {
+        "window_start": signal.get("window_start"),
+        "window_end": signal.get("window_end"),
+        "detector_used": signal.get("detector_used"),
+        "candidate_drydowns": signal.get("total_awd"),
+        "source": signal.get("cache_source"),
+    }
+
+
+def _compare(detector: dict | None, ml_is_awd: bool, window: tuple[str, str]) -> dict:
+    """Practice-level comparison only. The detector's drydown count maps to
+    VM0051's water-regime categories; the model only says AWD-like vs
+    PTR-like, so the count itself is never compared."""
+    if detector is None or detector["candidate_drydowns"] is None:
+        return {"status": "no_detector_run", "detector_category": None, "agrees": None}
+    count = detector["candidate_drydowns"]
+    category = ("continuous_flooding" if count == 0 else
+                "single_drainage" if count == 1 else "multiple_drainage")
+    overlaps = bool(detector["window_start"] and detector["window_end"]
+                    and detector["window_start"] <= window[1] and detector["window_end"] >= window[0])
+    return {
+        "status": "compared" if overlaps else "different_windows",
+        "detector_category": category,
+        # VM0051 defines AWD as multiple (>1) drainage events.
+        "agrees": (category == "multiple_drainage") == ml_is_awd,
+    }
+
+
 @router.get("/fields/{field_id}/awd-external-comparison")
 def get_external_awd_comparison(
     field_id: str,
     user: dict = Depends(get_current_user),
     field: dict = Depends(get_owned_field(expect_type="rice_awd")),
 ):
-    """Read-only shadow comparison. Never calls prediction or the carbon engine.
-
-    External research dataset features are not interoperable with the existing
-    GEE sigma0 median features without independent preprocessing work.
-    Absence of benchmark results is explicit instead of faking accuracy.
-    """
+    """Read-only: research benchmark metrics + the latest detector run.
+    Never calls the carbon engine."""
     from src.ai.ml.external_awd import read_metrics
-    from src.paths import DATA_DIR
-    from src.persistence.database import get_latest_signal_result
 
-    metrics = read_metrics(DATA_DIR / "external_awd_benchmark")
-    signal = get_latest_signal_result(user["org_id"], field_id)
-    if signal is None:
-        detector = None
-    else:
-        detector = {
-            "window_start": signal.get("window_start"),
-            "window_end": signal.get("window_end"),
-            "detector_used": signal.get("detector_used"),
-            "candidate_drydowns": signal.get("total_awd"),
-            "source": signal.get("cache_source"),
-        }
     return {
         "field_id": field_id,
         "experimental": True,
-        "research_benchmark": metrics,
-        "existing_signal": detector,
-        "field_ml_prediction": None,
-        "comparison_status": "feature_adapter_not_validated",
-        "ground_truth_status": "not_provided",
+        "research_benchmark": read_metrics(),
+        "existing_signal": _detector_summary(user["org_id"], field_id),
         "affects_carbon_calculation": False,
         "message": (
-            "This research benchmark measures external AWD-practice labels, "
-            "not independent drydown counts. Terra Audit's Sentinel-1 preprocessing "
-            "differs; no field-level ML inference is activated."
+            "AWD practice classification from an external research model (Punjab, India). "
+            "It is not an independently verified AWD cycle count and does not change "
+            "drydown counting, carbon calculations, readiness or issuance."
         ),
+    }
+
+
+@router.post("/fields/{field_id}/awd-external-prediction")
+def predict_external_awd(
+    field_id: str,
+    user: dict = Depends(get_current_user),
+    field: dict = Depends(get_owned_field(expect_type="rice_awd")),
+    engine=Depends(get_spatial_engine),
+):
+    """Experimental, read-only AWD practice classification for one field:
+    ascending Sentinel-1 gamma0 over the research window, the same 61
+    Ricemapper handcrafted features the model was trained on, then the
+    random forest. Nothing is stored and no calculation input changes."""
+    from datetime import date
+    from src.ai.ml.external_awd import load_bundle, predict
+    from src.ai.ml.ricemapper_features import (
+        FEATURE_VERSION, extract_ascending_gamma0, handcrafted_features, research_window,
+    )
+
+    bundle = load_bundle()
+    if bundle is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "External AWD model is not installed on this server")
+    if bundle.get("feature_version") != FEATURE_VERSION:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Model and feature pipeline versions differ")
+    window = research_window(date.today())
+    try:
+        series, relative_orbit = extract_ascending_gamma0(field["geojson_geometry"], *window)
+    except Exception as exc:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"Sentinel-1 extraction failed: {exc}")
+    try:
+        features = handcrafted_features(series, *window)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc))
+    score = predict(bundle, features)
+    is_awd = score >= 0.5
+    return {
+        "field_id": field_id,
+        "experimental": True,
+        "task": "awd_practice_classification",
+        "predicted_class": "AWD" if is_awd else "PTR",
+        "awd_score": score,
+        "score_calibrated": False,
+        "window_start": window[0],
+        "window_end": window[1],
+        "observations": int(series["date"].nunique()),
+        "relative_orbit": relative_orbit,
+        "model_version": bundle["version"],
+        "feature_version": FEATURE_VERSION,
+        "comparison": _compare(_detector_summary(user["org_id"], field_id), is_awd, window),
+        "affects_carbon_calculation": False,
     }

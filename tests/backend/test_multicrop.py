@@ -109,11 +109,14 @@ def test_monitoring_is_generic_and_snapshots_are_stable(client, auth_headers, al
     assert client.get(f"/multi-crop/jobs/{jobid}", headers=auth_headers["admin"]).json()["status"] == "done"
     assert client.get(f"/multi-crop/jobs/{jobid}", headers=auth_headers["other_org_admin"]).status_code == 404
     before = client.get(f"{path}/evidence", headers=auth_headers["admin"]).json()
+    # The server records the district detected from the boundary, not the
+    # one the fixture submitted.
+    registered_district = client.get(f"/fields/{alm_field}", headers=auth_headers["admin"]).json()["district"]
     from src.persistence.database import update_field_info
     update_field_info("testorg", alm_field, "Changed", "Changed")
     after = client.get(f"{path}/evidence", headers=auth_headers["admin"]).json()
     assert before == after
-    assert before["runs"][0]["payload"]["field"]["district"] == "Test District"
+    assert before["runs"][0]["payload"]["field"]["district"] == registered_district != "Changed"
     # Only usable evidence may be reused. An insufficient run must be
     # collected again and appended, without changing the original evidence.
     calls = []
