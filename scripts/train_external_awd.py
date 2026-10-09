@@ -1,10 +1,10 @@
 """Run the external AWD research benchmark offline; never changes Terra Audit credits.
 
-Example (AWD task, handcrafted features, Jun 1 – Sep 5 window — chosen over
-May 1 – Dec 15 by repeated nested cross-validation; pass that search's JSON
-summary with --model-selection to record it):
+Example (AWD task, handcrafted + Satellite Embedding features, Jun 1 – Sep 5
+window — both chosen by repeated cross-validation; pass the selection
+evidence JSON with --model-selection to record it):
 python scripts/train_external_awd.py \
-    --input <ricemapper>/data/features/06-01_09-05_f4d/train_HC.parquet
+    --input <ricemapper>/data/features/06-01_09-05_f4d/train_HC_SE.parquet
 
 Use only trusted, locally downloaded research datasets. No HTTP fetch or
 user-uploaded joblib loading occurs in the Terra Audit API.
@@ -52,8 +52,8 @@ def main() -> None:
         test_fraction=args.test_fraction,
     )
     if set(report["feature_names"]) != set(feature_names()):
-        raise SystemExit("Input features differ from the Ricemapper HC features Terra Audit computes "
-                         "at inference; use the published train_HC.parquet.")
+        raise SystemExit("Input features differ from the Ricemapper HC + SE features Terra Audit computes "
+                         "at inference; use the published train_HC_SE.parquet.")
     report["source_file"] = f"{args.input.parent.name}/{args.input.name}"
     if args.model_selection:
         import json

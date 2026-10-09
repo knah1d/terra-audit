@@ -1,12 +1,15 @@
-"""Ricemapper handcrafted (HC) Sentinel-1 features for the external AWD model.
+"""Ricemapper handcrafted (HC) Sentinel-1 + Satellite Embedding (SE) features
+for the external AWD model.
 
 The feature functions below are ported from microsoft/rice-irrigation-mapping-s1s2
 (ricemapper/utils/utils.py: generate_s1_spline, find_troughs_and_crests,
 count_inflection_points, find_min_max_mean_stdev, _normalize_ratios, and
 scripts/train/train.py: _generate_handcrafted_features_batch) with the exact
 parameters used for the published AWD-task features
-(data/features/06-01_09-05_f4d/train_HC.parquet), so that inference computes
-the same 61 features the model was trained on.
+(data/features/06-01_09-05_f4d/train_HC_SE.parquet), so that inference computes
+the same 125 features the model was trained on: 61 HC features plus the 64-band
+Google Satellite Embedding (ricemapper/utils/gee/sat_embs.py: polygon mean of
+GOOGLE/SATELLITE_EMBEDDING/V1/ANNUAL for the same year as the radar window).
 
     Copyright (c) Microsoft Corporation. Licensed under the MIT License.
 
@@ -30,7 +33,7 @@ from scipy.ndimage import gaussian_filter1d
 from scipy.optimize import curve_fit
 from scipy.signal import find_peaks
 
-FEATURE_VERSION = "ricemapper-hc-ascending-v1"
+FEATURE_VERSION = "ricemapper-hc-se-ascending-v2"
 ORBIT = "ASCENDING"
 # One of the two published research windows. With handcrafted features only,
 # Jun 1 – Sep 5 scored higher in repeated nested cross-validation than the
@@ -41,14 +44,20 @@ SPLINE_SIGMA = 0.5
 RATIO_SMOOTHING_SIGMA = 10
 MIN_OBSERVATIONS = 4
 VARIABLES = [f"VV_{ORBIT}_mean_spline", f"VH_{ORBIT}_mean_spline", f"{ORBIT}_spline_ratio"]
+EMBEDDING_COLLECTION = "GOOGLE/SATELLITE_EMBEDDING/V1/ANNUAL"
+SE_NAMES = [f"sat_emb_{i}" for i in range(64)]  # research column sat_emb_i = band A{i:02d}
 _EPOCH = pd.Timestamp("1970-01-01")  # matplotlib>=3.3 date2num epoch (research pinned 3.8)
+
+
+def window_for_year(year: int) -> tuple[str, str]:
+    (sm, sd), (em, ed) = WINDOW_MONTH_DAY
+    return date(year, sm, sd).isoformat(), date(year, em, ed).isoformat()
 
 
 def research_window(today: date) -> tuple[str, str]:
     """Most recent complete research window (Jun 1 – Sep 5) on or before `today`."""
-    (sm, sd), (em, ed) = WINDOW_MONTH_DAY
-    year = today.year if today >= date(today.year, em, ed) else today.year - 1
-    return date(year, sm, sd).isoformat(), date(year, em, ed).isoformat()
+    _, (em, ed) = WINDOW_MONTH_DAY
+    return window_for_year(today.year if today >= date(today.year, em, ed) else today.year - 1)
 
 
 def _db_to_linear(ts):
@@ -141,7 +150,7 @@ def _troughs_and_crests(series, dates, start):
 
 
 def feature_names() -> list[str]:
-    """The 61 HC feature names, as they appear in the published parquet."""
+    """The 125 model features (61 HC + 64 SE), as named in the published parquet."""
     names = [f"{ORBIT}_ratio_gaussian_{k}" for k in ("a", "b", "c", "r2")]
     for var in VARIABLES:
         for base in ("troughs_values", "crests_values", "trough_days", "crest_days"):
@@ -149,7 +158,7 @@ def feature_names() -> list[str]:
         names += [f"{var}_num_troughs", f"{var}_num_crests"]
     for var in VARIABLES:
         names += [f"{stat}_{var}" for stat in ("inflection_points", "min", "max", "mean", "std")]
-    return names
+    return names + SE_NAMES
 
 
 def handcrafted_features(obs: pd.DataFrame, start: str, end: str) -> dict:
@@ -172,17 +181,45 @@ def handcrafted_features(obs: pd.DataFrame, start: str, end: str) -> dict:
     return features
 
 
+def _ee_geometry(geometry: dict):
+    import ee
+    if "features" in geometry:
+        geometry = geometry["features"][0]["geometry"]
+    elif "geometry" in geometry:
+        geometry = geometry["geometry"]
+    return ee.Geometry(geometry)
+
+
+def latest_embedding_year(geometry: dict, up_to: int) -> int | None:
+    """Latest year <= up_to with a published annual embedding over the field.
+    The embedding is released after the year ends, so the newest season may
+    not have one yet; training paired each season with the same year's SE."""
+    import ee
+    years = (ee.ImageCollection(EMBEDDING_COLLECTION).filterBounds(_ee_geometry(geometry))
+             .aggregate_array("system:time_start").getInfo())
+    years = [datetime.utcfromtimestamp(t / 1000).year for t in years]
+    eligible = [y for y in years if y <= up_to]
+    return max(eligible) if eligible else None
+
+
+def extract_satellite_embedding(geometry: dict, year: int) -> dict:
+    """sat_embs.py _extract_polygon_embedding(): mean of bands A00..A63 over the
+    polygon at 10 m from the year's image covering it; missing bands -> 0.0."""
+    import ee
+    geom = _ee_geometry(geometry)
+    image = (ee.ImageCollection(EMBEDDING_COLLECTION)
+             .filterDate(f"{year}-01-01", f"{year + 1}-01-01").filterBounds(geom).first())
+    values = image.reduceRegion(ee.Reducer.mean(), geom, 10, maxPixels=1e9).getInfo()
+    return {name: float(values.get(f"A{i:02d}") or 0.0) for i, name in enumerate(SE_NAMES)}
+
+
 def extract_ascending_gamma0(geometry: dict, start: str, end: str) -> tuple[pd.DataFrame, int | None]:
     """Polygon-mean linear gamma0 (sigma0 / cos(incidence)) from the dominant
     ascending relative orbit — mixing relative orbits would mix viewing
     geometries within one series. Returns (series, relative_orbit)."""
     import ee
 
-    if "features" in geometry:
-        geometry = geometry["features"][0]["geometry"]
-    elif "geometry" in geometry:
-        geometry = geometry["geometry"]
-    geom = ee.Geometry(geometry)
+    geom = _ee_geometry(geometry)
     stop = (pd.to_datetime(end) + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
     collection = (
         ee.ImageCollection("COPERNICUS/S1_GRD_FLOAT").filterBounds(geom).filterDate(start, stop)

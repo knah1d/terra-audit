@@ -30,7 +30,7 @@ from sklearn.pipeline import Pipeline
 
 from src.ai.ml.ricemapper_features import FEATURE_VERSION
 
-BENCHMARK_VERSION = "external-ricemapper-practice-v2"
+BENCHMARK_VERSION = "external-ricemapper-practice-v3"
 SOURCE_URL = "https://github.com/microsoft/rice-irrigation-mapping-s1s2"
 # Shipped with the code (src/ is in the API image; data/ is not).
 ARTIFACT_DIR = Path(__file__).parent / "artifacts" / "ricemapper_awd"
@@ -205,6 +205,8 @@ def train_benchmark(
             "Model score is an uncalibrated random-forest vote share, not a calibrated probability.",
             "Practice classification does not establish the count of AWD drydown events.",
             "Inference uses Earth Engine S1_GRD_FLOAT gamma0 (sigma0/cos θ) without SNAP's multi-temporal speckle filter; training used SNAP gamma0.",
+            "64 features are Google's learned annual Satellite Embedding (GOOGLE/SATELLITE_EMBEDDING/V1/ANNUAL): less interpretable than the radar-curve features, and on their own they score below chance.",
+            "The embedding is published after each year ends, so live predictions use the latest season that has one (same-year pairing, as in training), not necessarily the current season.",
             "Research window Jun 1 – Sep 5 follows the Punjab Kharif calendar; Bangladesh Boro (Jan–May) is outside it.",
             "No use in carbon calculation, readiness, or credit issuance.",
             *([] if groups is not None else [

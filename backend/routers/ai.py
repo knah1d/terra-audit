@@ -146,13 +146,15 @@ def predict_external_awd(
     engine=Depends(get_spatial_engine),
 ):
     """Experimental, read-only AWD practice classification for one field:
-    ascending Sentinel-1 gamma0 over the research window, the same 61
-    Ricemapper handcrafted features the model was trained on, then the
-    random forest. Nothing is stored and no calculation input changes."""
+    ascending Sentinel-1 gamma0 over the research window plus the same
+    year's Satellite Embedding — the same 125 features the model was trained
+    on — then the random forest. Nothing is stored and no calculation input
+    changes."""
     from datetime import date
     from src.ai.ml.external_awd import load_bundle, predict
     from src.ai.ml.ricemapper_features import (
-        FEATURE_VERSION, extract_ascending_gamma0, handcrafted_features, research_window,
+        FEATURE_VERSION, extract_ascending_gamma0, extract_satellite_embedding,
+        handcrafted_features, latest_embedding_year, research_window, window_for_year,
     )
 
     bundle = load_bundle()
@@ -160,15 +162,25 @@ def predict_external_awd(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "External AWD model is not installed on this server")
     if bundle.get("feature_version") != FEATURE_VERSION:
         raise HTTPException(status.HTTP_409_CONFLICT, "Model and feature pipeline versions differ")
-    window = research_window(date.today())
+    geometry = field["geojson_geometry"]
+    latest_window_year = int(research_window(date.today())[0][:4])
     try:
-        series, relative_orbit = extract_ascending_gamma0(field["geojson_geometry"], *window)
+        year = latest_embedding_year(geometry, up_to=latest_window_year)
+        if year is None:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY,
+                                "No Satellite Embedding is published for this field yet")
+        window = window_for_year(year)
+        series, relative_orbit = extract_ascending_gamma0(geometry, *window)
+        embedding = extract_satellite_embedding(geometry, year)
+    except HTTPException:
+        raise
     except Exception as exc:
-        raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"Sentinel-1 extraction failed: {exc}")
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"Earth Engine extraction failed: {exc}")
     try:
         features = handcrafted_features(series, *window)
     except ValueError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc))
+    features.update(embedding)
     score = predict(bundle, features)
     is_awd = score >= 0.5
     return {
@@ -182,6 +194,7 @@ def predict_external_awd(
         "window_end": window[1],
         "observations": int(series["date"].nunique()),
         "relative_orbit": relative_orbit,
+        "embedding_year": year,
         "model_version": bundle["version"],
         "feature_version": FEATURE_VERSION,
         "comparison": _compare(_detector_summary(user["org_id"], field_id), is_awd, window),

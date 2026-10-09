@@ -1,17 +1,17 @@
 {
-  "benchmark_version": "external-ricemapper-practice-v2",
+  "benchmark_version": "external-ricemapper-practice-v3",
   "source_url": "https://github.com/microsoft/rice-irrigation-mapping-s1s2",
-  "source_sha256": "33cb92e003f7573a5754fe5edabd55e10d3c49773dd149623516dd914ec55de7",
+  "source_sha256": "cd9bb27c4fe1fe4bd15f90b4c0c96307b4a0b8284c2849c8d05de7eda236c81c",
   "target": "AWD vs PTR (puddled transplanted rice) research practice labels \u2014 not measured CF, not drydown counts",
   "sklearn_version": "1.9.1",
   "rows_awd_ptr": 863,
-  "duplicate_rows_removed": 13,
+  "duplicate_rows_removed": 3,
   "model": "random_forest",
   "seed": 42,
   "split_strategy": "stratified_row_holdout_plot_independence_unverified",
   "group_column": null,
-  "train_rows": 680,
-  "test_rows": 170,
+  "train_rows": 688,
+  "test_rows": 172,
   "train_groups": null,
   "test_groups": null,
   "feature_names": [
@@ -75,47 +75,111 @@
     "min_ASCENDING_spline_ratio",
     "max_ASCENDING_spline_ratio",
     "mean_ASCENDING_spline_ratio",
-    "std_ASCENDING_spline_ratio"
+    "std_ASCENDING_spline_ratio",
+    "sat_emb_0",
+    "sat_emb_1",
+    "sat_emb_2",
+    "sat_emb_3",
+    "sat_emb_4",
+    "sat_emb_5",
+    "sat_emb_6",
+    "sat_emb_7",
+    "sat_emb_8",
+    "sat_emb_9",
+    "sat_emb_10",
+    "sat_emb_11",
+    "sat_emb_12",
+    "sat_emb_13",
+    "sat_emb_14",
+    "sat_emb_15",
+    "sat_emb_16",
+    "sat_emb_17",
+    "sat_emb_18",
+    "sat_emb_19",
+    "sat_emb_20",
+    "sat_emb_21",
+    "sat_emb_22",
+    "sat_emb_23",
+    "sat_emb_24",
+    "sat_emb_25",
+    "sat_emb_26",
+    "sat_emb_27",
+    "sat_emb_28",
+    "sat_emb_29",
+    "sat_emb_30",
+    "sat_emb_31",
+    "sat_emb_32",
+    "sat_emb_33",
+    "sat_emb_34",
+    "sat_emb_35",
+    "sat_emb_36",
+    "sat_emb_37",
+    "sat_emb_38",
+    "sat_emb_39",
+    "sat_emb_40",
+    "sat_emb_41",
+    "sat_emb_42",
+    "sat_emb_43",
+    "sat_emb_44",
+    "sat_emb_45",
+    "sat_emb_46",
+    "sat_emb_47",
+    "sat_emb_48",
+    "sat_emb_49",
+    "sat_emb_50",
+    "sat_emb_51",
+    "sat_emb_52",
+    "sat_emb_53",
+    "sat_emb_54",
+    "sat_emb_55",
+    "sat_emb_56",
+    "sat_emb_57",
+    "sat_emb_58",
+    "sat_emb_59",
+    "sat_emb_60",
+    "sat_emb_61",
+    "sat_emb_62",
+    "sat_emb_63"
   ],
-  "accuracy": 0.6647058823529411,
-  "balanced_accuracy": 0.6636640798226164,
+  "accuracy": 0.7093023255813954,
+  "balanced_accuracy": 0.7092140921409213,
   "confusion_matrix_labels": [
     "PTR",
     "AWD"
   ],
   "confusion_matrix": [
     [
-      52,
-      30
+      58,
+      24
     ],
     [
-      27,
-      61
+      26,
+      64
     ]
   ],
   "precision": {
-    "not_awd": 0.6582278481012658,
-    "awd": 0.6703296703296703
+    "not_awd": 0.6904761904761905,
+    "awd": 0.7272727272727273
   },
   "recall": {
-    "not_awd": 0.6341463414634146,
-    "awd": 0.6931818181818182
+    "not_awd": 0.7073170731707317,
+    "awd": 0.7111111111111111
   },
   "f1": {
-    "not_awd": 0.6459627329192547,
-    "awd": 0.6815642458100558
+    "not_awd": 0.6987951807228916,
+    "awd": 0.7191011235955056
   },
   "support": {
     "not_awd": 82,
-    "awd": 88
+    "awd": 90
   },
-  "roc_auc": 0.7189578713968958,
-  "brier_score": 0.21613121124145954,
+  "roc_auc": 0.7538617886178861,
+  "brier_score": 0.21525854953495696,
   "repeated_cv_5x5": {
-    "accuracy_mean": 0.6068235294117647,
-    "accuracy_std": 0.0427976651046328,
-    "roc_auc_mean": 0.6520223100497377,
-    "roc_auc_std": 0.048251533350229636
+    "accuracy_mean": 0.6630232558139535,
+    "accuracy_std": 0.0415518338288166,
+    "roc_auc_mean": 0.718141202669658,
+    "roc_auc_std": 0.03343108218098432
   },
   "limitations": [
     "Data from Punjab, India, in 2024; not Bangladesh accuracy.",
@@ -123,28 +187,89 @@
     "Model score is an uncalibrated random-forest vote share, not a calibrated probability.",
     "Practice classification does not establish the count of AWD drydown events.",
     "Inference uses Earth Engine S1_GRD_FLOAT gamma0 (sigma0/cos \u03b8) without SNAP's multi-temporal speckle filter; training used SNAP gamma0.",
+    "64 features are Google's learned annual Satellite Embedding (GOOGLE/SATELLITE_EMBEDDING/V1/ANNUAL): less interpretable than the radar-curve features, and on their own they score below chance.",
+    "The embedding is published after each year ends, so live predictions use the latest season that has one (same-year pairing, as in training), not necessarily the current season.",
     "Research window Jun 1 \u2013 Sep 5 follows the Punjab Kharif calendar; Bangladesh Boro (Jan\u2013May) is outside it.",
     "No use in carbon calculation, readiness, or credit issuance.",
     "No verified plot identifier in input; row holdout may contain correlated plots."
   ],
-  "source_file": "06-01_09-05_f4d/train_HC.parquet",
+  "source_file": "06-01_09-05_f4d/train_HC_SE.parquet",
   "model_selection": {
-    "method": "Nested CV: outer RepeatedStratifiedKFold(5x3), inner StratifiedKFold(3) grid over min_samples_leaf {2,10}, max_features {sqrt,0.5}, drop gaussian features {no,yes}, SelectFromModel(median) {no,yes}",
-    "rule": "Keep a change only if repeated CV improves beyond noise",
-    "results": {
-      "may_dec": {
-        "baseline_mean": 0.5655,
-        "baseline_std": 0.0328,
-        "nested_mean": 0.5694,
-        "nested_std": 0.0437
+    "rule": "Keep a change only if repeated cross-validation improves beyond noise",
+    "window_search": {
+      "method": "Nested CV: outer RepeatedStratifiedKFold(5x3), inner StratifiedKFold(3) grid over min_samples_leaf {2,10}, max_features {sqrt,0.5}, drop gaussian features {no,yes}, SelectFromModel(median) {no,yes}",
+      "results": {
+        "may_dec": {
+          "baseline_mean": 0.5655,
+          "baseline_std": 0.0328,
+          "nested_mean": 0.5694,
+          "nested_std": 0.0437
+        },
+        "jun_sep": {
+          "baseline_mean": 0.6055,
+          "baseline_std": 0.0277,
+          "nested_mean": 0.6067,
+          "nested_std": 0.0347
+        }
       },
-      "jun_sep": {
-        "baseline_mean": 0.6055,
-        "baseline_std": 0.0277,
-        "nested_mean": 0.6067,
-        "nested_std": 0.0347
+      "decision": "Jun 1 - Sep 5 window kept; tuned hyperparameters and feature selection not kept (within noise)"
+    },
+    "feature_set_comparison_5x5_cv_jun_sep": {
+      "HC (61) random_forest": {
+        "accuracy": 0.607,
+        "accuracy_std": 0.043,
+        "roc_auc": 0.652
+      },
+      "HC (61) gradient_boosting": {
+        "accuracy": 0.595,
+        "accuracy_std": 0.041,
+        "roc_auc": 0.628
+      },
+      "SE only (64) random_forest": {
+        "accuracy": 0.429,
+        "accuracy_std": 0.035,
+        "roc_auc": 0.416
+      },
+      "HC+SE (125) random_forest": {
+        "accuracy": 0.663,
+        "accuracy_std": 0.042,
+        "roc_auc": 0.718
+      },
+      "HC+SE (125) gradient_boosting": {
+        "accuracy": 0.651,
+        "accuracy_std": 0.035,
+        "roc_auc": 0.709
+      },
+      "HC+Presto (6333) random_forest": {
+        "accuracy": 0.596,
+        "accuracy_std": 0.032,
+        "roc_auc": 0.644
       }
     },
-    "decision": "Jun 1 - Sep 5 window kept (+4.0 points vs May-Dec baseline on identical folds); tuned hyperparameters and feature selection not kept (+0.2 to +0.4 points, within noise)"
+    "location_grouped_check": {
+      "method": "StratifiedGroupKFold(5) x 5 seeds, groups = k-means clusters of the satellite embedding (proxy for location)",
+      "k100": {
+        "HC": {
+          "accuracy": 0.602,
+          "roc_auc": 0.639
+        },
+        "HC+SE": {
+          "accuracy": 0.643,
+          "roc_auc": 0.694
+        }
+      },
+      "k200": {
+        "HC": {
+          "accuracy": 0.613,
+          "roc_auc": 0.655
+        },
+        "HC+SE": {
+          "accuracy": 0.651,
+          "roc_auc": 0.707
+        }
+      },
+      "note": "Nearest-embedding neighbour has the opposite label for 61.3% of plots (likely adjacent AWD/PTR plots); the HC+SE gain persists when similar-location plots are kept together"
+    },
+    "decision": "HC + Satellite Embedding with the unchanged random forest settings"
   }
 }

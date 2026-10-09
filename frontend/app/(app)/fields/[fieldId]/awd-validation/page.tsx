@@ -51,6 +51,7 @@ type Prediction = {
   window_end: string;
   observations: number;
   relative_orbit: number | null;
+  embedding_year: number;
   model_version: string;
   comparison: {
     status: "compared" | "different_windows" | "no_detector_run";
@@ -123,8 +124,9 @@ export default function ExternalAWDValidationPage() {
               <Button type="button" onClick={() => prediction.mutate()} loading={prediction.isPending}>
                 {result ? "Run again" : "Run ML classification"}
               </Button>
-              <p className="ui-meta">Fetches ascending Sentinel-1 for the research window (Jun 1 – Sep 5) and computes
-                the same 61 features used in training.</p>
+              <p className="ui-meta">Fetches ascending Sentinel-1 for the research window (Jun 1 – Sep 5) and that
+                year&apos;s Google Satellite Embedding, then computes the same 125 features used in training (61 radar +
+                64 embedding). The embedding is published once a year, so this uses the latest season that has one.</p>
               {prediction.error && <Alert tone="danger">
                 {prediction.error instanceof ApiError ? prediction.error.detail : prediction.error.message}
               </Alert>}
@@ -137,7 +139,7 @@ export default function ExternalAWDValidationPage() {
                 </div>
                 <p className="text-xs text-text-secondary">
                   Window {result.window_start} – {result.window_end} · {result.observations} ascending observations ·
-                  relative orbit {result.relative_orbit ?? "—"}
+                  relative orbit {result.relative_orbit ?? "—"} · Satellite Embedding {result.embedding_year}
                 </p>
                 <p className="text-sm">
                   <strong>Compared with detector: </strong>
