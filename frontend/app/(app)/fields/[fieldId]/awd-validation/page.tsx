@@ -124,9 +124,6 @@ export default function ExternalAWDValidationPage() {
               <Button type="button" onClick={() => prediction.mutate()} loading={prediction.isPending}>
                 {result ? "Run again" : "Run ML classification"}
               </Button>
-              {/* <p className="ui-meta">Fetches ascending Sentinel-1 for the research window (Jun 1 – Sep 5) and that
-                year&apos;s Google Satellite Embedding, then computes the same 125 features used in training (61 radar +
-                64 embedding). The embedding is published once a year, so this uses the latest season that has one.</p> */}
               {prediction.error && <Alert tone="danger">
                 {prediction.error instanceof ApiError ? prediction.error.detail : prediction.error.message}
               </Alert>}
