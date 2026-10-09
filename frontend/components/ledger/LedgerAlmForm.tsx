@@ -101,7 +101,7 @@ export function LedgerAlmForm({ fieldId, defaultArea }: { fieldId: string; defau
       <form onSubmit={handleSubmit(onPreview)} className="grid grid-cols-3 gap-4">
         <div>
           <FieldLabel htmlFor="field-1">Field Area (ha)</FieldLabel>
-          <TextInput id="field-1" type="number" step="0.01" {...register("area_ha")} />
+          <TextInput id="field-1" type="number" step="any" {...register("area_ha")} />
           <ErrorText>{errors.area_ha?.message}</ErrorText>
         </div>
         <div>

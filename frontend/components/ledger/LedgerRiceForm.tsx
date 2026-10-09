@@ -173,7 +173,7 @@ export function LedgerRiceForm({
         </div>
         <div>
           <FieldLabel htmlFor="field-2">Field Area (ha)</FieldLabel>
-          <TextInput id="field-2" type="number" step="0.01" {...register("area_ha")} />
+          <TextInput id="field-2" type="number" step="any" {...register("area_ha")} />
           <ErrorText>{errors.area_ha?.message}</ErrorText>
         </div>
         <div>
