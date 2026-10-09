@@ -10,7 +10,7 @@ import { useFieldContext } from "@/components/fields/FieldContext";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { StatCard } from "@/components/ui/Card";
-import { ErrorText, FieldLabel, Select, TextInput } from "@/components/ui/Field";
+import { FieldLabel, Select, TextInput } from "@/components/ui/Field";
 import { IconTile } from "@/components/ui/IconTile";
 import { Switch } from "@/components/ui/Switch";
 import { useJobPoll } from "@/hooks/use-job-poll";
@@ -195,9 +195,6 @@ function SignalAnalyticsView() {
                 <TextInput id="field-3" type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} />
               </div>
             </div>
-          )}
-          {preset === "Custom Range" && rangeInvalid && (
-            <ErrorText>Close date must be after open date.</ErrorText>
           )}
 
           <div>
