@@ -2,7 +2,8 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { PenSquare, Save } from "lucide-react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { GeometryInputTabs } from "@/components/fields/GeometryInputTabs";
@@ -12,12 +13,14 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { ErrorText, FieldLabel, Select, TextInput } from "@/components/ui/Field";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { NewProjectSheet } from "@/components/projects/NewProjectSheet";
 import { useCreateField } from "@/hooks/use-fields";
+import { useProjects } from "@/hooks/use-projects";
 import { useComputedArea, useDetectedDistrict, useDetectedLandUse } from "@/hooks/use-geometry";
 import {
   FIELD_TYPE_OPTIONS, LAND_USE_OPTIONS, SUGGESTED_METHODOLOGY, fieldCreateSchema, type FieldCreateForm,
 } from "@/lib/schemas/field";
-import { ApiError } from "@/lib/api";
+import { apiFetch, ApiError } from "@/lib/api";
 import { firstStepPath } from "@/lib/field-steps";
 
 /**
@@ -38,6 +41,15 @@ export default function NewFieldPage() {
   const detectedLandUse = landUseData?.land_use ?? null;
   const createField = useCreateField();
   const [serverError, setServerError] = useState<string | null>(null);
+  // Project or standalone. "?mode=project" asks for a project; "?project=<id>"
+  // (from a project page) pre-selects it.
+  const search = useSearchParams();
+  const projects = useProjects();
+  const projectMode = !!search.get("project") || search.get("mode") === "project";
+  const [projectId, setProjectId] = useState(() => search.get("project") ?? "");
+  const [projectStart, setProjectStart] = useState(() => new Date().toISOString().slice(0, 10));
+  const [creatingProject, setCreatingProject] = useState(false);
+  const [savedFieldPath, setSavedFieldPath] = useState<string | null>(null);
 
   const {
     register,
@@ -80,7 +92,19 @@ export default function NewFieldPage() {
       const field = await createField.mutateAsync({
         ...values, land_use: values.land_use || null, feature: pendingFeature,
       });
-      router.push(firstStepPath(field.field_id, field.field_type));
+      const fieldPath = firstStepPath(field.field_id, field.field_type);
+      if (projectId) {
+        try {
+          await apiFetch(`/projects/${encodeURIComponent(projectId)}/fields`, {
+            method: "POST", json: { field_id: field.field_id, effective_start_date: projectStart },
+          });
+        } catch (err) {
+          setSavedFieldPath(fieldPath);
+          setServerError(`The field was saved, but adding it to the project failed: ${err instanceof ApiError ? err.detail : "unknown error"}. You can add it from the field page.`);
+          return;
+        }
+      }
+      router.push(fieldPath);
     } catch (err) {
       setServerError(err instanceof ApiError ? err.detail : "Failed to save field");
     }
@@ -194,13 +218,27 @@ export default function NewFieldPage() {
                 This boundary doesn&apos;t look like cropland — check it before registering.
               </Alert>
             )}
-            {serverError && <Alert tone="danger">{serverError}</Alert>}
-            <Button type="submit" icon={Save} loading={isSubmitting} disabled={!areaData || detectingDistrict} className="w-full">
+            <div>
+              <FieldLabel htmlFor="field-project">Project</FieldLabel>
+              <Select id="field-project" value={projectId} onChange={(e) => setProjectId(e.target.value)}>
+                <option value="">{projectMode ? "Select a project" : "Standalone (no project)"}</option>
+                {(projects.data ?? []).map((p) => <option key={p.project_id} value={p.project_id}>{p.name}</option>)}
+              </Select>
+              <Button type="button" variant="ghost" size="sm" className="mt-1" onClick={() => setCreatingProject(true)}>+ Create a new project</Button>
+              {projectId && (
+                <label className="mt-2 block text-sm">In the project from
+                  <TextInput type="date" value={projectStart} onChange={(e) => setProjectStart(e.target.value)} />
+                </label>
+              )}
+            </div>
+            {serverError && <Alert tone="danger">{serverError}{savedFieldPath && <> <Link className="underline" href={savedFieldPath}>Open the field</Link></>}</Alert>}
+            <Button type="submit" icon={Save} loading={isSubmitting} disabled={!areaData || detectingDistrict || (projectMode && !projectId) || !!savedFieldPath} className="w-full">
               Save Field
             </Button>
           </form>
         </Card>
       )}
+      <NewProjectSheet open={creatingProject} onClose={() => setCreatingProject(false)} onCreated={(p) => setProjectId(p.project_id)} />
     </div>
   );
 }

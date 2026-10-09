@@ -62,7 +62,7 @@ export default function RegisterPage() {
       setServerError(body.detail ?? "Verification failed");
       return;
     }
-    router.push("/fields");
+    router.push("/dashboard");
     router.refresh();
   }
 

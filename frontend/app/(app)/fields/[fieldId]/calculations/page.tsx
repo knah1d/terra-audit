@@ -8,6 +8,7 @@ import { SignalEvidenceInputs } from "@/components/calculations/SignalEvidenceIn
 import { ExplainButton } from "@/components/ai/ExplainDrawer";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSession } from "@/app/providers";
+import { StartFromRun } from "@/components/calculations/StartFromRun";
 import { useFieldContext } from "@/components/fields/FieldContext";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -97,7 +98,8 @@ function CalculationsView() {
   const [periodStart, setPeriodStart] = useState(() => requestedDate("start"));
   const [periodEnd, setPeriodEnd] = useState(() => requestedDate("end"));
   const [supersedes, setSupersedes] = useState("");
-  const [projectId, setProjectId] = useState(() => search.get("project") ?? "");
+  // A field is in at most one project at a time, so default to it.
+  const [projectId, setProjectId] = useState(() => search.get("project") ?? field.current_project?.project_id ?? "");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
@@ -210,6 +212,10 @@ function CalculationsView() {
           <p className="ui-secondary">No crop seasons recorded yet — add one under Crop Seasons first.</p>
         ) : (
           <fieldset disabled={busy} className="space-y-3 text-sm">
+            {pathway === "vm0051_rice_awd" && (
+              <StartFromRun fieldId={field.field_id} seasons={seasons.data} disabled={busy}
+                onPick={(start, end, ids) => { setPeriodStart(start); setPeriodEnd(end); setSelectedSeasons(ids); }} />
+            )}
             <div>
               <p className="mb-1.5 font-medium">Crop seasons in this accounting period</p>
               <div className="flex flex-wrap gap-2">
@@ -225,7 +231,7 @@ function CalculationsView() {
               <label>Monitoring period start<TextInput type="date" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} /></label>
               <label>Monitoring period end<TextInput type="date" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} /></label>
             </div>
-            <label className="block">Project (optional — required to submit this calculation for internal review later)
+            <label className="block">Project{field.current_project ? "" : " (optional — needed to submit for internal review)"}
               <Select value={projectId} onChange={(e) => setProjectId(e.target.value)}>
                 <option value="">No project</option>
                 {(projects.data ?? []).map((p) => <option key={p.project_id} value={p.project_id}>{p.name}</option>)}

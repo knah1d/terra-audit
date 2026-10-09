@@ -1,6 +1,6 @@
 "use client";
 
-import { Paperclip, Calculator, ChevronRight, ClipboardList, FlaskConical, Microscope, Satellite, ShieldCheck, Sprout, Wheat, type LucideIcon } from "lucide-react";
+import { Paperclip, Calculator, ChevronRight, ClipboardList, FlaskConical, LayoutDashboard, Microscope, Satellite, ShieldCheck, Sprout, Wheat, type LucideIcon } from "lucide-react";
 import { Fragment } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -8,9 +8,12 @@ import { useEffect, useRef, useState } from "react";
 import { resetLiquidPointer, trackLiquidPointer } from "@/components/ui/liquid-pointer";
 import { revealNavigationItem } from "@/lib/reveal-navigation";
 import { Toolbar } from "@/components/ui/Toolbar";
+import { StepStatusDot } from "@/components/fields/StepStatusBadge";
+import { useFieldWorkflow } from "@/hooks/use-workflow";
 import { fieldSteps } from "@/lib/field-steps";
 
 const STEP_ICONS: Record<string, LucideIcon> = {
+  overview: LayoutDashboard,
   "crop-seasons": Sprout,
   enrollment: ClipboardList,
   "signal-analytics": Satellite,
@@ -39,12 +42,14 @@ export function FieldTabs({ fieldId, fieldType }: { fieldId: string; fieldType: 
   const [pillStyle, setPillStyle] = useState<{ left: number; width: number } | null>(null);
 
   // Workflow order lives in lib/field-steps.ts (shared with every redirect into a field).
+  const workflow = useFieldWorkflow(fieldId);
   let stepNumber = 0;
   const options = fieldSteps(fieldType).map((step) => ({
     href: `/fields/${fieldId}/${step.segment}`,
     label: step.label,
     icon: STEP_ICONS[step.segment] ?? Paperclip,
     number: step.numbered ? ++stepNumber : null,
+    status: workflow.data?.steps[step.segment]?.status,
   }));
 
   useEffect(() => {
@@ -87,7 +92,7 @@ export function FieldTabs({ fieldId, fieldType }: { fieldId: string; fieldType: 
             }}
           />
         )}
-        {options.map(({ href, label, icon: Icon, number }, i) => {
+        {options.map(({ href, label, icon: Icon, number, status }, i) => {
           const active = pathname === href;
           return (
             <Fragment key={href}>
@@ -114,6 +119,7 @@ export function FieldTabs({ fieldId, fieldType }: { fieldId: string; fieldType: 
                 <Icon className="size-3.5" aria-hidden />
               )}
               <span>{number !== null && <span className="sr-only">Step {number}: </span>}{label}</span>
+              {status && <StepStatusDot status={status} />}
             </Link>
             </Fragment>
           );

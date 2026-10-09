@@ -28,6 +28,7 @@ from backend.routers import (
     account_access, ai, ai_explain, ai_workspace, alm, attachments, auth, calculations, carbon, export, farms, fields,
     methodology, monitoring, monitoring_ops,
     portfolio, product_ops, production_records, projects, registration, reviews, signal, soil_evidence, team,
+    workflow,
 )
 
 
@@ -66,7 +67,8 @@ for router in (auth.router, registration.router, fields.router, alm.router, carb
                signal.router, ai.router, portfolio.router, export.router, team.router, monitoring.router,
                projects.router, farms.router, attachments.router, calculations.router, reviews.router,
                monitoring_ops.router, ai_workspace.router, account_access.router, product_ops.router,
-               methodology.router, soil_evidence.router, production_records.router, ai_explain.router):
+               methodology.router, soil_evidence.router, production_records.router, ai_explain.router,
+               workflow.router):
     app.include_router(router)
 
 

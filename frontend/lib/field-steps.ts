@@ -10,6 +10,7 @@
 export type FieldStep = { segment: string; label: string; numbered: boolean };
 
 const RICE_STEPS: FieldStep[] = [
+  { segment: "overview", label: "Overview", numbered: false },
   { segment: "crop-seasons", label: "Crop Seasons", numbered: true },
   { segment: "enrollment", label: "Enrollment", numbered: true },
   { segment: "signal-analytics", label: "Signal Analytics", numbered: true },
@@ -19,6 +20,7 @@ const RICE_STEPS: FieldStep[] = [
 ];
 
 const ALM_STEPS: FieldStep[] = [
+  { segment: "overview", label: "Overview", numbered: false },
   { segment: "crop-seasons", label: "Crop Seasons", numbered: true },
   { segment: "enrollment", label: "Enrollment", numbered: true },
   { segment: "practice-data", label: "Practice & Soil Data", numbered: true },
@@ -32,7 +34,19 @@ export function fieldSteps(fieldType: string): FieldStep[] {
   return fieldType === "rice_awd" ? RICE_STEPS : ALM_STEPS;
 }
 
-/** Where a field opens: its first workflow step. */
+/** Label for a workflow step id, including "review" (no tab of its own —
+ * submission happens from Calculations). */
+export function stepLabel(segment: string): string {
+  if (segment === "review") return "Review";
+  return [...RICE_STEPS, ...ALM_STEPS].find((s) => s.segment === segment)?.label ?? segment;
+}
+
+/** Tab that holds a workflow step ("review" is done from Calculations). */
+export function stepSegment(step: string): string {
+  return step === "review" ? "calculations" : step;
+}
+
+/** Where a field opens: its Overview (statuses + next step). */
 export function firstStepPath(fieldId: string, fieldType: string): string {
   return `/fields/${encodeURIComponent(fieldId)}/${fieldSteps(fieldType)[0].segment}`;
 }

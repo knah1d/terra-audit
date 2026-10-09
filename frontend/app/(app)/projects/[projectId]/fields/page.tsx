@@ -23,7 +23,8 @@ export default function ProjectFieldsPage() {
 
   const openMemberships = (memberships.data ?? []).filter((m) => m.removed_at === null);
   const assignedFieldIds = new Set(openMemberships.map((m) => m.field_id));
-  const assignable = (fields.data ?? []).filter((f) => !assignedFieldIds.has(f.field_id));
+  // One project per field at a time: only standalone fields can be assigned.
+  const assignable = (fields.data ?? []).filter((f) => !assignedFieldIds.has(f.field_id) && !f.current_project);
 
   return (
     <div className="ui-container space-y-6">
@@ -31,8 +32,8 @@ export default function ProjectFieldsPage() {
       <Card>
         <h3 className="ui-subsection-title mb-3">Assign an existing field</h3>
         <p className="ui-meta mb-3">
-          This never guesses an assignment or touches the field&apos;s history — it only records that this field
-          is part of this project as of the effective date below. A field can belong to more than one project at once.
+          Only standalone fields are listed — a field belongs to one project at a time. Its history is kept.{" "}
+          <Link className="underline" href={`/fields/new?project=${encodeURIComponent(project.project_id)}`}>Register a new field for this project</Link>
         </p>
         <form className="flex flex-wrap gap-2" onSubmit={(e) => {
           e.preventDefault();

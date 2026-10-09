@@ -73,6 +73,8 @@ class FieldOut(BaseModel):
     created_at: datetime | None = None
     land_use: str | None = None
     land_use_source: str | None = None  # "detected" | "manual"
+    # The field's current (open) project membership; None = standalone.
+    current_project: dict[str, Any] | None = None
 
 
 class FieldDetailOut(FieldOut):

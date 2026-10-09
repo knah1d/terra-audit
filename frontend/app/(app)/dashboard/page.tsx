@@ -1,6 +1,6 @@
 "use client";
 
-import { FolderKanban, MapPin, Plus, Rows3, Sprout } from "lucide-react";
+import { AlertTriangle, ArrowRight, ClipboardCheck, FolderKanban, MapPin, Plus, Rows3, Sprout } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -15,6 +15,13 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useFields } from "@/hooks/use-fields";
 import { useOrgSummary, useProjects } from "@/hooks/use-projects";
+import { useMyReviews } from "@/hooks/use-reviews";
+import { useDashboardSummary } from "@/hooks/use-workflow";
+import { formatQueueTimestamp } from "@/lib/format";
+import { stepLabel, stepSegment } from "@/lib/field-steps";
+
+const ACTIVITY: Record<string, string> = { calculation: "Calculation", crop_season: "Crop season", signal_run: "Satellite analysis" };
+const OPEN_REVIEW = new Set(["submitted", "in_review"]);
 
 const METHODOLOGY: Record<string, string> = { rice_awd: "Rice — AWD", cropland_alm_vm0042: "Cropland — ALM" };
 const newestFirst = <T extends { created_at: string | null }>(rows: T[]) =>
@@ -76,7 +83,13 @@ function Dashboard() {
   const session = useSession();
   const projects = useProjects();
   const fields = useFields();
+  const summary = useDashboardSummary();
+  const myReviews = useMyReviews();
   const [creating, setCreating] = useState(false);
+  const recent = summary.data?.recent ?? [];
+  const attention = recent.filter((r) => r.needs_attention.length);
+  const assigned = (myReviews.data ?? []).filter((r) => OPEN_REVIEW.has(r.status));
+  const fieldName = (id: string) => fields.data?.find((f) => f.field_id === id)?.name ?? id;
   const canCreate = session?.role === "admin" || session?.role === "analyst";
   const recentProjects = newestFirst(projects.data ?? []).slice(0, 5);
   const recentFields = newestFirst(fields.data ?? []).slice(0, 5);
@@ -90,6 +103,74 @@ function Dashboard() {
           <ButtonLink size="sm" href="/fields/new" icon={MapPin}>Register a field</ButtonLink>
         </div>}
       />
+      {!!recent.length && (
+        <section className="mb-6">
+          <h2 className="ui-subsection-title mb-3">Continue where you left off</h2>
+          <div className="grid gap-2">
+            {recent.map((r) => {
+              const base = `/fields/${encodeURIComponent(r.field_id)}`;
+              return (
+                <Card key={r.field_id} className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <Link href={`${base}/overview`} className="font-medium hover:underline">{r.name}</Link>
+                    <p className="ui-meta">
+                      {ACTIVITY[r.last_activity.kind]} · {formatQueueTimestamp(r.last_activity.at)}
+                      {r.project ? ` · ${r.project.name}` : " · Standalone"}
+                    </p>
+                  </div>
+                  {r.next_step ? (
+                    <ButtonLink size="sm" href={`${base}/${stepSegment(r.next_step.step)}`} icon={ArrowRight} className="flex-row-reverse gap-2">
+                      {r.next_step.step === "review" ? "Submit for review" : `Next: ${stepLabel(r.next_step.step)}`}
+                    </ButtonLink>
+                  ) : <Badge tone="success">All steps complete</Badge>}
+                </Card>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {(!!attention.length || !!assigned.length) && (
+        <div className="mb-6 grid gap-6 lg:grid-cols-2">
+          {!!assigned.length && (
+            <section>
+              <h2 className="ui-subsection-title mb-3">Reviews assigned to you</h2>
+              <div className="grid gap-2">
+                {assigned.map((r) => (
+                  <Link key={r.submission_id} href={`/reviews/${encodeURIComponent(r.submission_id)}`}>
+                    <Card interactive className="flex items-center justify-between gap-3">
+                      <span className="flex min-w-0 items-center gap-3">
+                        <IconTile icon={ClipboardCheck} size="sm" />
+                        <span className="truncate font-medium">{fieldName(r.field_id)}</span>
+                      </span>
+                      <Badge tone="brand">{r.status.replace("_", " ")}</Badge>
+                    </Card>
+                  </Link>
+                ))}
+              </div>
+            </section>
+          )}
+          {!!attention.length && (
+            <section>
+              <h2 className="ui-subsection-title mb-3">Needs attention</h2>
+              <div className="grid gap-2">
+                {attention.map((r) => (
+                  <Link key={r.field_id} href={`/fields/${encodeURIComponent(r.field_id)}/${stepSegment(r.needs_attention[0].step)}`}>
+                    <Card interactive className="flex items-center gap-3">
+                      <IconTile icon={AlertTriangle} size="sm" />
+                      <span className="min-w-0">
+                        <span className="block truncate font-medium">{r.name} · {stepLabel(r.needs_attention[0].step)}</span>
+                        <span className="ui-meta">{r.needs_attention[0].detail}</span>
+                      </span>
+                    </Card>
+                  </Link>
+                ))}
+              </div>
+            </section>
+          )}
+        </div>
+      )}
+
       <div className="grid gap-6 lg:grid-cols-2">
         <section>
           <div className="mb-3 flex items-center justify-between">
@@ -124,7 +205,7 @@ function Dashboard() {
           ) : (
             <div className="grid gap-2">
               {recentFields.map((f) => (
-                <Link key={f.field_id} href={`/fields/${encodeURIComponent(f.field_id)}`}>
+                <Link key={f.field_id} href={`/fields/${encodeURIComponent(f.field_id)}/overview`}>
                   <Card interactive className="flex items-center justify-between gap-3">
                     <span className="flex min-w-0 items-center gap-3">
                       <IconTile icon={MapPin} size="sm" />

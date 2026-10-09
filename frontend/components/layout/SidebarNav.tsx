@@ -1,31 +1,41 @@
 "use client";
 
-import { Activity, BrainCircuit, ClipboardCheck, FolderKanban, LayoutGrid, Plus, Rows3, Users, CircleUserRound } from "lucide-react";
+import { Activity, BrainCircuit, ClipboardCheck, FolderKanban, LayoutDashboard, LayoutGrid, Rows3, Settings, Users, CircleUserRound } from "lucide-react";
 import Link from "next/link";
+import { Fragment } from "react";
 import { usePathname } from "next/navigation";
 import { LogoutButton } from "@/components/auth/LogoutButton";
 import { resetLiquidPointer, trackLiquidPointer } from "@/components/ui/liquid-pointer";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
+import { useOrgSummary } from "@/hooks/use-projects";
 import type { SessionClaims } from "@/lib/session";
 
+// Field-specific work (crop seasons, analytics, calculations, evidence) lives
+// inside each field's workspace, not here. "Register a field" is a button on
+// the Fields page and the Dashboard.
 const NAV_ITEMS = [
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, exact: false },
   { href: "/projects", label: "Projects", icon: Rows3, exact: false },
   { href: "/fields", label: "Fields", icon: FolderKanban, exact: false },
-  { href: "/fields/new", label: "Register a field", icon: Plus, exact: true },
   { href: "/portfolio", label: "Portfolio", icon: LayoutGrid, exact: false },
   { href: "/reviews", label: "Reviews", icon: ClipboardCheck, exact: false },
   { href: "/ai-validation", label: "AI Validation", icon: BrainCircuit, exact: false },
 ];
 
 const ADMIN_NAV_ITEMS = [
-  { href: "/admin/setup", label: "Product setup", icon: ClipboardCheck, exact: false },
+  { href: "/admin/setup", label: "Product setup", icon: Settings, exact: false },
   { href: "/team", label: "Team", icon: Users, exact: false },
   { href: "/admin/queue", label: "Worker & queue", icon: Activity, exact: false },
 ];
 
 export function SidebarNav({ session, collapsed = false }: { session: SessionClaims | null; collapsed?: boolean }) {
   const pathname = usePathname();
-  const items = session?.role === "admin" ? [...NAV_ITEMS, ...ADMIN_NAV_ITEMS] : NAV_ITEMS;
+  const isAdmin = session?.role === "admin";
+  // The first-run welcome page shows only the account card (email, role,
+  // theme, logout) — no navigation until the organisation has a project or field.
+  const summary = useOrgSummary();
+  const onWelcome = pathname === "/dashboard" && (summary.isLoading || !!summary.data?.is_new_organization);
+  const items = onWelcome ? [] : isAdmin ? [...NAV_ITEMS, ...ADMIN_NAV_ITEMS] : NAV_ITEMS;
 
   // Non-exact items match by prefix (e.g. "/fields" matches
   // "/fields/{id}/ledger"), but that would also match "/fields/new" —
@@ -42,8 +52,14 @@ export function SidebarNav({ session, collapsed = false }: { session: SessionCla
         {items.map(({ href, label, icon: Icon }) => {
           const active = href === activeHref;
           return (
+            <Fragment key={href}>
+            {/* Admin pages are grouped under their own heading. */}
+            {isAdmin && href === ADMIN_NAV_ITEMS[0].href && (
+              collapsed
+                ? <hr className="my-2 border-border-subtle" />
+                : <p className="ui-meta mt-4 px-3 pb-1 font-semibold uppercase tracking-wide">Administration</p>
+            )}
             <Link
-              key={href}
               href={href}
               title={collapsed ? label : undefined}
               aria-label={collapsed ? label : undefined}
@@ -58,6 +74,7 @@ export function SidebarNav({ session, collapsed = false }: { session: SessionCla
               <Icon className="size-4" />
               {!collapsed && <span>{label}</span>}
             </Link>
+            </Fragment>
           );
         })}
       </nav>

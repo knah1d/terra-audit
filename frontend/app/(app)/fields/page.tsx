@@ -26,20 +26,31 @@ export default function FieldsPage() {
   const [query, setQuery] = useState("");
   const [methodology, setMethodology] = useState("all");
   const [sort, setSort] = useState("name");
-  const visibleFields = filterFields(fields ?? [], query, methodology, sort);
+  const [scope, setScope] = useState<"all" | "standalone" | "project">("all");
+  const visibleFields = filterFields(fields ?? [], query, methodology, sort)
+    .filter((f) => scope === "all" || (scope === "project") === !!f.current_project);
 
   return (
     <div className="ui-container">
       <PageHeader
         title="Fields"
-        subtitle="Registered field boundaries and their carbon-credit methodology."
         actions={
-          <ButtonLink href="/fields/new" icon={Plus}>Register a field</ButtonLink>
+          <div className="flex flex-wrap gap-2">
+            <ButtonLink href="/fields/new" variant="secondary" icon={Plus}>Register standalone field</ButtonLink>
+            <ButtonLink href="/fields/new?mode=project" icon={Plus}>Register project field</ButtonLink>
+          </div>
         }
       />
 
       {!!fields?.length && (
         <div className="ui-card mb-6">
+          <div className="mb-3 flex flex-wrap gap-2" role="group" aria-label="Field type">
+            {([["all", "All fields"], ["standalone", "Standalone"], ["project", "In a project"]] as const).map(([value, label]) => (
+              <Button key={value} size="sm" variant={scope === value ? "primary" : "secondary"} aria-pressed={scope === value} onClick={() => setScope(value)}>
+                {label} ({(fields ?? []).filter((f) => value === "all" || (value === "project") === !!f.current_project).length})
+              </Button>
+            ))}
+          </div>
           <div className="grid gap-3 sm:grid-cols-[1fr_180px_150px]">
             <label className="ui-label">Find a field
               <TextInput className="mt-2" type="search" placeholder="Search name, district or ID…" value={query} onChange={(e) => setQuery(e.target.value)} />
@@ -57,7 +68,7 @@ export default function FieldsPage() {
           </div>
           <div className="mt-3 flex items-center justify-between text-xs text-text-secondary">
             <span role="status">{visibleFields.length} of {fields.length} fields</span>
-            {(query || methodology !== "all" || sort !== "name") && <Button variant="ghost" size="sm" onClick={() => { setQuery(""); setMethodology("all"); setSort("name"); }}>Clear filters</Button>}
+            {(query || methodology !== "all" || sort !== "name" || scope !== "all") && <Button variant="ghost" size="sm" onClick={() => { setQuery(""); setMethodology("all"); setSort("name"); setScope("all"); }}>Clear filters</Button>}
           </div>
         </div>
       )}
@@ -82,7 +93,7 @@ export default function FieldsPage() {
           icon={FolderKanban}
           motif
           title="No fields registered yet"
-          description="Register your first field boundary to start tracking carbon credits."
+          description="Register a standalone field for analysis, or a field inside a carbon project."
           action={
             <ButtonLink href="/fields/new" icon={Plus}>Register a field</ButtonLink>
           }
@@ -111,6 +122,7 @@ export default function FieldsPage() {
                       {field.district}
                     </span>
                     <Badge tone="brand">{FIELD_TYPE_LABELS[field.field_type] ?? field.field_type}</Badge>
+                    <Badge tone="neutral">{field.current_project ? `Project: ${field.current_project.name}` : "Standalone"}</Badge>
                   </div>
                 </div>
               </div>

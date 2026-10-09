@@ -129,13 +129,16 @@ def geometry_land_use(feature: dict, user: dict = Depends(get_current_user),
 
 @router.get("/fields", response_model=list[FieldOut])
 def list_org_fields(user: dict = Depends(get_current_user)):
-    return [FieldOut(**f) for f in list_fields(user["org_id"])]
+    from src.projects.workflow import current_projects
+    projects = current_projects(user["org_id"])
+    return [FieldOut(**f, current_project=projects.get(f["field_id"])) for f in list_fields(user["org_id"])]
 
 
 @router.get("/fields/{field_id}", response_model=FieldDetailOut)
 def get_org_field(field_id: str, user: dict = Depends(get_current_user),
                   field: dict = Depends(_field)):
-    return FieldDetailOut(**field)
+    from src.projects.workflow import current_projects
+    return FieldDetailOut(**field, current_project=current_projects(user["org_id"]).get(field_id))
 
 
 @router.post("/fields", response_model=FieldDetailOut, status_code=status.HTTP_201_CREATED)

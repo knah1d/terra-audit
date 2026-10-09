@@ -1,6 +1,6 @@
 "use client";
 
-import { Users, Activity, MapPinned, LayoutList, BrainCircuit, ScrollText } from "lucide-react";
+import { Users, Activity, MapPinned, LayoutList, BrainCircuit, ScrollText, LayoutDashboard } from "lucide-react";
 import { revealNavigationItem } from "@/lib/reveal-navigation";
 import Link from "next/link";
 import { useEffect, useRef } from "react";
@@ -11,6 +11,7 @@ export function ProjectTabs({ projectId }: { projectId: string }) {
   const nav = useRef<HTMLElement>(null);
   useEffect(() => { revealNavigationItem(nav.current, nav.current?.querySelector<HTMLElement>('[aria-current="page"]') ?? null); }, [pathname]);
   const options = [
+    { href: `/projects/${projectId}/overview`, label: "Overview", icon: LayoutDashboard },
     { href: `/projects/${projectId}/monitoring`, label: "Monitoring", icon: Activity },
     { href: `/projects/${projectId}/fields`, label: "Fields", icon: MapPinned },
     { href: `/projects/${projectId}/methodology`, label: "Methodology", icon: ScrollText },

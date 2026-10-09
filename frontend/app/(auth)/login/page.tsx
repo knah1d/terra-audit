@@ -40,7 +40,7 @@ export default function LoginPage() {
       return;
     }
     const next = searchParams.get("next");
-    window.location.replace(next?.startsWith("/") && !next.startsWith("//") ? next : "/fields");
+    window.location.replace(next?.startsWith("/") && !next.startsWith("//") ? next : "/dashboard");
   }
 
   return (

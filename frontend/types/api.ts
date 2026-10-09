@@ -19,6 +19,13 @@ export interface LandUseResponse {
   evidence: LandUseEvidence;
 }
 
+export interface CurrentProject {
+  project_id: string;
+  name: string;
+  membership_id: string;
+  effective_start_date: string;
+}
+
 export interface FieldOut {
   field_id: string;
   name: string;
@@ -28,6 +35,17 @@ export interface FieldOut {
   created_at: string | null;
   land_use: LandUse | null;
   land_use_source: "detected" | "manual" | null;
+  current_project?: CurrentProject | null; // null = standalone field
+}
+
+export type StepStatus = "not_started" | "in_progress" | "needs_attention" | "ready" | "completed" | "not_applicable";
+export interface WorkflowStep { status: StepStatus; detail: string }
+export interface FieldWorkflow {
+  field_id: string;
+  project: CurrentProject | null;
+  order: string[];
+  steps: Record<string, WorkflowStep>;
+  next_step: ({ step: string } & WorkflowStep) | null;
 }
 
 export interface FieldDetailOut extends FieldOut {

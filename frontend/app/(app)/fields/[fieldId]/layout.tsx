@@ -2,6 +2,7 @@ import { Pencil } from "lucide-react";
 import { notFound } from "next/navigation";
 import { DeleteFieldButton } from "@/components/fields/DeleteFieldButton";
 import { FieldProvider } from "@/components/fields/FieldContext";
+import { FieldProjectControl } from "@/components/fields/FieldProjectControl";
 import { FieldTabs } from "@/components/fields/FieldTabs";
 import { StepNav } from "@/components/fields/StepNav";
 import { Badge } from "@/components/ui/Badge";
@@ -48,6 +49,8 @@ export default async function FieldLayout({
               <Badge tone="brand">{FIELD_TYPE_LABELS[field.field_type] ?? field.field_type}</Badge>
               <span className="text-text-tertiary">·</span>
               <span className="font-mono tabular-nums">{field.area_ha?.toFixed(2)} ha</span>
+              <span className="text-text-tertiary">·</span>
+              <FieldProjectControl fieldId={field.field_id} project={field.current_project ?? null} />
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
