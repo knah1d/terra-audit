@@ -80,3 +80,42 @@ def test_parse_coordinates_error_surfaces_as_error_field(client, auth_headers):
     body = r.json()
     assert body["feature"] is None
     assert body["error"] is not None
+
+
+OUTSIDE_BD_FEATURE = {
+    "type": "Feature", "properties": {},
+    "geometry": {"type": "Polygon", "coordinates": [[
+        [-0.1, 51.5], [-0.09, 51.5], [-0.09, 51.51], [-0.1, 51.51], [-0.1, 51.5],
+    ]]},
+}
+
+
+def test_detect_district(client, auth_headers):
+    r = client.post("/geometry/district", json=RICE_FEATURE, headers=auth_headers["admin"])
+    assert r.status_code == 200
+    assert r.json() == {"district": "Gopalganj"}
+
+    r = client.post("/geometry/district", json=OUTSIDE_BD_FEATURE, headers=auth_headers["admin"])
+    assert r.json() == {"district": None}
+
+
+def test_detected_district_overrides_submitted(client, rice_field, auth_headers):
+    """The read-only district can't be bypassed via the API, on create or edit."""
+    r = client.get(f"/fields/{rice_field}", headers=auth_headers["admin"])
+    assert r.json()["district"] == "Gopalganj"
+
+    r = client.patch(f"/fields/{rice_field}", json={"name": "x", "district": "Dhaka"},
+                     headers=auth_headers["analyst"])
+    assert r.json()["district"] == "Gopalganj"
+
+
+def test_manual_district_only_outside_bangladesh(client, auth_headers):
+    payload = {"field_id": "F-UK", "name": "UK", "field_type": "rice_awd",
+               "feature": OUTSIDE_BD_FEATURE}
+    r = client.post("/fields", json=payload, headers=auth_headers["admin"])
+    assert r.status_code == 422
+
+    r = client.post("/fields", json={**payload, "district": "London"},
+                    headers=auth_headers["admin"])
+    assert r.status_code == 201
+    assert r.json()["district"] == "London"

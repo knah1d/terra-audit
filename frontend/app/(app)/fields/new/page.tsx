@@ -45,7 +45,7 @@ export default function NewFieldPage() {
   // The district comes from the boundary and is read-only; manual entry is
   // only offered when the boundary lies outside Bangladesh (null).
   useEffect(() => {
-    if (detectedDistrict) setValue("district", detectedDistrict, { shouldValidate: true });
+    setValue("district", detectedDistrict ?? "", { shouldValidate: !!detectedDistrict });
   }, [detectedDistrict, setValue]);
 
   async function onSubmit(values: FieldCreateForm) {
