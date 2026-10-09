@@ -171,6 +171,11 @@ function CalculationsView() {
   const result = !dirty ? preview.data : undefined;
   const blocking = result ? result.readiness.filter(isBlocking) : [];
   const openCalculations = (history.data ?? []).filter((r) => !r.legacy && r.status !== "superseded");
+  // A saved, reviewable project calculation overlapping this period: saving a
+  // new one would double count (the server refuses), so offer a correction.
+  const accounted = context && !supersedes ? openCalculations.find((c): c is Extract<CalculationHistoryRow, { legacy: false }> =>
+    !c.legacy && c.status === "ready_for_review" && !!c.project_id && c.accounting_pathway === pathway
+    && c.monitoring_period_start <= context.end && context.start <= c.monitoring_period_end) : undefined;
   // The remembered request applies only while the page still shows the same context.
   const lastMatches = !!last && !!context && !contextIssue && last.body.monitoring_period_start === context.start
     && last.body.monitoring_period_end === context.end && JSON.stringify(last.body.season_ids) === JSON.stringify(context.seasons);
@@ -218,6 +223,19 @@ function CalculationsView() {
     }
     return { verification_years: number("verification_years", "verification years"),
       non_permanence_risk_pct: number("non_permanence_risk_pct", "non-permanence risk") };
+  }
+
+  function saveCalculation(supersedesId: string | null) {
+    return perform("Couldn't save calculation", async () => {
+      const out = await commit.mutateAsync({ body: { ...lastBody, monitoring_run_ids: [], attachment_ids: [],
+        supersedes_calculation_id: supersedesId }, idempotencyKey: crypto.randomUUID() });
+      setSaved({ id: out.calculation.calculation_id, status: out.calculation.status, version: out.calculation.version,
+        projectId: (lastBody?.project_id as string | null) ?? null });
+      toast.success("Calculation saved", { description: out.calculation.status === "ready_for_review"
+        ? `Version ${out.calculation.version} · ready for review` : `Version ${out.calculation.version} · draft — fix the listed items before review` });
+      await queryClient.invalidateQueries({ queryKey: ["calculations", field.field_id] });
+      await queryClient.invalidateQueries({ queryKey: ["field-workflow", field.field_id] });
+    });
   }
 
   const explain = (id: string) => projectId && context ? (
@@ -330,16 +348,17 @@ function CalculationsView() {
           )}
 
           <div className="flex flex-wrap items-center gap-2">
-            {!saved && <Button icon={Save} loading={commit.isPending} disabled={busy || !lastBody} onClick={() => void perform("Couldn't save calculation", async () => {
-              const out = await commit.mutateAsync({ body: { ...lastBody, monitoring_run_ids: [], attachment_ids: [],
-                supersedes_calculation_id: supersedes || null }, idempotencyKey: crypto.randomUUID() });
-              setSaved({ id: out.calculation.calculation_id, status: out.calculation.status, version: out.calculation.version,
-                projectId: (lastBody?.project_id as string | null) ?? null });
-              toast.success("Calculation saved", { description: out.calculation.status === "ready_for_review"
-                ? `Version ${out.calculation.version} · ready for review` : `Version ${out.calculation.version} · draft — fix the listed items before review` });
-              await queryClient.invalidateQueries({ queryKey: ["calculations", field.field_id] });
-              await queryClient.invalidateQueries({ queryKey: ["field-workflow", field.field_id] });
-            })}>Save calculation</Button>}
+            {!saved && (accounted ? (
+              <>
+                <p className="w-full text-sm text-text-secondary">
+                  This period is already saved as v{accounted.version} (ready for review{accounted.project_id === projectId ? "" : " in another project"}).
+                  Saving it again would count the same reductions twice.
+                </p>
+                {accounted.project_id === projectId && (
+                  <Button icon={Save} loading={commit.isPending} disabled={busy || !lastBody} onClick={() => void saveCalculation(accounted.calculation_id)}>Save as a correction of v{accounted.version}</Button>
+                )}
+              </>
+            ) : <Button icon={Save} loading={commit.isPending} disabled={busy || !lastBody} onClick={() => void saveCalculation(supersedes || null)}>Save calculation</Button>)}
             {saved?.status === "ready_for_review" && saved.projectId && (
               <Button variant="secondary" loading={createSubmission.isPending} onClick={() => void perform("Couldn't submit for review", async () => {
                 const sub = await createSubmission.mutateAsync({ project_id: saved.projectId!, calculation_id: saved.id });
