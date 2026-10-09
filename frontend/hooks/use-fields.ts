@@ -27,6 +27,7 @@ export function useCreateField() {
       apiFetch<FieldDetailOut>("/fields", { method: "POST", json: body }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["fields"] });
+      queryClient.invalidateQueries({ queryKey: ["org-summary"] });
     },
   });
 }

@@ -3,21 +3,18 @@
 import { FolderKanban, Plus } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
+import { NewProjectSheet } from "@/components/projects/NewProjectSheet";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { TextArea, TextInput } from "@/components/ui/Field";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Sheet } from "@/components/ui/Sheet";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { useCreateProject, useProjects } from "@/hooks/use-projects";
+import { useProjects } from "@/hooks/use-projects";
 
 export default function ProjectsPage() {
   const projects = useProjects();
-  const create = useCreateProject();
   const [open, setOpen] = useState(false);
-  const [error, setError] = useState("");
 
   return (
     <div className="ui-container">
@@ -28,7 +25,8 @@ export default function ProjectsPage() {
       />
       {projects.isLoading && <Skeleton className="h-24" />}
       {projects.data && projects.data.length === 0 && (
-        <EmptyState icon={FolderKanban} motif title="No projects yet" description="Create a project to start assigning fields and monitoring them together." />
+        <EmptyState icon={FolderKanban} motif title="No projects yet" description="Create a project to start assigning fields and monitoring them together."
+          action={<Button icon={Plus} onClick={() => setOpen(true)}>New project</Button>} />
       )}
       <div className="grid gap-3">
         {(projects.data ?? []).map((p) => (
@@ -44,23 +42,7 @@ export default function ProjectsPage() {
         ))}
       </div>
 
-      <Sheet open={open} onClose={() => setOpen(false)} title="New project">
-        <form className="flex flex-col gap-3" onSubmit={(e) => {
-          e.preventDefault();
-          setError("");
-          const data = new FormData(e.currentTarget);
-          create.mutateAsync({
-            name: data.get("name"), description: data.get("description"), geography: data.get("geography"),
-          }).then(() => setOpen(false)).catch((err) => setError(err instanceof Error ? err.message : "Failed to create project"));
-        }}>
-          <label className="text-sm">Name<TextInput name="name" required maxLength={200} /></label>
-          <label className="text-sm">Description<TextArea name="description" maxLength={4000} /></label>
-          <label className="text-sm">Geography<TextInput name="geography" placeholder="e.g. Rajshahi division" maxLength={2000} /></label>
-          {error && <p role="alert" className="text-sm text-danger-700">{error}</p>}
-          <Button type="submit" loading={create.isPending}>Create project</Button>
-          <Button type="button" variant="secondary" onClick={() => setOpen(false)}>Cancel</Button>
-        </form>
-      </Sheet>
+      <NewProjectSheet open={open} onClose={() => setOpen(false)} />
     </div>
   );
 }

@@ -14,7 +14,9 @@ from backend.schemas.projects import (
     ProjectCreate, ProjectMemberCreate, ProjectMemberOut, ProjectOut, ProjectUpdate,
 )
 from src.accounts.auth import list_org_users
-from src.persistence.database import get_field
+from sqlalchemy import text
+
+from src.persistence.database import get_db_connection, get_field
 from src.projects import repository as projects_db
 
 router = APIRouter(tags=["projects"])
@@ -31,6 +33,19 @@ def _owned_project(org_id: str, project_id: str) -> dict:
 def list_projects(user=Depends(get_current_user)):
     return [ProjectOut(**p) for p in projects_db.list_projects(user["org_id"])
             if user["role"] == "admin" or projects_db.get_project_member(user["org_id"], p["project_id"], user["user_id"])]
+
+
+@router.get("/org/summary")
+def org_summary(user=Depends(get_current_user)):
+    """Organisation-wide counts that decide the post-login screen. Counted
+    across the whole organisation (not only projects the caller belongs to),
+    so a teammate joining an organisation that already has work never sees
+    the first-run Get Started screen."""
+    with get_db_connection() as conn:
+        counts = {name: conn.execute(text(f"SELECT COUNT(*) FROM {table} WHERE org_id = :org"),
+                                     {"org": user["org_id"]}).scalar()
+                  for name, table in (("field_count", "fields"), ("project_count", "projects"))}
+    return {**counts, "is_new_organization": counts["field_count"] == 0 and counts["project_count"] == 0}
 
 
 @router.post("/projects", response_model=ProjectOut, status_code=status.HTTP_201_CREATED)

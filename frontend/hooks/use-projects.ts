@@ -15,7 +15,10 @@ export function useCreateProject() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body: Record<string, unknown>) => apiFetch<ProjectOut>("/projects", { method: "POST", json: body }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["projects"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+      queryClient.invalidateQueries({ queryKey: ["org-summary"] });
+    },
   });
 }
 
@@ -77,5 +80,14 @@ export function useAddProjectMember(projectId: string | undefined) {
     mutationFn: (body: { user_id: string; project_role: string; reason?: string }) =>
       apiFetch<ProjectMemberRow[]>(`/projects/${projectId}/members`, { method: "POST", json: body }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["project-members", projectId] }),
+  });
+}
+
+/** Organisation-wide counts (not limited to the caller's projects) — an
+ * organisation with no fields and no projects gets the Get Started screen. */
+export function useOrgSummary() {
+  return useQuery({
+    queryKey: ["org-summary"],
+    queryFn: () => apiFetch<{ field_count: number; project_count: number; is_new_organization: boolean }>("/org/summary"),
   });
 }
