@@ -649,6 +649,137 @@ def generate_mrv_report_vm0051(ctx: dict) -> bytes:
     return bytes(pdf.output())
 
 
+# VM0051 §8.6.3: the QA3 flat uncertainty deduction is valid only up to this
+# project-wide annual size; per-field checks cannot see the project total.
+_QA3_PROJECT_GATE_TCO2E = 60000.0
+
+
+def generate_project_mrv_report_vm0051(ctx: dict) -> bytes:
+    """Project-level VM0051 monitoring report: aggregates the current,
+    reviewable calculation of every field in the reporting period. Each
+    field's own report (generate_mrv_report_vm0051) and frozen snapshot ship
+    alongside it in the evidence package. `ctx` comes from
+    backend/routers/export.py (_project_mrv)."""
+    project, items, users = ctx["project"], ctx["included"], ctx["users"]
+    final = ctx["status"] == "final"
+
+    pdf = _MRVPDF(orientation="P", unit="mm", format="A4")
+    pdf.draft = not final
+    pdf.methodology_label = "Verra VM0051 v1.1"
+    pdf.set_margins(left=18, top=20, right=18)
+    pdf.set_auto_page_break(auto=True, margin=16)
+    pdf.add_page()
+
+    total = lambda key: sum(float(i["calculation"]["result"].get(key) or 0) for i in items)
+    area = sum(float(i["calculation"]["snapshot"]["field"]["area_ha"]) for i in items)
+    net, gross = total("final_issuance"), total("delta_e_co2e")
+
+    pdf.set_font("Helvetica", "B", 15)
+    pdf.set_text_color(20, 40, 80)
+    pdf.ln(2)
+    pdf.cell(0, 9, "Project Monitoring Report - VM0051 v1.1", align="C", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font("Helvetica", "", 9)
+    pdf.set_text_color(90, 90, 90)
+    pdf.cell(0, 6, _s(f"{project['name']}  |  monitoring period {ctx['period_start']} - {ctx['period_end']}"),
+             align="C", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_text_color(0, 0, 0)
+    pdf.banner("FINAL - every included field calculation is internally approved" if final else
+               "DRAFT - not every included field calculation is internally approved. "
+               "Not for submission to a registry or VVB.", ok=final)
+
+    # ---- 1. Summary --------------------------------------------------------
+    pdf.section("1. Project Summary")
+    pdf.kv("Project", f"{project['name']}  ({project['project_id']})")
+    if project.get("geography"):
+        pdf.kv("Geography", project["geography"])
+    if project.get("description"):
+        pdf.kv("Description", project["description"])
+    pdf.kv("Methodology", "Verra VM0051 v1.1 - Improved Rice Cultivation, QA3 (default emission factors)")
+    pdf.kv("Monitoring period", f"{ctx['period_start']} to {ctx['period_end']}")
+    pdf.kv("Fields reported", f"{len(items)}  ({area:.4f} ha)")
+    pdf.kv("Net GHG emission reductions", f"{net:.4f} tCO2e  (calculated estimate, not issued credits)")
+    pdf.kv("Report status", "FINAL" if final else "DRAFT")
+    pdf.kv("Generated", f"{datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')} by {ctx.get('generated_by') or '-'}")
+
+    # ---- 2. Fields ----------------------------------------------------------
+    pdf.section("2. Project Fields in this Monitoring Period")
+    pdf.table(["Field", "Area (ha)", "Period", "AWD events", "Net tCO2e", "Internal review"],
+              [[f"{i['calculation']['snapshot']['field']['name']} ({i['calculation']['field_id']})",
+                f"{float(i['calculation']['snapshot']['field']['area_ha']):.2f}",
+                f"{i['calculation']['monitoring_period_start']} - {i['calculation']['monitoring_period_end']}",
+                i["calculation"]["snapshot"]["engine_inputs"].get("awd_events"),
+                f"{float(i['calculation']['result'].get('final_issuance') or 0):.4f}",
+                i["review_status"].replace("_", " ")] for i in items], (44, 18, 38, 18, 24, 32))
+    if ctx.get("excluded"):
+        pdf.note("Project fields NOT included in this report:")
+        pdf.table(["Field", "Reason"], [[f"{e['name']} ({e['field_id']})", e["reason"]] for e in ctx["excluded"]], (60, 114))
+
+    # ---- 3. Aggregated quantification --------------------------------------
+    pdf.section("3. Quantification of GHG Emission Reductions (sum of fields)")
+    pdf.kv("Baseline CH4 emissions", f"{total('e_baseline'):.4f} kg CH4  (Eq. 6/8)")
+    pdf.kv("Project CH4 emissions", f"{total('e_project'):.4f} kg CH4  (Eq. 6/8)")
+    pdf.kv("Gross CH4 avoided", f"{total('delta_e_ch4'):.4f} kg CH4")
+    pdf.kv("Gross reductions (before UNC)", f"{gross:.6f} tCO2e")
+    pdf.kv("Uncertainty deduction (QA3)", f"{total('unc_tco2e'):.6f} tCO2e  (15%, §8.6.3)")
+    pdf.kv("N2O correction (Eq. 25)", f"{total('pe_n2o_tco2e'):.6f} tCO2e")
+    pdf.kv("NET REDUCTIONS (Eq. 29)", f"{net:.6f} tCO2e")
+    if gross > _QA3_PROJECT_GATE_TCO2E:
+        pdf.banner(f"Project gross reductions ({gross:,.0f} tCO2e) exceed the QA3 {_QA3_PROJECT_GATE_TCO2E:,.0f} "
+                   "tCO2e/yr gate (§8.6.3): the flat 15% uncertainty deduction is not valid at this size.", ok=False)
+    pdf.note("Per-field parameters, satellite evidence and equation detail are in each field's report "
+             "(evidence package: fields/<field_id>/).")
+
+    # ---- 4. Monitoring approach --------------------------------------------
+    pdf.section("4. Monitoring Approach")
+    pdf.body(_RICE_METHOD_TEXT)
+
+    # ---- 5. QA/QC ------------------------------------------------------------
+    pdf.section("5. Internal Review (QA/QC)")
+    rows = []
+    for i in items:
+        sub = i.get("submission")
+        rows.append([i["calculation"]["snapshot"]["field"]["name"], f"v{i['calculation']['version']}",
+                     _who(users, sub.get("assigned_reviewer_id")) if sub else "-",
+                     i["review_status"].replace("_", " "),
+                     _date(sub.get("decided_at")) if sub and sub.get("decided_at") else "-"])
+    pdf.table(["Field", "Version", "Reviewer", "Status", "Decided"], rows, (50, 18, 50, 34, 22))
+
+    # ---- 6. Requirements across fields ---------------------------------------
+    pdf.section("6. Methodology Requirements Across Fields")
+    statuses: dict[str, dict[str, int]] = {}
+    for i in items:
+        for c in i["calculation"].get("readiness") or []:
+            counts = statuses.setdefault(c["requirement_id"], {})
+            counts[c["status"]] = counts.get(c["status"], 0) + 1
+    pdf.table(["Requirement", "Status across fields"],
+              [[rid, ", ".join(f"{k}: {v}" for k, v in sorted(counts.items()))] for rid, counts in sorted(statuses.items())],
+              (80, 94))
+    pdf.note("'unsupported' requirements are not quantified by this platform and must be addressed in the "
+             "project documentation for the verifier.")
+
+    # ---- 7. Evidence package ---------------------------------------------------
+    pdf.section("7. Evidence Package and Data Integrity")
+    pdf.table(["Field", "Calculation", "Snapshot SHA-256"],
+              [[i["calculation"]["snapshot"]["field"]["name"], i["calculation"]["calculation_id"][:12], i["snapshot_sha256"]]
+               for i in items], (40, 30, 104))
+    pdf.note("The evidence package (ZIP) holds this report, each field's monitoring report, each frozen calculation "
+             "snapshot (JSON), the Sentinel-1 analysis results, the attached field documents, and manifest.json "
+             "listing the SHA-256 of every file.")
+
+    # ---- 8. Assumptions, declaration ----------------------------------------
+    pdf.section("8. Assumptions and Limitations")
+    sample = items[0]["calculation"]["result"] if items else {"ef_c_used": "-"}
+    for n, a in enumerate(_rice_assumptions(sample) + _RICE_LIMITATIONS, 1):
+        pdf.set_x(pdf.l_margin + 8)
+        pdf.set_font("Helvetica", "", 9)
+        pdf.multi_cell(0, 6, f"{n}. {_s(a)}", new_x="LMARGIN", new_y="NEXT")
+    pdf.section("9. Declaration")
+    pdf.body("This monitoring report presents calculated emission reductions for internal and verifier use. "
+             "It does not constitute issued Verified Carbon Units. Issuance requires validation and verification "
+             "by an accredited validation/verification body (VVB) and registration under the Verra VCS Program.")
+    return bytes(pdf.output())
+
+
 def generate_pdf_alm(
     field_info: dict,
     meta: dict,
