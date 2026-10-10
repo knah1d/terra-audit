@@ -178,7 +178,7 @@ def test_current_alm_pdf_uses_frozen_snapshot_and_enforces_scope(
     assert practices == calc["snapshot"]["alm_practice_schedule"]
     assert livestock == calc["snapshot"].get("alm_livestock_schedule")
     assert result == calc["result"]
-    assert meta["status"] == "draft" and meta["readiness"] == calc["readiness"]
+    assert meta["status"] == "ready_for_review" and meta["readiness"] == calc["readiness"]  # readiness is informational; it no longer holds a calculation back
     assert client.get(f"/calculations/{calc['calculation_id']}", headers=auth_headers["admin"]).json() == calc
 
 

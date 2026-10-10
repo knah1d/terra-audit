@@ -373,9 +373,10 @@ def commit_calculation(
     'superseded' — all in ONE connection/ONE commit, mirroring
     src.persistence.database.commit_carbon_credit_result's atomicity rationale.
 
-    status is derived here, not trusted from the caller: 'draft' if any
-    readiness item is blocking (see _is_blocking), else 'ready_for_review'
-    — so a client can never talk its way into a false "ready" state.
+    The readiness checklist is recorded with the snapshot for information
+    only; it no longer holds a calculation back. Every committed calculation
+    is 'ready_for_review' and the human reviewer decides. (The engine's own
+    gate above, result_is_issuable, still refuses a non-computable result.)
 
     Returns {"calculation": <decoded row>, "already_committed": bool}.
     """
@@ -388,8 +389,7 @@ def commit_calculation(
         current_fingerprint = compute_evidence_fingerprint(org_id, field_id, accounting_pathway, season_ids, project_id)
         if not snapshot.get("evidence_fingerprint") or snapshot["evidence_fingerprint"] != current_fingerprint:
             raise ValueError("Evidence changed after the snapshot was created. Run a fresh calculation.")
-    blocking = not readiness or any(_is_blocking(item) for item in readiness)
-    status = "draft" if blocking else "ready_for_review"
+    status = "ready_for_review"
 
     with get_db_connection() as conn:
         existing = conn.execute(text("""
@@ -489,10 +489,8 @@ def commit_calculation(
 
 
 def _is_blocking(item: dict) -> bool:
-    """Mandatory missing, unreviewed, or unsupported requirements block readiness.
-
-    Nonblocking informational limitations remain visible without being gates.
-    """
+    """Whether a readiness item would have blocked review under the former
+    gating policy. Kept for reporting; commit no longer uses it."""
     return item["status"] in ("missing", "needs_review", "unsupported") and item.get("blocking", True)
 
 

@@ -103,9 +103,8 @@ def commit_calculation(
     user=Depends(require_writer), field=Depends(_field),
 ):
     """Freezes evidence into an immutable snapshot and persists one
-    calculation version. Never becomes 'ready_for_review' while a
-    blocking readiness item remains (src.carbon.calculations._is_blocking) —
-    the caller cannot override this by asking nicely."""
+    calculation version, ready for review. The readiness checklist is
+    recorded for information; the reviewer decides."""
     org_id = user["org_id"]
     _validate_pathway(field, body.accounting_pathway)
     project_role = _validate_project(user, body.project_id)

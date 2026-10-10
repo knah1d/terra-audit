@@ -60,7 +60,7 @@ def test_alm_snapshot_commit_retry_preserves_one_draft_and_external_cumulative_s
     one = first.json()
     assert one["already_committed"] is False
     calc = one["calculation"]
-    assert calc["status"] == "draft"
+    assert calc["status"] == "ready_for_review"  # readiness is informational; the reviewer decides
     assert calc["result"]["leakage"]["computable"] is True
     assert calc["result"]["leakage"]["selected_record_ids"]
     assert calc["result"]["final_issuance"] > 0

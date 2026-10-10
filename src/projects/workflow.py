@@ -35,8 +35,6 @@ class Prefetch:
             return grouped
 
         self.seasons = by_field(monitoring.current_seasons(org_id))
-        self.observations = by_field(monitoring.records("field_observations", org_id))
-        self.reviews = by_field(monitoring.records("observation_reviews", org_id))
         with get_db_connection() as conn:
             self.calculations = by_field(dict(r) for r in conn.execute(text("""
                 SELECT field_id, chain_id, version, status, monitoring_period_start, monitoring_period_end, created_at
@@ -69,17 +67,8 @@ def current_projects(org_id: str) -> dict:
 def _crop_seasons(org_id: str, field_id: str, seasons: list, pre: Prefetch | None = None) -> dict:
     if not seasons:
         return _step("not_started", "No crop season yet")
-    latest_review = {}
-    reviews = pre.reviews.get(field_id, []) if pre else monitoring.records("observation_reviews", org_id, field_id)
-    for review in reviews:
-        latest_review[review["payload"]["observation_id"]] = review["payload"]["decision"]
-    observations = pre.observations.get(field_id, []) if pre else monitoring.records("field_observations", org_id, field_id)
-    rejected = sum(1 for o in observations if latest_review.get(o["id"]) == "rejected")
-    pending = sum(1 for o in observations if o["id"] not in latest_review)
-    if rejected:
-        return _step("needs_attention", f"{rejected} observation(s) rejected")
-    if pending:
-        return _step("in_progress", f"{pending} observation(s) awaiting review by another team member")
+    # Field observations and their reviews are no longer part of the
+    # workflow; a recorded season completes this step.
     return _step("completed", f"{len(seasons)} season(s)")
 
 

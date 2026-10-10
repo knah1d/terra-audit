@@ -1,8 +1,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Calculator, CheckCircle2, Save, Satellite, Sprout, TriangleAlert } from "lucide-react";
-import Link from "next/link";
+import { Calculator, CheckCircle2, Save, Satellite, Sprout } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useRef, useState } from "react";
 import { useToast } from "@/components/ui/Toast";
@@ -14,15 +13,15 @@ import { Button, ButtonLink } from "@/components/ui/Button";
 import { Card, StatCard } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Select, TextInput } from "@/components/ui/Field";
-import { useCalculationHistory, useCommitCalculation, usePreviewCalculation, useRecordDetermination } from "@/hooks/use-calculations";
+import { useCalculationHistory, useCommitCalculation, usePreviewCalculation } from "@/hooks/use-calculations";
 import { useCropSeasons } from "@/hooks/use-crop-seasons";
-import { useProjectMembers, useProjects } from "@/hooks/use-projects";
+import { useProjects } from "@/hooks/use-projects";
 import { useCreateSubmission, useProjectSubmissions } from "@/hooks/use-reviews";
 import { apiFetch, apiFetchBlob } from "@/lib/api";
 import { downloadBlob } from "@/lib/download";
 import { formatDate, formatNumber, formatQueueTimestamp } from "@/lib/format";
 import { AMENDMENT_TYPE_OPTIONS } from "@/lib/schemas/ledger";
-import type { AccountingPathway, CalculationHistoryRow, ReadinessCheck } from "@/types/api";
+import type { AccountingPathway, CalculationHistoryRow } from "@/types/api";
 
 const PATHWAY_BY_FIELD_TYPE: Record<string, AccountingPathway> = {
   rice_awd: "vm0051_rice_awd",
@@ -31,24 +30,6 @@ const PATHWAY_BY_FIELD_TYPE: Record<string, AccountingPathway> = {
 const STATUS_TONE: Record<string, "brand" | "success" | "warning" | "neutral"> = {
   draft: "warning", ready_for_review: "success", superseded: "neutral",
 };
-const READINESS_TONE: Record<string, "success" | "warning" | "danger" | "neutral"> = {
-  satisfied: "success", not_applicable: "neutral", unsupported: "neutral", missing: "danger", needs_review: "warning",
-};
-// Which field tab fixes a blocking readiness item.
-const FIX_TAB: Record<string, string> = {
-  "common.monitoring_period_coverage": "crop-seasons", "common.evidence_review_status": "crop-seasons",
-  "vm0042.historical_lookback": "crop-seasons", "vm0042.rotation_completeness": "crop-seasons",
-  "vm0051.required_measurement_inputs": "signal-analytics",
-  "vm0042.project_practice_schedule": "practice-data", "vm0042.baseline_documentation": "practice-data",
-  "vm0042.soc_measurements": "practice-data", "vm0042.soc_sampling_traceability": "soil-evidence",
-  "vm0042.soc_uncertainty_annualization": "soil-evidence",
-  "vm0042.leakage_evidence_review": "production-records", "vm0042.other_leakage_scope": "production-records",
-};
-// Items no tab can fix: only a project lead's recorded decision clears them,
-// in the evidence-review form under Advanced on this page.
-const DECISION_ITEMS = new Set(["common.methodology_applicability"]);
-const isBlocking = (c: ReadinessCheck) => ["missing", "needs_review", "unsupported"].includes(c.status) && (c as { blocking?: boolean }).blocking !== false;
-
 type Run = { job_id: string; window_start: string; window_end: string; total_awd: number; season_length_days: number };
 
 // The last calculation per field (request AND result), kept in this browser.
@@ -72,23 +53,6 @@ function download(value: unknown, name: string) {
   const a = document.createElement("a"); a.href = url; a.download = name; a.click(); URL.revokeObjectURL(url);
 }
 
-function ReadinessList({ checklist, highlighted }: { checklist: ReadinessCheck[]; highlighted?: string }) {
-  return (
-    <div className="space-y-2">
-      {checklist.map((c) => (
-        <div key={c.requirement_id} className={`flex flex-wrap items-start gap-2 border-t border-border py-2 text-sm first:border-t-0 first:pt-0 ${c.requirement_id === highlighted ? "rounded-lg bg-brand-50 px-3" : ""}`}>
-          <Badge tone={READINESS_TONE[c.status]}>{c.status.replace("_", " ")}</Badge>
-          <div className="min-w-0 flex-1">
-            <p className="font-mono text-xs text-text-tertiary">{c.requirement_id}</p>
-            <p>{c.explanation}</p>
-            {c.decided_by && <p className="text-xs text-text-secondary">Recorded decision: {c.reason}</p>}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 export default function CalculationsPage() {
   const field = useFieldContext();
   const search = useSearchParams();
@@ -110,7 +74,6 @@ function CalculationsView() {
   const pathway = PATHWAY_BY_FIELD_TYPE[field.field_type];
   const isRice = pathway === "vm0051_rice_awd";
   const base = `/fields/${encodeURIComponent(field.field_id)}`;
-  const highlighted = search.get("requirement") ?? "";
   const urlDate = (key: string) => /^\d{4}-\d{2}-\d{2}$/.test(search.get(key) ?? "") ? search.get(key)! : "";
 
   const seasons = useCropSeasons(field.field_id);
@@ -122,7 +85,6 @@ function CalculationsView() {
   const history = useCalculationHistory(field.field_id);
   const preview = usePreviewCalculation(field.field_id);
   const commit = useCommitCalculation(field.field_id);
-  const determination = useRecordDetermination(field.field_id);
   const createSubmission = useCreateSubmission();
   const projects = useProjects();
 
@@ -152,9 +114,6 @@ function CalculationsView() {
   const [saved, setSaved] = useState<{ id: string; status: string; version: number; projectId: string | null } | null>(null);
   const toast = useToast();
 
-  const members = useProjectMembers(projectId || undefined);
-  const canReview = session?.role === "admin" || (session?.role === "analyst" &&
-    members.data?.some((m) => m.user_id === session.user_id && m.project_role === "lead"));
 
   // Automatic context: the chosen (default: latest) saved run's exact window
   // and the crop seasons overlapping it; cropland uses its latest season.
@@ -178,7 +137,7 @@ function CalculationsView() {
     !context.seasons.length ? "No crop season covers this period — add one in Crop Seasons or adjust the dates under Advanced." :
     !context.start || !context.end ? "Set both monitoring dates under Advanced." :
     context.end < context.start ? "The period end must be on or after its start." : "";
-  const busy = preview.isPending || commit.isPending || determination.isPending || createSubmission.isPending;
+  const busy = preview.isPending || commit.isPending || createSubmission.isPending;
   const lastMatchesEarly = !!last?.result && !!context && !contextIssue && (last.body.project_id ?? "") === projectId
     && last.body.monitoring_period_start === context.start && last.body.monitoring_period_end === context.end
     && JSON.stringify(last.body.season_ids) === JSON.stringify(context.seasons);
@@ -186,7 +145,6 @@ function CalculationsView() {
   const result = !dirty ? preview.data : cached?.result;
   // What Save commits: the live calculation, or the remembered one being shown.
   const bodyForSave = !dirty ? lastBody : cached ? { ...cached.body, signal_run_id: evidenceRun?.job_id ?? null } : null;
-  const blocking = result ? result.readiness.filter(isBlocking) : [];
   const openCalculations = (history.data ?? []).filter((r) => !r.legacy && r.status !== "superseded");
   // A saved, reviewable project calculation overlapping this period: saving a
   // new one would double count (the server refuses), so offer a correction.
@@ -364,24 +322,7 @@ function CalculationsView() {
           {!!result.result.leakage_block_reason && <p className="text-sm text-danger-700">{String(result.result.leakage_block_reason)}</p>}
           <p className="ui-meta">Calculated estimate — not issued credits.</p>
 
-          {blocking.length ? (
-            <div className="rounded-lg border border-warning-600/25 bg-warning-50/60 p-3 text-sm">
-              <p className="flex items-center gap-2 font-medium text-warning-700"><TriangleAlert className="size-4" />{blocking.length} thing{blocking.length > 1 ? "s" : ""} to fix before it can go to review</p>
-              <ul className="mt-2 space-y-1.5">
-                {blocking.map((c) => (
-                  <li key={c.requirement_id} className="flex flex-wrap items-center justify-between gap-2">
-                    <span>{c.explanation}</span>
-                    {DECISION_ITEMS.has(c.requirement_id) ? (canReview && projectId
-                      ? <Link className="font-medium underline" href={`${base}/calculations?requirement=${encodeURIComponent(c.requirement_id)}#evidence-review`}>Review</Link>
-                      : <span className="ui-meta">{projectId ? "Decided by a project lead" : "Add the field to a project first"}</span>)
-                      : FIX_TAB[c.requirement_id] && <Link className="font-medium underline" href={`${base}/${FIX_TAB[c.requirement_id]}`}>Fix</Link>}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : (
-            <p className="flex items-center gap-2 text-sm font-medium text-success-700"><CheckCircle2 className="size-4" />Ready to save{projectId ? " and submit for review" : ""}.</p>
-          )}
+          <p className="flex items-center gap-2 text-sm font-medium text-success-700"><CheckCircle2 className="size-4" />Ready to save{projectId ? " and submit for review" : ""}.</p>
 
           {!canWork && <p className="ui-meta">You can calculate here, but saving needs a lead or contributor role in {field.current_project?.name ?? "the project"}.</p>}
           {canWork && <div className="flex flex-wrap items-center gap-2">
@@ -412,7 +353,7 @@ function CalculationsView() {
         </Card>
       )}
 
-      <details className="ui-card" open={!!highlighted || manual}>
+      <details className="ui-card" open={manual}>
         <summary className="ui-subsection-title cursor-pointer">Advanced</summary>
         <div className="mt-4 space-y-5 text-sm">
           <section className="space-y-2">
@@ -452,35 +393,6 @@ function CalculationsView() {
                 ))}
               </Select>
             </label>
-          )}
-          {result && (
-            <section>
-              <p className="mb-2 font-medium">Full readiness checklist</p>
-              <ReadinessList checklist={result.readiness} highlighted={highlighted} />
-            </section>
-          )}
-          {canReview && projectId && result && context && (
-            <form id="evidence-review" key={highlighted} className="scroll-mt-6 space-y-2" onSubmit={(e) => {
-              e.preventDefault();
-              const data = new FormData(e.currentTarget);
-              void perform("Couldn't save review", async () => {
-                await determination.mutateAsync({ project_id: projectId, accounting_pathway: pathway, season_ids: context.seasons,
-                  monitoring_period_start: context.start, monitoring_period_end: context.end,
-                  requirement_id: String(data.get("requirement")), status: String(data.get("decision")), reason: String(data.get("reason")) });
-                preview.reset(); markDirty();
-                toast.success("Review saved", { description: "Click Calculate again to update the result." });
-              });
-            }}>
-              <p className="font-medium">Record an evidence review</p>
-              <Select aria-label="Requirement to review" name="requirement" required defaultValue={result.readiness.some((c) => c.requirement_id === highlighted) ? highlighted : ""}>
-                <option value="">Select a requirement</option>
-                {result.readiness.filter((c) => c.reviewer_authority !== "automated_only" && c.implementation_support !== "unsupported")
-                  .map((c) => <option key={c.requirement_id} value={c.requirement_id}>{c.requirement_id}</option>)}
-              </Select>
-              <Select aria-label="Review decision" name="decision" defaultValue="satisfied"><option value="satisfied">Evidence accepted</option><option value="not_applicable">Not applicable (where permitted)</option><option value="needs_review">Further review needed</option></Select>
-              <TextInput aria-label="Review justification" name="reason" required placeholder="Decision, sources and justification" />
-              <Button type="submit" variant="secondary" loading={determination.isPending}>Record review</Button>
-            </form>
           )}
         </div>
       </details>
