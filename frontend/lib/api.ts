@@ -17,6 +17,20 @@ export class ApiError extends Error {
   }
 }
 
+/** FastAPI's `detail` is a string, or a list of validation errors
+ * ({loc, msg}) for 422s — never show "[object Object]". */
+function describeDetail(detail: unknown): string {
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    return detail.map((d) => {
+      const item = d as { loc?: unknown[]; msg?: string };
+      const where = item.loc?.filter((part) => part !== "body").join(".");
+      return where ? `${where}: ${item.msg ?? ""}` : (item.msg ?? JSON.stringify(d));
+    }).join("; ");
+  }
+  return JSON.stringify(detail);
+}
+
 export async function apiFetch<T>(
   path: string,
   options: { method?: string; json?: unknown; headers?: Record<string, string>; form?: FormData } = {},
@@ -38,7 +52,7 @@ export async function apiFetch<T>(
 
   if (!res.ok) {
     const detail = typeof body === "object" && body && "detail" in body
-      ? String((body as { detail: unknown }).detail)
+      ? describeDetail((body as { detail: unknown }).detail)
       : `Request failed (${res.status})`;
     throw new ApiError(res.status, detail);
   }
@@ -59,7 +73,7 @@ export async function apiFetchBlob(path: string): Promise<Blob> {
     let detail = `Request failed (${res.status})`;
     try {
       const parsed = JSON.parse(text);
-      if (parsed && typeof parsed === "object" && "detail" in parsed) detail = String(parsed.detail);
+      if (parsed && typeof parsed === "object" && "detail" in parsed) detail = describeDetail(parsed.detail);
     } catch {
       // not JSON — keep the generic detail
     }

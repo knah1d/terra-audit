@@ -1,6 +1,6 @@
 "use client";
 
-import { Users, Activity, MapPinned, LayoutList, BrainCircuit, ScrollText, LayoutDashboard } from "lucide-react";
+import { Users, Activity, MapPinned, LayoutList, BrainCircuit, ScrollText, LayoutDashboard, FileText } from "lucide-react";
 import { revealNavigationItem } from "@/lib/reveal-navigation";
 import Link from "next/link";
 import { useEffect, useRef } from "react";
@@ -18,6 +18,7 @@ export function ProjectTabs({ projectId }: { projectId: string }) {
     { href: `/projects/${projectId}/members`, label: "Members", icon: Users },
     { href: `/projects/${projectId}/ai`, label: "AI workspace", icon: BrainCircuit },
     { href: `/reviews?project=${projectId}`, label: "Reviews", icon: LayoutList },
+    { href: `/projects/${projectId}/mrv`, label: "MRV report", icon: FileText },
   ];
   return (
     <nav ref={nav} aria-label="Project sections" className="flex gap-1 overflow-x-auto border-b border-border-subtle">

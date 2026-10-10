@@ -45,8 +45,9 @@ export function useSubmissionDiff(submissionId: string | null, hasPrevious: bool
 export function useCreateSubmission() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (body: { project_id: string; calculation_id: string; previous_submission_id?: string }) =>
-      apiFetch<ReviewSubmissionOut>(`/projects/${body.project_id}/submissions`, { method: "POST", json: body }),
+    // project_id travels in the URL only — the request schema forbids extra keys.
+    mutationFn: ({ project_id, ...body }: { project_id: string; calculation_id: string; previous_submission_id?: string }) =>
+      apiFetch<ReviewSubmissionOut>(`/projects/${project_id}/submissions`, { method: "POST", json: body }),
     onSuccess: (_data, vars) => {
       queryClient.invalidateQueries({ queryKey: ["project-submissions", vars.project_id] });
       queryClient.invalidateQueries({ queryKey: ["my-reviews"] });
