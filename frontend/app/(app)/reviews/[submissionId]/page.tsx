@@ -2,6 +2,7 @@
 
 import { formatDate, formatNumber, formatQueueTimestamp } from "@/lib/format";
 
+import { FileDown } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 import { useToast } from "@/components/ui/Toast";
@@ -13,6 +14,8 @@ import { Card } from "@/components/ui/Card";
 import { Select, TextInput, TextArea } from "@/components/ui/Field";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { apiFetchBlob } from "@/lib/api";
+import { downloadBlob } from "@/lib/download";
 import { useTeamUsers } from "@/hooks/use-team";
 import { useAddProjectMember, useProjectMembers } from "@/hooks/use-projects";
 import {
@@ -167,6 +170,19 @@ export default function SubmissionDetailPage() {
       <PageHeader
         title={<span className="flex items-center gap-2">Submission <Badge tone={STATUS_TONE[submission.status]}>{submission.status.replace(/_/g, " ")}</Badge></span>}
         subtitle="Internal approval only. This never sets or implies external verification or registry issuance."
+        actions={
+          // Final once internally approved; a watermarked draft before that.
+          <Button variant={submission.status === "internally_approved" ? "primary" : "secondary"} icon={FileDown}
+            onClick={() => void perform(async () => {
+              const rice = calculation.accounting_pathway === "vm0051_rice_awd";
+              downloadBlob(await apiFetchBlob(`/calculations/${calculation.calculation_id}/evidence/pdf`),
+                `${rice ? "mrv-report" : "calculation"}-${calculation.calculation_id}.pdf`);
+            })}>
+            {calculation.accounting_pathway === "vm0051_rice_awd"
+              ? submission.status === "internally_approved" ? "MRV report" : "MRV report (draft)"
+              : "Report PDF"}
+          </Button>
+        }
       />
 
       <Card>

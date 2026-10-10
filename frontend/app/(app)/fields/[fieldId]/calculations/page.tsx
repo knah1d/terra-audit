@@ -333,8 +333,8 @@ function CalculationsView() {
         <Card className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-3">
             <StatCard label="Estimated reductions (tCO2e)" value={formatNumber(result.result.final_issuance as number | null, "tco2e")} tone="success" />
-            {isRice && <StatCard label="Baseline CH4 (tCO2e)" value={formatNumber(result.result.e_baseline as number | null, "tco2e")} />}
-            {isRice && <StatCard label="Project CH4 (tCO2e)" value={formatNumber(result.result.e_project as number | null, "tco2e")} />}
+            {isRice && <StatCard label="Baseline CH4 (kg CH4)" value={formatNumber(result.result.e_baseline as number | null)} />}
+            {isRice && <StatCard label="Project CH4 (kg CH4)" value={formatNumber(result.result.e_project as number | null)} />}
           </div>
           {!!result.result.leakage_block_reason && <p className="text-sm text-danger-700">{String(result.result.leakage_block_reason)}</p>}
           <p className="ui-meta">Calculated estimate — not issued credits.</p>
@@ -480,9 +480,9 @@ function CalculationsView() {
                     ? <ButtonLink variant="secondary" size="sm" href={`/reviews/${encodeURIComponent(submissionFor(row.calculation_id)!.submission_id)}`}>Open review</ButtonLink>
                     : writable && row.project_id === projectId && <Button variant="secondary" size="sm" loading={createSubmission.isPending} onClick={() => void submitForReview(row.project_id!, row.calculation_id)}>Submit for review</Button>)}
                   <Button variant="ghost" size="sm" onClick={() => download(row, row.legacy ? `credit-history-${row.credit_history_id}.json` : `calculation-${row.calculation_id}.json`)}>JSON</Button>
-                  {!row.legacy && pathway === "vm0042_alm" && <Button variant="ghost" size="sm" onClick={() => void perform("Download failed", async () => {
-                    downloadBlob(await apiFetchBlob(`/calculations/${row.calculation_id}/evidence/pdf`), `calculation-${row.calculation_id}.pdf`);
-                  })}>PDF</Button>}
+                  {!row.legacy && <Button variant="ghost" size="sm" onClick={() => void perform("Download failed", async () => {
+                    downloadBlob(await apiFetchBlob(`/calculations/${row.calculation_id}/evidence/pdf`), `${isRice ? "mrv-report" : "calculation"}-${row.calculation_id}.pdf`);
+                  })}>{isRice ? "MRV report" : "PDF"}</Button>}
                 </div>
               </div>
             ))}
