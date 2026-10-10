@@ -117,6 +117,8 @@ def _project_mrv(org_id: str, project_id: str, user: dict, start: date | None, e
     approved = bool(included) and all(i["review_status"] == "internally_approved" for i in included)
     return {
         "project": project, "users": users, "included": included, "excluded": excluded,
+        "documents": projects_db.list_project_documents(org_id, project_id),
+        "document_categories": projects_db.PROJECT_DOCUMENT_CATEGORIES,
         "status": "final" if approved else "draft",
         "period_start": start.isoformat() if start else (min(starts) if starts else "-"),
         "period_end": end.isoformat() if end else (max(ends) if ends else "-"),
@@ -182,6 +184,12 @@ def project_mrv_package(project_id: str, start: date | None = None, end: date | 
 
     files: dict[str, bytes] = {"project-mrv-report.pdf": generate_project_mrv_report_vm0051(ctx)}
     missing = []
+    for doc in ctx["documents"]:
+        try:
+            with get_storage().open(doc["storage_key"]) as f:
+                files[f"project-documents/{doc['category']}/{doc['document_id'][:8]}-{sanitize_filename(doc['filename'])}"] = f.read()
+        except (OSError, KeyError, ValueError):
+            missing.append(doc.get("filename"))
     for item in ctx["included"]:
         calc = item["calculation"]
         folder = f"fields/{sanitize_filename(calc['field_id'])}"

@@ -977,10 +977,22 @@ def generate_project_mrv_report_vm0051(ctx: dict) -> bytes:
     pdf.data_table(["Requirement", "Status across fields"],
                    [[rid, ", ".join(f"{_label(k)}: {v}" for k, v in sorted(counts.items()))]
                     for rid, counts in sorted(statuses.items())], (85, 85), mono=(0,))
-    pdf.note("Requirements marked 'Unsupported' are not quantified by this platform and must be addressed in the "
-             "project documentation for the verifier.")
+    pdf.note("Requirements marked 'Unsupported' are not quantified by this platform; address them in the project "
+             "documentation (Section 6), e.g. the leakage assessment and other emission sources.")
 
-    pdf.section("6. Evidence Package and Data Integrity")
+    pdf.section("6. Project Documentation")
+    categories, documents = ctx.get("document_categories") or {}, ctx.get("documents") or []
+    if documents:
+        pdf.data_table(["Document", "Title", "File", "SHA-256"],
+                       [[categories.get(d["category"], _label(d["category"])), d["title"], d["filename"], d["sha256"]]
+                        for d in documents], (34, 36, 34, 66), mono=(3,))
+    expected = ["pdd", "monitoring_plan", "additionality", "land_tenure", "leakage"]
+    missing = [categories.get(c, c) for c in expected if not any(d["category"] == c for d in documents)]
+    if missing:
+        pdf.notice("Not yet provided: " + ", ".join(missing) + ". A verifier will normally expect these.", "amber")
+    pdf.note("Project documents are included in the evidence package (folder project-documents/).")
+
+    pdf.section("7. Evidence Package and Data Integrity")
     pdf.data_table(["Field", "Calculation", "Snapshot SHA-256"],
                    [[field(i)["name"], i["calculation"]["calculation_id"][:12], i["snapshot_sha256"]] for i in items],
                    (34, 26, 110), mono=(1, 2))
@@ -988,10 +1000,10 @@ def generate_project_mrv_report_vm0051(ctx: dict) -> bytes:
              "snapshot (JSON), the Sentinel-1 analysis results, the attached field documents, and manifest.json "
              "listing the SHA-256 of every file.")
 
-    pdf.section("7. Assumptions and Limitations")
+    pdf.section("8. Assumptions and Limitations")
     sample = items[0]["calculation"]["result"] if items else {"ef_c_used": "-"}
     pdf.numbered(_rice_assumptions(sample) + _RICE_LIMITATIONS)
-    pdf.section("8. Declaration")
+    pdf.section("9. Declaration")
     pdf.paragraph(_DECLARATION)
     return bytes(pdf.output())
 
