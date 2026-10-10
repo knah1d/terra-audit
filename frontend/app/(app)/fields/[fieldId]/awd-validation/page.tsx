@@ -109,15 +109,9 @@ export default function ExternalAWDValidationPage() {
                 {prediction.error instanceof ApiError ? prediction.error.detail : prediction.error.message}
               </Alert>}
               {result && !prediction.error && <>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <p className="ui-meta">Classification</p>
-                    <p className="text-xl font-semibold">{result.comparison.ml_is_awd ? "AWD" : "Not AWD"}</p>
-                  </div>
-                  <div>
-                    <p className="ui-meta">AWD score</p>
-                    <p className="text-xl font-semibold tabular-nums">{pct(result.awd_score)}</p>
-                  </div>
+                <div>
+                  <p className="ui-meta">AWD score</p>
+                  <p className="text-3xl font-semibold tabular-nums">{pct(result.awd_score)}</p>
                 </div>
                 <p className="text-xs text-text-secondary">
                   Window {result.window_start} – {result.window_end} · {result.observations} ascending Sentinel-1
@@ -125,22 +119,18 @@ export default function ExternalAWDValidationPage() {
                   Satellite Embedding {result.embedding_year}
                 </p>
                 <p className="text-sm">
-                  <strong>Compared with detector: </strong>
+                  <strong>Detector on the same window: </strong>
                   {result.comparison.status === "no_detector_run" ? "no detector run to compare." : <>
-                    {result.comparison.agrees ? "they agree" : "they disagree"} — ML says{" "}
-                    {result.comparison.ml_is_awd ? "AWD" : "not AWD"} ({pct(result.awd_score)}{" "}
-                    {result.comparison.ml_is_awd ? "≥" : "<"} 50%); the detector found{" "}
                     {result.comparison.detector_drydowns} drydown{result.comparison.detector_drydowns === 1 ? "" : "s"}{" "}
-                    ({result.comparison.detector_category === "multiple_drainage" ? "AWD: multiple drainage"
-                      : "not AWD: " + (result.comparison.detector_category === "single_drainage"
-                        ? "single drainage" : "continuous flooding")}).
+                    ({result.comparison.detector_category === "multiple_drainage" ? "multiple drainage"
+                      : result.comparison.detector_category === "single_drainage" ? "single drainage" : "continuous flooding"}).
                   </>}
                 </p>
                 {/* AI explanation of this exact prediction vs the detector (needs the field's project). */}
                 {field.current_project && result.comparison.status === "compared" && (
                   <ExplainButton projectId={field.current_project.project_id}
                     request={{ action: "explain_awd_check", field_id: field.field_id }}>
-                    {result.comparison.agrees ? "Why do they agree?" : "Why do they disagree?"}
+                    Explain this AWD score
                   </ExplainButton>
                 )}
               </>}

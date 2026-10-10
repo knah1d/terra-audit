@@ -658,7 +658,7 @@ def explain_signal_run(org_id, project_id, user_id, field_id, *, window_start, w
 
 
 def explain_awd_check(org_id, project_id, user_id, field_id, *, max_tokens=DEFAULT_PACKET_TOKENS):
-    """Why the ML practice model and the rule-based detector agree or disagree."""
+    """What the ML model's AWD score means for this season, next to the detector's drydown count."""
     from src.ai.ml.external_awd import read_metrics
     from src.persistence.database import list_completed_jobs
     b = _Builder(org_id, project_id, user_id, field_id, "explain_awd_check")
@@ -669,19 +669,17 @@ def explain_awd_check(org_id, project_id, user_id, field_id, *, max_tokens=DEFAU
     job_id, _ = _signal_run(b, prediction["window_start"], prediction["window_end"])
     comparison = prediction.get("comparison") or {}
     facts = {"window_start": prediction["window_start"], "window_end": prediction["window_end"],
-             "ml_classification": "AWD" if comparison.get("ml_is_awd") else "not AWD",
-             "awd_score_percent": round(100 * prediction["awd_score"], 1), "awd_decision_threshold_percent": 50,
+             "awd_score_percent": round(100 * prediction["awd_score"], 1),
              "radar_observations": prediction.get("observations"), "largest_gap_days": prediction.get("max_gap_days"),
              "embedding_year": prediction.get("embedding_year"), "model_version": prediction.get("model_version"),
              "detector_drydowns": comparison.get("detector_drydowns"),
-             "detector_category": comparison.get("detector_category"),
-             "agrees": comparison.get("agrees")}
+             "detector_category": comparison.get("detector_category")}
     route = f"/fields/{quote(field_id, safe='')}/awd-validation"
     b.fact("ml_prediction", facts)
     b.source(f"awd_prediction:{job_id}", "ML practice classification", "awd_prediction", facts, record_id=job_id, route=route)
     b.source(f"awd_rule:{job_id}", "How the two are compared", "awd_prediction",
-             "The model calls a season AWD when its AWD score is at least 50%.\n"
-             "The detector treats a season as AWD (multiple drainage) only with two or more drydowns.\n"
+             "The AWD score is the model's estimate, in percent, that the season was managed with AWD.\n"
+             "The detector counts drydowns; two or more is the multiple-drainage water regime.\n"
              "The model's score is not calibrated and it never changes a calculation.", route=route)
     metrics = read_metrics() or {}
     if metrics:
