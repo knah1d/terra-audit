@@ -4,7 +4,7 @@ credit_history). A field belongs to at most one project at a time
 (src.projects.repository enforces it), and membership never infers or
 changes a field's accounting methodology (field_type).
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile, status
 
 from backend.deps import get_current_user, require_writer
 from backend.access import project_role, require_project_access, require_project_lead
@@ -226,3 +226,78 @@ def get_projects_for_field(field_id: str, user=Depends(get_current_user)):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Field not found")
     return [FieldMembershipOut(**m) for m in projects_db.list_projects_for_field(user["org_id"], field_id)
             if user["role"] == "admin" or projects_db.get_project_member(user["org_id"], m["project_id"], user["user_id"])]
+
+
+# --------------------------------------------------------------------------
+# Project documents (PDD, monitoring plan, additionality, ...) — shipped in
+# the MRV evidence package next to the field evidence.
+# --------------------------------------------------------------------------
+
+@router.get("/projects/{project_id}/documents")
+def list_project_documents(project_id: str, user=Depends(get_current_user)):
+    require_project_access(user["org_id"], project_id, user)
+    _owned_project(user["org_id"], project_id)
+    emails = {u["user_id"]: u["email"] for u in list_org_users(user["org_id"])}
+    return {
+        "categories": projects_db.PROJECT_DOCUMENT_CATEGORIES,
+        "documents": [{k: v for k, v in d.items() if k not in ("storage_key", "org_id")}
+                      | {"uploaded_by_email": emails.get(d["uploaded_by"])}
+                      for d in projects_db.list_project_documents(user["org_id"], project_id)],
+    }
+
+
+@router.post("/projects/{project_id}/documents", status_code=status.HTTP_201_CREATED)
+async def upload_project_document(project_id: str, category: str = Form(...), title: str = Form(""),
+                                  file: UploadFile = None, user=Depends(require_writer)):
+    import hashlib
+    import io
+    import uuid
+    from backend.access import require_project_contributor
+    from backend.config import ALLOWED_ATTACHMENT_CONTENT_TYPES, MAX_ATTACHMENT_SIZE_BYTES
+    from src.persistence.storage import get_storage, make_storage_key, sanitize_filename
+
+    require_project_contributor(user["org_id"], project_id, user)
+    _owned_project(user["org_id"], project_id)
+    if category not in projects_db.PROJECT_DOCUMENT_CATEGORIES:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Unknown document category")
+    if file is None:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "A file is required")
+    if file.content_type not in ALLOWED_ATTACHMENT_CONTENT_TYPES:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            "Unsupported file type. Upload a PDF, Word document, image, CSV or text file.")
+    content = await file.read(MAX_ATTACHMENT_SIZE_BYTES + 1)
+    if len(content) > MAX_ATTACHMENT_SIZE_BYTES:
+        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                            f"File exceeds the {MAX_ATTACHMENT_SIZE_BYTES // (1024 * 1024)} MB upload limit")
+    filename = sanitize_filename(file.filename or "document")
+    document_id = uuid.uuid4().hex
+    storage_key = make_storage_key(user["org_id"], document_id, filename)
+    get_storage().save(storage_key, io.BytesIO(content))
+    projects_db.create_project_document(
+        user["org_id"], project_id, category, title.strip()[:200] or filename, filename, file.content_type,
+        len(content), storage_key, hashlib.sha256(content).hexdigest(), user["user_id"], document_id)
+    return {k: v for k, v in projects_db.get_project_document(user["org_id"], project_id, document_id).items()
+            if k not in ("storage_key", "org_id")}
+
+
+@router.get("/projects/{project_id}/documents/{document_id}/download")
+def download_project_document(project_id: str, document_id: str, user=Depends(get_current_user)):
+    from fastapi.responses import Response
+    from src.persistence.storage import get_storage
+
+    require_project_access(user["org_id"], project_id, user)
+    document = projects_db.get_project_document(user["org_id"], project_id, document_id)
+    if document is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Document not found")
+    with get_storage().open(document["storage_key"]) as f:
+        content = f.read()
+    return Response(content=content, media_type=document["content_type"],
+                    headers={"Content-Disposition": f'attachment; filename="{document["filename"]}"'})
+
+
+@router.delete("/projects/{project_id}/documents/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
+def remove_project_document(project_id: str, document_id: str, user=Depends(require_writer)):
+    require_project_lead(user["org_id"], project_id, user)
+    if not projects_db.remove_project_document(user["org_id"], project_id, document_id):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Document not found")
+    return None

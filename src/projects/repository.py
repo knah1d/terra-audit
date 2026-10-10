@@ -153,6 +153,29 @@ def initialize_tables(conn):
     conn.execute(text("CREATE INDEX IF NOT EXISTS idx_attachments_field ON attachments(org_id, field_id)"))
     conn.execute(text("CREATE INDEX IF NOT EXISTS idx_attachments_target ON attachments(org_id, target_type, target_id)"))
 
+    # Project-level documents for the verifier (PDD, monitoring plan,
+    # additionality, land tenure, ...). Bytes live in src.persistence.storage
+    # like field attachments; removal stamps removed_at, the row is kept.
+    conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS project_documents (
+            org_id        TEXT NOT NULL,
+            document_id   TEXT NOT NULL,
+            project_id    TEXT NOT NULL,
+            category      TEXT NOT NULL,
+            title         TEXT NOT NULL,
+            filename      TEXT NOT NULL,
+            content_type  TEXT NOT NULL,
+            size_bytes    INTEGER NOT NULL,
+            storage_key   TEXT NOT NULL,
+            sha256        TEXT NOT NULL,
+            uploaded_by   TEXT,
+            uploaded_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            removed_at    TIMESTAMP,
+            PRIMARY KEY (org_id, document_id)
+        )
+    """))
+    conn.execute(text("CREATE INDEX IF NOT EXISTS idx_project_documents ON project_documents(org_id, project_id)"))
+
 
 def _now_iso():
     return datetime.now(timezone.utc).isoformat()
@@ -547,6 +570,62 @@ def list_farms_for_field(org_id: str, field_id: str) -> list[dict]:
 # --------------------------------------------------------------------------
 # Attachments (metadata rows — file bytes live in src.persistence.storage)
 # --------------------------------------------------------------------------
+
+PROJECT_DOCUMENT_CATEGORIES = {
+    "pdd": "Project description (PDD)",
+    "monitoring_plan": "Monitoring plan",
+    "additionality": "Additionality demonstration",
+    "land_tenure": "Land tenure / right of use",
+    "leakage": "Leakage assessment",
+    "emissions_other": "Other emission sources (N2O, biomass burning)",
+    "stakeholder": "Stakeholder consultation",
+    "other": "Other",
+}
+
+
+def create_project_document(org_id: str, project_id: str, category: str, title: str, filename: str,
+                            content_type: str, size_bytes: int, storage_key: str, sha256: str,
+                            uploaded_by: str, document_id: str) -> None:
+    with get_db_connection() as conn:
+        conn.execute(text("""
+            INSERT INTO project_documents (org_id, document_id, project_id, category, title, filename,
+                                           content_type, size_bytes, storage_key, sha256, uploaded_by)
+            VALUES (:org_id, :document_id, :project_id, :category, :title, :filename,
+                    :content_type, :size_bytes, :storage_key, :sha256, :uploaded_by)
+        """), {"org_id": org_id, "document_id": document_id, "project_id": project_id, "category": category,
+               "title": title, "filename": filename, "content_type": content_type, "size_bytes": size_bytes,
+               "storage_key": storage_key, "sha256": sha256, "uploaded_by": uploaded_by})
+        conn.commit()
+
+
+def list_project_documents(org_id: str, project_id: str) -> list[dict]:
+    with get_db_connection() as conn:
+        rows = conn.execute(text("""
+            SELECT * FROM project_documents
+            WHERE org_id = :org_id AND project_id = :project_id AND removed_at IS NULL
+            ORDER BY category, uploaded_at
+        """), {"org_id": org_id, "project_id": project_id}).mappings().fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_project_document(org_id: str, project_id: str, document_id: str) -> dict | None:
+    with get_db_connection() as conn:
+        row = conn.execute(text("""
+            SELECT * FROM project_documents
+            WHERE org_id = :org_id AND project_id = :project_id AND document_id = :document_id AND removed_at IS NULL
+        """), {"org_id": org_id, "project_id": project_id, "document_id": document_id}).mappings().fetchone()
+    return dict(row) if row else None
+
+
+def remove_project_document(org_id: str, project_id: str, document_id: str) -> bool:
+    with get_db_connection() as conn:
+        result = conn.execute(text("""
+            UPDATE project_documents SET removed_at = CURRENT_TIMESTAMP
+            WHERE org_id = :org_id AND project_id = :project_id AND document_id = :document_id AND removed_at IS NULL
+        """), {"org_id": org_id, "project_id": project_id, "document_id": document_id})
+        conn.commit()
+    return result.rowcount > 0
+
 
 ATTACHMENT_TARGET_TYPES = {"field", "season", "observation", "practice_event", "soil_sample", "soil_sampling_plan"}
 

@@ -37,17 +37,19 @@ export default function ProjectFieldsPage() {
           Only standalone fields are listed — a field belongs to one project at a time. Its history is kept.{" "}
           <Link className="underline" href={`/fields/new?project=${encodeURIComponent(project.project_id)}`}>Register a new field for this project</Link>
         </p>
-        <form className="flex flex-wrap gap-2" onSubmit={(e) => {
+        <form className="grid grid-cols-1 items-end gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]" onSubmit={(e) => {
           e.preventDefault();
           assign.mutateAsync({ field_id: fieldId, effective_start_date: effectiveDate }).then(() => { setFieldId(""); toast.success("Field assigned"); })
             .catch((err) => toast.error(err, "Failed to assign field"));
         }}>
-          <Select aria-label="Field to assign" value={fieldId} onChange={(e) => setFieldId(e.target.value)} required className="max-w-xs">
+          <label className="ui-label flex min-w-0 flex-col gap-2">Field to assign
+          <Select aria-label="Field to assign" value={fieldId} onChange={(e) => setFieldId(e.target.value)} required>
             <option value="">Choose a field…</option>
             {assignable.map((f) => <option key={f.field_id} value={f.field_id}>{f.name}{f.district ? ` · ${f.district}` : ""}</option>)}
           </Select>
-          <label className="ui-label">In the project from<TextInput type="date" required value={effectiveDate} onChange={e => setEffectiveDate(e.target.value)} /></label>
-          <Button type="submit" loading={assign.isPending}>Assign to project</Button>
+          </label>
+          <label className="ui-label flex min-w-0 flex-col gap-2">In the project from<TextInput type="date" required value={effectiveDate} onChange={e => setEffectiveDate(e.target.value)} /></label>
+          <Button type="submit" loading={assign.isPending} className="h-[var(--control-h)]">Assign to project</Button>
         </form>
       </Card>}
 
