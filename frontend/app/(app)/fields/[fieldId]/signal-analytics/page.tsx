@@ -7,6 +7,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "@/app/providers";
 import { useToast } from "@/components/ui/Toast";
+import { ExplainButton } from "@/components/ai/ExplainDrawer";
 import { AuditTrailTable } from "@/components/signal/AuditTrailTable";
 import { SignalTimeseriesChart } from "@/components/signal/SignalTimeseriesChart";
 import { useFieldContext } from "@/components/fields/FieldContext";
@@ -271,6 +272,16 @@ function SignalAnalyticsView() {
                 <StatCard label="Season Length" value={`${effectiveResult.season_length_days} d${effectiveResult.from_phenology ? "" : " (default)"}`} />
                 <StatCard label="Detector Used" value={effectiveResult.detector_used} />
               </div>
+              {/* AI explanation of the saved rule-based run (needs the field's project). */}
+              {field.current_project && effectiveResult.detector_used === "Threshold Gate (rule-based)" && (
+                <div className="flex flex-wrap items-center gap-2 text-sm text-text-secondary">
+                  <span>Wondering why?</span>
+                  <ExplainButton projectId={field.current_project.project_id} request={{
+                    action: "explain_signal_run", field_id: field.field_id,
+                    window_start: effectiveResult.window_start, window_end: effectiveResult.window_end,
+                  }}>Why {awdCount} drydown{awdCount === 1 ? "" : "s"}?</ExplainButton>
+                </div>
+              )}
 
               <div className="ui-card">
                 <SignalTimeseriesChart

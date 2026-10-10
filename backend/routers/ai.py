@@ -206,7 +206,7 @@ def predict_external_awd(
     features.update(embedding)
     score = predict(bundle, features)
     is_awd = score >= 0.5
-    return {
+    response = {
         "field_id": field_id,
         "experimental": True,
         "task": "awd_practice_classification",
@@ -224,3 +224,11 @@ def predict_external_awd(
         "comparison": _compare(detector, is_awd),
         "affects_carbon_calculation": False,
     }
+    # Kept as a completed job so an AI explanation can cite this exact result
+    # ("why do the model and the detector agree / disagree?"). Never an input
+    # to any calculation.
+    from src.jobs.queue import record_completed_job
+    record_completed_job(user["org_id"], "awd_ml_prediction",
+                         {"field_id": field_id, "window_start": window[0], "window_end": window[1],
+                          "requested_by": user["user_id"]}, response)
+    return response

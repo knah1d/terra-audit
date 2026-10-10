@@ -31,7 +31,7 @@ export function ExplainButton({ projectId, request, children }: {
     </span>
     <dialog ref={dialog} aria-label="AI draft explanation" onCancel={() => setOpen(false)} className="fixed m-auto max-h-[85vh] w-[min(720px,95vw)] overflow-y-auto rounded-xl border border-border bg-background p-6 text-text-primary backdrop:bg-black/60">
       <div className="flex items-start justify-between gap-4">
-        <h2 className="ui-section-title">AI explanation — draft, not an official readiness decision</h2>
+        <h2 className="ui-section-title">AI explanation — a cited draft; it never changes a result</h2>
         <Button variant="secondary" size="sm" onClick={() => setOpen(false)}>Close</Button>
       </div>
       {ai.loading && <p role="status" className="my-4">Preparing evidence, generating a draft, and checking citations… This may take a few minutes.</p>}

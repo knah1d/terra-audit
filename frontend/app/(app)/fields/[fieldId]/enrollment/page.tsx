@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { useState } from "react";
 import { useToast } from "@/components/ui/Toast";
+import { ExplainButton } from "@/components/ai/ExplainDrawer";
 import { useFieldContext } from "@/components/fields/FieldContext";
 import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
@@ -53,6 +54,14 @@ export default function EnrollmentPage() {
                 Methodology version used: <strong>{enrollment.data.methodology_bundle.bundle_version}</strong>
                 {enrollment.data.methodology_bundle.effective_from && ` (in force from ${enrollment.data.methodology_bundle.effective_from})`}
               </p>
+            )}
+            {field.current_project && (
+              <div className="mt-3">
+                <ExplainButton projectId={field.current_project.project_id}
+                  request={{ action: "applicable_requirements", field_id: field.field_id }}>
+                  Which requirements apply, and why?
+                </ExplainButton>
+              </div>
             )}
           </Card>
 

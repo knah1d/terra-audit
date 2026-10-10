@@ -15,7 +15,8 @@ router = APIRouter(prefix="/projects/{project_id}/ai", tags=["AI explanations"])
 
 class ExplainRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    action: Literal["explain_block", "missing_evidence", "applicable_requirements", "explain_leakage", "diff_since_previous"]
+    action: Literal["explain_block", "missing_evidence", "applicable_requirements", "explain_leakage", "diff_since_previous",
+                    "explain_signal_run", "explain_awd_check"]
     field_id: str = Field(min_length=1)
     calculation_id: str | None = None
     assessment_id: str | None = None
@@ -23,6 +24,8 @@ class ExplainRequest(BaseModel):
     monitoring_period_end: str | None = None
     season_ids: list[str] | None = None
     requirement_id: str | None = None
+    window_start: str | None = None  # explain_signal_run: the saved run's window
+    window_end: str | None = None
 
 
 def access(user, project_id, field_id=None):

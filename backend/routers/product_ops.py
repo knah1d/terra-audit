@@ -3,6 +3,7 @@ import importlib.util
 import os
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import text
 from backend.deps import require_admin
 from backend.config import JWT_SECRET, _DEV_ONLY_JWT_SECRET, EMAIL_CONFIGURED
@@ -46,3 +47,31 @@ def accounting_conflicts(user=Depends(require_admin)):
     from src.projects.repository import overlapping_project_memberships
     return {"conflicts": find_conflicts(user["org_id"]),
             "overlapping_memberships": overlapping_project_memberships(user["org_id"])}
+
+
+@router.get("/admin/ai-provider-permission")
+def get_ai_provider_permission(user=Depends(require_admin)):
+    """Whether this organization lets project evidence go to the configured
+    external AI provider (Groq or OpenAI) for explanations."""
+    from src.ai import workspace as ws
+    from src.ai.providers import provider_name
+    name = provider_name()
+    external = name in {"groq", "openai"}
+    return {"provider": name, "external": external,
+            "allowed": ws.provider_allowed(user["org_id"], name) if external else True}
+
+
+class ProviderPermissionUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    allowed: bool
+
+
+@router.put("/admin/ai-provider-permission")
+def set_ai_provider_permission(body: ProviderPermissionUpdate, user=Depends(require_admin)):
+    from fastapi import HTTPException
+    from src.ai import workspace as ws
+    from src.ai.providers import provider_name
+    name = provider_name()
+    if name not in {"groq", "openai"}:
+        raise HTTPException(422, "Only an external AI provider (groq or openai) needs this permission.")
+    return ws.set_provider_allowed(user["org_id"], name, body.allowed, user["user_id"])

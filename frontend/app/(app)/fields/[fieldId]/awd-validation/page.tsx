@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { ExplainButton } from "@/components/ai/ExplainDrawer";
 import { useFieldContext } from "@/components/fields/FieldContext";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
@@ -135,6 +136,13 @@ export default function ExternalAWDValidationPage() {
                         ? "single drainage" : "continuous flooding")}).
                   </>}
                 </p>
+                {/* AI explanation of this exact prediction vs the detector (needs the field's project). */}
+                {field.current_project && result.comparison.status === "compared" && (
+                  <ExplainButton projectId={field.current_project.project_id}
+                    request={{ action: "explain_awd_check", field_id: field.field_id }}>
+                    {result.comparison.agrees ? "Why do they agree?" : "Why do they disagree?"}
+                  </ExplainButton>
+                )}
               </>}
             </>}
           </section>

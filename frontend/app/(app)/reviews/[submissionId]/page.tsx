@@ -9,6 +9,7 @@ import { useParams } from "next/navigation";
 import { useState } from "react";
 import { useSession } from "@/app/providers";
 import { useToast } from "@/components/ui/Toast";
+import { ExplainButton } from "@/components/ai/ExplainDrawer";
 import { InputProvenance } from "@/components/calculations/InputProvenance";
 import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
@@ -241,6 +242,15 @@ export default function SubmissionDetailPage() {
           <Button variant="ghost" size="sm" className="mt-2" onClick={() => setShowDiff((v) => !v)}>
             {showDiff ? "Hide" : "Compare to previous version"}
           </Button>
+        )}
+        {calculation.supersedes_calculation_id && (
+          <div className="mt-2">
+            {/* AI explanation of what changed in this corrected version, and why it matters. */}
+            <ExplainButton projectId={submission.project_id}
+              request={{ action: "diff_since_previous", field_id: calculation.field_id, calculation_id: calculation.calculation_id }}>
+              Explain what changed since the last version
+            </ExplainButton>
+          </div>
         )}
         {showDiff && diff.data && (
           <div className="mt-2 rounded-lg bg-surface-muted/40 p-3 text-sm">

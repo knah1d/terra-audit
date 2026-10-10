@@ -7,7 +7,6 @@ import { useSearchParams } from "next/navigation";
 import { useRef, useState } from "react";
 import { useToast } from "@/components/ui/Toast";
 import { useSession } from "@/app/providers";
-import { ExplainButton } from "@/components/ai/ExplainDrawer";
 import { useFieldContext } from "@/components/fields/FieldContext";
 import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
@@ -73,13 +72,12 @@ function download(value: unknown, name: string) {
   const a = document.createElement("a"); a.href = url; a.download = name; a.click(); URL.revokeObjectURL(url);
 }
 
-function ReadinessList({ checklist, explain, highlighted }: { checklist: ReadinessCheck[]; explain?: (id: string) => React.ReactNode; highlighted?: string }) {
+function ReadinessList({ checklist, highlighted }: { checklist: ReadinessCheck[]; highlighted?: string }) {
   return (
     <div className="space-y-2">
       {checklist.map((c) => (
         <div key={c.requirement_id} className={`flex flex-wrap items-start gap-2 border-t border-border py-2 text-sm first:border-t-0 first:pt-0 ${c.requirement_id === highlighted ? "rounded-lg bg-brand-50 px-3" : ""}`}>
           <Badge tone={READINESS_TONE[c.status]}>{c.status.replace("_", " ")}</Badge>
-          {explain && isBlocking(c) && explain(c.requirement_id)}
           <div className="min-w-0 flex-1">
             <p className="font-mono text-xs text-text-tertiary">{c.requirement_id}</p>
             <p>{c.explanation}</p>
@@ -268,10 +266,6 @@ function CalculationsView() {
     });
   }
 
-  const explain = (id: string) => projectId && context ? (
-    <ExplainButton projectId={projectId} request={{ action: "missing_evidence", field_id: field.field_id, requirement_id: id,
-      monitoring_period_start: context.start, monitoring_period_end: context.end, season_ids: context.seasons }}>Explain</ExplainButton>
-  ) : null;
 
   // ---- prerequisites -------------------------------------------------------
   if (seasons.isLoading || (isRice && runs.isLoading)) return <div className="ui-container"><p role="status">Loading…</p></div>;
@@ -462,7 +456,7 @@ function CalculationsView() {
           {result && (
             <section>
               <p className="mb-2 font-medium">Full readiness checklist</p>
-              <ReadinessList checklist={result.readiness} explain={explain} highlighted={highlighted} />
+              <ReadinessList checklist={result.readiness} highlighted={highlighted} />
             </section>
           )}
           {canReview && projectId && result && context && (

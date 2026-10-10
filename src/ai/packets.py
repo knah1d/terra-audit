@@ -35,7 +35,7 @@ DEFAULT_PACKET_TOKENS = 12000  # Leaves room in a 16k context for prompt/schema/
 MAX_SENTENCE_CHARS = 400
 MAX_SOURCE_SENTENCES = 64
 ACTIONS = {"explain_block", "missing_evidence", "applicable_requirements",
-           "explain_leakage", "diff_since_previous"}
+           "explain_leakage", "diff_since_previous", "explain_signal_run", "explain_awd_check"}
 
 REQUIREMENT_FIX_MAP = {
     "common.methodology_applicability": ("methodology_applicability", "/fields/{field_id}/calculations"),
@@ -595,11 +595,114 @@ def diff_since_previous(org_id, project_id, user_id, field_id, calculation_id, *
     return b.finish(max_tokens)
 
 
+# Rule-based AWD detector settings (src/signals/threshold_gate.py AdaptiveAWDGate defaults).
+FLOOD_Z_THRESHOLD = -0.8
+DRYDOWN_JUMP_SIGMA = 1.2
+
+
+def _signal_run(b, window_start, window_end):
+    """Adds the saved rule-based satellite run for this window as facts and
+    citable sources; returns (job_id, summary)."""
+    from src.carbon.signal_evidence import candidates
+    from src.persistence.database import get_job
+    run = next((r for r in candidates(b.org, b.field_id)
+                if r["window_start"] == window_start and r["window_end"] == window_end), None)
+    if run is None:
+        raise ValueError("No saved rule-based satellite analysis for this field and window")
+    result = (get_job(b.org, run["job_id"]) or {}).get("result") or {}
+    rows = result.get("timeseries") or []
+    vv_std = result.get("vv_std")
+    summary = {
+        "window_start": window_start, "window_end": window_end, "detector": result.get("detector_used"),
+        "observations": result.get("n_observations"), "drydowns_detected": result.get("total_awd"),
+        "drydown_dates": result.get("awd_dates") or [],
+        "flooded_dates": [r["date"] for r in rows if r.get("is_flooded")],
+        "sowing_date": result.get("sowing_date"), "harvest_date": result.get("harvest_date"),
+        "season_length_days": result.get("season_length_days"),
+        "season_dates_from_radar": bool(result.get("from_phenology")),
+        "vv_mean_db": round(result["vv_mean"], 3) if result.get("vv_mean") is not None else None,
+        "vv_std_db": round(vv_std, 3) if vv_std is not None else None,
+    }
+    route = f"/fields/{quote(b.field_id, safe='')}/signal-analytics"
+    job_id = run["job_id"]
+    b.fact("signal_run", summary)
+    b.source(f"signal_run:{job_id}", "Saved satellite analysis", "signal_run", summary, record_id=job_id, route=route)
+    rule = (f"An observation counts as flooded when its VV z-score is below {FLOOD_Z_THRESHOLD}.\n"
+            f"A drydown is counted when VV rises by more than {DRYDOWN_JUMP_SIGMA} standard deviations"
+            + (f" ({round(DRYDOWN_JUMP_SIGMA * vv_std, 3)} dB for this field)" if vv_std is not None else "")
+            + " directly after a flooded observation.\n"
+            "Fewer than two drydowns places the season in a non-AWD VM0051 water-regime category.")
+    b.fact("detector_rule", {"flood_z_threshold": FLOOD_Z_THRESHOLD, "drydown_jump_sigma": DRYDOWN_JUMP_SIGMA})
+    b.source(f"signal_rule:{job_id}", "Rule-based AWD detector", "signal_run", rule, route=route)
+    for row in rows:
+        obs = {"date": row.get("date"),
+               "vv_zscore": round(row["vv_zscore"], 3) if row.get("vv_zscore") is not None else None,
+               "flooded": bool(row.get("is_flooded")),
+               "vv_change_db": round(row["vv_diff"], 3) if row.get("vv_diff") is not None else None,
+               "drydown": bool(row.get("drydown_event"))}
+        b.source(f"signal_observation:{job_id}:{row.get('date')}", f"Radar observation {row.get('date')}",
+                 "signal_observation", obs, record_id=job_id, route=route)
+    if not summary["season_dates_from_radar"]:
+        b.packet["limitations"].append("Sowing and harvest were not detected in the radar signal; the season length is a fallback estimate.")
+    return job_id, summary
+
+
+def explain_signal_run(org_id, project_id, user_id, field_id, *, window_start, window_end,
+                       max_tokens=DEFAULT_PACKET_TOKENS):
+    """Why the saved satellite analysis found this many drydowns."""
+    b = _Builder(org_id, project_id, user_id, field_id, "explain_signal_run")
+    job_id, _ = _signal_run(b, window_start, window_end)
+    b.packet.update(target_id=job_id, request_scope={"start": window_start, "end": window_end})
+    b.methodology("vm0051-v1.1", "§8.2.3 Eq. 6")
+    return b.finish(max_tokens)
+
+
+def explain_awd_check(org_id, project_id, user_id, field_id, *, max_tokens=DEFAULT_PACKET_TOKENS):
+    """Why the ML practice model and the rule-based detector agree or disagree."""
+    from src.ai.ml.external_awd import read_metrics
+    from src.persistence.database import list_completed_jobs
+    b = _Builder(org_id, project_id, user_id, field_id, "explain_awd_check")
+    prediction = next((j["result"] for j in list_completed_jobs(org_id, "awd_ml_prediction")
+                       if (j["result"] or {}).get("field_id") == field_id), None)
+    if prediction is None:
+        raise ValueError("Run the ML classification on the AWD Check tab first")
+    job_id, _ = _signal_run(b, prediction["window_start"], prediction["window_end"])
+    comparison = prediction.get("comparison") or {}
+    facts = {"window_start": prediction["window_start"], "window_end": prediction["window_end"],
+             "ml_classification": "AWD" if comparison.get("ml_is_awd") else "not AWD",
+             "awd_score_percent": round(100 * prediction["awd_score"], 1), "awd_decision_threshold_percent": 50,
+             "radar_observations": prediction.get("observations"), "largest_gap_days": prediction.get("max_gap_days"),
+             "embedding_year": prediction.get("embedding_year"), "model_version": prediction.get("model_version"),
+             "detector_drydowns": comparison.get("detector_drydowns"),
+             "detector_category": comparison.get("detector_category"),
+             "agrees": comparison.get("agrees")}
+    route = f"/fields/{quote(field_id, safe='')}/awd-validation"
+    b.fact("ml_prediction", facts)
+    b.source(f"awd_prediction:{job_id}", "ML practice classification", "awd_prediction", facts, record_id=job_id, route=route)
+    b.source(f"awd_rule:{job_id}", "How the two are compared", "awd_prediction",
+             "The model calls a season AWD when its AWD score is at least 50%.\n"
+             "The detector treats a season as AWD (multiple drainage) only with two or more drydowns.\n"
+             "The model's score is not calibrated and it never changes a calculation.", route=route)
+    metrics = read_metrics() or {}
+    if metrics:
+        perf = {"training_data": "Microsoft rice-irrigation-mapping plots, Punjab, India",
+                "held_out_accuracy_percent": round(100 * metrics["accuracy"], 1),
+                "awd_recall_percent": round(100 * metrics["recall"]["awd"], 1),
+                "awd_precision_percent": round(100 * metrics["precision"]["awd"], 1),
+                "held_out_plots": metrics.get("test_rows")}
+        b.fact("model_performance", perf)
+        b.source("awd_model:performance", "ML model performance on held-out plots", "awd_prediction", perf, route=route)
+    b.packet["limitations"].append("The ML model was trained on plots in Punjab, India; its accuracy on this region is not established.")
+    b.packet.update(target_id=job_id)
+    return b.finish(max_tokens)
+
+
 def build_packet(org_id, project_id, user_id, action, field_id, **parameters):
     """Dispatches only the named read-only actions; rejects unexpected parameters."""
     builders = {"explain_block": explain_block, "missing_evidence": missing_evidence,
                 "applicable_requirements": applicable_requirements, "explain_leakage": explain_leakage,
-                "diff_since_previous": diff_since_previous}
+                "diff_since_previous": diff_since_previous, "explain_signal_run": explain_signal_run,
+                "explain_awd_check": explain_awd_check}
     if action not in builders:
         raise ValueError("Unknown explanation action")
     with read_connection_scope():
