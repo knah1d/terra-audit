@@ -98,13 +98,10 @@ function CalculationsView() {
   const [periodEnd, setPeriodEnd] = useState(() => urlDate("end") || String(restoring?.monitoring_period_end ?? ""));
   const [manualSeasons, setManualSeasons] = useState<string[]>(() => (restoring?.season_ids as string[] | undefined) ?? search.getAll("season"));
   const [runChoice, setRunChoice] = useState(() => last?.runChoice ?? "");
-  // One project per field: a calculation is either under the field's current
-  // project or standalone (preliminary) — never another project.
-  const fieldProject = field.current_project?.project_id ?? "";
-  const [projectId, setProjectId] = useState(() => {
-    const wanted = search.get("project") ?? (last ? (last.body.project_id as string | null) ?? "" : fieldProject);
-    return wanted === "" || wanted === fieldProject ? wanted : fieldProject;
-  });
+  // A field in a project always calculates under that project (so it can be
+  // submitted for review); only a field without a project is standalone. Never
+  // taken from a remembered calculation — the field may have joined since.
+  const projectId = field.current_project?.project_id ?? "";
   const [supersedes, setSupersedes] = useState("");
   const [dirty, setDirty] = useState(true);
   const [lastBody, setLastBody] = useState<Record<string, unknown> | null>(null);
@@ -378,12 +375,8 @@ function CalculationsView() {
               </div>
             </>}
           </section>
-          <label className="block">Project
-            <Select value={projectId} disabled={busy} onChange={(e) => { setProjectId(e.target.value); markDirty(); }}>
-              <option value="">No project (preliminary)</option>
-              {field.current_project && <option value={field.current_project.project_id}>{field.current_project.name}</option>}
-            </Select>
-          </label>
+          <p>Project: <strong>{field.current_project?.name ?? "none — a standalone (preliminary) calculation"}</strong>
+            <span className="ui-meta"> · set by the field&apos;s project membership</span></p>
           {!!openCalculations.length && (
             <label className="block">Correct an existing calculation
               <Select value={supersedes} disabled={busy} onChange={(e) => setSupersedes(e.target.value)}>
