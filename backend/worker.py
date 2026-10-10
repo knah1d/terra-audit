@@ -133,7 +133,10 @@ def run(job_types=None, max_iterations: int | None = None) -> None:
     """max_iterations is used by tests/manual runs that want the worker
     to process what's queued and then return, instead of polling
     forever."""
+    log.info("checking the database schema (the first start after a code change can take a minute on a remote database)…")
+    started = time.monotonic()
     initialize_database()
+    log.info("database ready in %.1fs; connecting to Earth Engine…", time.monotonic() - started)
     from src.signals.earth_engine import SpatialDataEngine
     try:
         engine = SpatialDataEngine()
@@ -144,7 +147,7 @@ def run(job_types=None, max_iterations: int | None = None) -> None:
 
     worker_id = worker_identity()
     register_worker(worker_id, socket.gethostname(), os.getpid())
-    log.info("worker %s started (pid %s)", worker_id, os.getpid())
+    log.info("worker %s started (pid %s), processing: %s", worker_id, os.getpid(), ", ".join(job_types) if job_types else "all job types")
 
     stop = threading.Event()
 

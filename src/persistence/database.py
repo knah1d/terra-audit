@@ -102,6 +102,28 @@ def read_connection_scope():
                 conn.rollback()
 
 
+# Every module whose code creates tables, migrates columns or seeds reference
+# rows at startup. Their source is fingerprinted: on Postgres an unchanged
+# fingerprint means the schema is already in place, so startup skips the
+# ~235 statements (each a network round trip to Neon) with one query.
+_SCHEMA_MODULES = (
+    "src.persistence.schema", "src.persistence.database", "src.evidence.monitoring", "src.projects.repository",
+    "src.carbon.calculations", "src.projects.reviews", "src.jobs.queue", "src.evidence.operations",
+    "src.methodology.registry", "src.methodology.quantification", "src.evidence.soil", "src.evidence.production",
+    "src.methodology.library", "src.ai.workspace", "src.accounts.account_access",
+)
+
+
+def _schema_fingerprint() -> str:
+    import hashlib
+    import importlib
+    import inspect
+    digest = hashlib.sha256()
+    for name in _SCHEMA_MODULES:
+        digest.update(inspect.getsource(importlib.import_module(name)).encode())
+    return digest.hexdigest()
+
+
 def initialize_database():
     """Idempotently creates all tables and applies schema migrations.
     Branches on backend: SQLite replays its full ALTER-TABLE migration
@@ -113,6 +135,17 @@ def initialize_database():
     global _DB_INITIALIZED
     if _DB_INITIALIZED:
         return
+    fingerprint = None if is_sqlite() else _schema_fingerprint()
+    if fingerprint is not None:
+        with get_db_connection() as conn:
+            try:
+                current = conn.execute(text("SELECT fingerprint FROM schema_state WHERE id = 1")).scalar()
+            except Exception:  # first run: the table does not exist yet
+                conn.rollback()
+                current = None
+        if current == fingerprint:
+            _DB_INITIALIZED = True
+            return
     with get_db_connection() as conn:
         if is_sqlite():
             _init_sqlite(conn)
@@ -148,6 +181,13 @@ def initialize_database():
             org_id TEXT NOT NULL, field_id TEXT NOT NULL, window_start TEXT NOT NULL,
             window_end TEXT NOT NULL, processing_version TEXT NOT NULL,
             PRIMARY KEY (org_id, field_id, window_start, window_end))"""))
+        if fingerprint is not None:
+            # Recorded last, so an interrupted setup simply runs again next time.
+            conn.execute(text("CREATE TABLE IF NOT EXISTS schema_state (id INTEGER PRIMARY KEY, fingerprint TEXT NOT NULL, "
+                              "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"))
+            conn.execute(text("""INSERT INTO schema_state (id, fingerprint) VALUES (1, :f)
+                                 ON CONFLICT (id) DO UPDATE SET fingerprint = excluded.fingerprint, updated_at = CURRENT_TIMESTAMP"""),
+                         {"f": fingerprint})
         conn.commit()
     _DB_INITIALIZED = True
 
