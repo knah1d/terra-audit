@@ -18,6 +18,33 @@ ALM_ORDER = ["crop-seasons", "enrollment", "practice-data", "soil-evidence", "pr
 OPEN = ("not_started", "in_progress", "needs_attention")
 
 
+class Prefetch:
+    """Rows for many fields loaded once (a few queries in total instead of
+    several per field) for list views — the dashboard and a project's
+    fields. Every Neon query is a network round trip."""
+
+    def __init__(self, org_id: str, field_ids: list[str]):
+        from src.carbon.signal_evidence import candidates_for_fields
+        wanted = set(field_ids)
+
+        def by_field(rows):
+            grouped: dict[str, list] = {f: [] for f in wanted}
+            for row in rows:
+                if row["field_id"] in grouped:
+                    grouped[row["field_id"]].append(row)
+            return grouped
+
+        self.seasons = by_field(monitoring.current_seasons(org_id))
+        self.observations = by_field(monitoring.records("field_observations", org_id))
+        self.reviews = by_field(monitoring.records("observation_reviews", org_id))
+        with get_db_connection() as conn:
+            self.calculations = by_field(dict(r) for r in conn.execute(text("""
+                SELECT field_id, chain_id, version, status, monitoring_period_start, monitoring_period_end, created_at
+                FROM calculations WHERE org_id = :org_id ORDER BY created_at DESC
+            """), {"org_id": org_id}).mappings().fetchall())
+        self.signal_runs = candidates_for_fields(org_id, field_ids)
+
+
 def _step(status: str, detail: str) -> dict:
     return {"status": status, "detail": detail}
 
@@ -39,13 +66,14 @@ def current_projects(org_id: str) -> dict:
                             "effective_start_date": r["effective_start_date"]} for r in rows}
 
 
-def _crop_seasons(org_id: str, field_id: str, seasons: list) -> dict:
+def _crop_seasons(org_id: str, field_id: str, seasons: list, pre: Prefetch | None = None) -> dict:
     if not seasons:
         return _step("not_started", "No crop season yet")
     latest_review = {}
-    for review in monitoring.records("observation_reviews", org_id, field_id):
+    reviews = pre.reviews.get(field_id, []) if pre else monitoring.records("observation_reviews", org_id, field_id)
+    for review in reviews:
         latest_review[review["payload"]["observation_id"]] = review["payload"]["decision"]
-    observations = monitoring.records("field_observations", org_id, field_id)
+    observations = pre.observations.get(field_id, []) if pre else monitoring.records("field_observations", org_id, field_id)
     rejected = sum(1 for o in observations if latest_review.get(o["id"]) == "rejected")
     pending = sum(1 for o in observations if o["id"] not in latest_review)
     if rejected:
@@ -58,9 +86,12 @@ def _crop_seasons(org_id: str, field_id: str, seasons: list) -> dict:
 def _enrollment(org_id: str, field: dict, seasons: list, project_id: str | None) -> dict:
     if not seasons:
         return _step("not_started", "Add a crop season first")
-    from src.methodology.readiness import guided_enrollment
-    enrollment = guided_enrollment(org_id, field, project_id)
-    unrecognized = [c for c in enrollment["declared_crops"] if not c.get("recognized", True)]
+    # Only crop recognition decides this step, so classify the declared crops
+    # of the seasons already loaded — no extra queries (guided_enrollment
+    # also loads the methodology registry and every satellite run).
+    from src.evidence import crop_taxonomy
+    declared = sorted({c for s in seasons for c in s["payload"].get("crops", [])})
+    unrecognized = [c for c in declared if not crop_taxonomy.classify(c).get("recognized", True)]
     # Gaps that later steps own (satellite run, practice schedules, SOC
     # samples) are reported on those steps, not here — otherwise "Next step"
     # sends users to Enrollment, which cannot fix them.
@@ -69,9 +100,9 @@ def _enrollment(org_id: str, field: dict, seasons: list, project_id: str | None)
     return _step("ready", "Crops recognised for this methodology")
 
 
-def _signal(org_id: str, field_id: str) -> dict:
+def _signal(org_id: str, field_id: str, pre: Prefetch | None = None) -> dict:
     from src.carbon.signal_evidence import candidates
-    runs = candidates(org_id, field_id)
+    runs = pre.signal_runs.get(field_id, []) if pre else candidates(org_id, field_id)
     if not runs:
         return _step("not_started", "No satellite analysis yet")
     return _step("completed", f"Latest: {runs[0]['window_start']} – {runs[0]['window_end']}")
@@ -118,9 +149,22 @@ def _production(org_id: str, field_id: str) -> dict:
     return _step("completed", f"{len(records)} record(s) and a leakage assessment")
 
 
-def _calculations(org_id: str, field_id: str) -> tuple[dict, dict | None]:
-    from src.carbon.calculations import list_calculations
-    calcs = list_calculations(org_id, field_id=field_id, latest_only=True)
+def _calculations(org_id: str, field_id: str, pre: Prefetch | None = None) -> tuple[dict, dict | None]:
+    # Status columns only — the full rows carry the (large) frozen snapshot.
+    if pre:
+        rows = pre.calculations.get(field_id, [])
+    else:
+        with get_db_connection() as conn:
+            rows = [dict(r) for r in conn.execute(text("""
+                SELECT chain_id, version, status, monitoring_period_start, monitoring_period_end, created_at
+                FROM calculations WHERE org_id = :org_id AND field_id = :field_id ORDER BY created_at DESC
+            """), {"org_id": org_id, "field_id": field_id}).mappings().fetchall()]
+    # Newest non-superseded version per chain (as list_calculations(latest_only=True)).
+    best: dict[str, dict] = {}
+    for row in rows:
+        if row["status"] != "superseded" and (row["chain_id"] not in best or row["version"] > best[row["chain_id"]]["version"]):
+            best[row["chain_id"]] = row
+    calcs = sorted(best.values(), key=lambda r: str(r["created_at"]), reverse=True)
     if not calcs:
         return _step("not_started", "No calculation yet"), None
     latest = calcs[0]
@@ -153,18 +197,18 @@ def _review(org_id: str, field_id: str, project: dict | None, latest_calc: dict 
     return _step("not_started", "Needs a ready calculation first")
 
 
-def field_workflow_status(org_id: str, field: dict, project: dict | None = None) -> dict:
+def field_workflow_status(org_id: str, field: dict, project: dict | None = None, pre: Prefetch | None = None) -> dict:
     field_id = field["field_id"]
-    seasons = monitoring.current_seasons(org_id, field_id)
-    calc_step, latest_calc = _calculations(org_id, field_id)
+    seasons = pre.seasons.get(field_id, []) if pre else monitoring.current_seasons(org_id, field_id)
+    calc_step, latest_calc = _calculations(org_id, field_id, pre)
     steps = {
-        "crop-seasons": _crop_seasons(org_id, field_id, seasons),
+        "crop-seasons": _crop_seasons(org_id, field_id, seasons, pre),
         "enrollment": _enrollment(org_id, field, seasons, project["project_id"] if project else None),
         "calculations": calc_step,
         "review": _review(org_id, field_id, project, latest_calc),
     }
     if field["field_type"] == "rice_awd":
-        steps["signal-analytics"] = _signal(org_id, field_id)
+        steps["signal-analytics"] = _signal(org_id, field_id, pre)
         steps["awd-validation"] = _awd_check(steps["signal-analytics"])
         order = RICE_ORDER
     else:
