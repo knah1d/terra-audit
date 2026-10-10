@@ -95,7 +95,9 @@ def test_authorized_viewer_can_build_but_other_org_and_inactive_field_cannot(sco
 def test_calculation_must_belong_to_selected_project(scope):
     cid = store_calc(scope)
     other = projects.create_project(scope["org_id"], "Other project", "", "", None, None, "active", scope["user_id"])
-    projects.assign_field_to_project(scope["org_id"], other, scope["field_id"], "2020-01-01", scope["user_id"])
+    # One project per field at a time: the field leaves the first project before joining the other.
+    projects.end_project_field_membership(scope["org_id"], scope["membership_id"], "2020-12-31", "Moved to other project")
+    projects.assign_field_to_project(scope["org_id"], other, scope["field_id"], "2021-01-01", scope["user_id"])
     with pytest.raises(ValueError, match="Calculation not found"):
         packets.explain_block(**{**args(scope), "project_id": other}, calculation_id=cid)
 

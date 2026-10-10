@@ -898,6 +898,15 @@ def generate_project_mrv_report_vm0051(ctx: dict) -> bytes:
     total = lambda key: sum(float(i["calculation"]["result"].get(key) or 0) for i in items)
     area = sum(float(field(i)["area_ha"]) for i in items)
     net, gross = total("final_issuance"), total("delta_e_co2e")
+    # The QA3 gate is per year. A period of up to a year holds that year's
+    # seasons as they are; a longer period is averaged per year (never
+    # scaled up, which would overstate a single short rice season).
+    try:
+        days = (datetime.date.fromisoformat(ctx["period_end"]) - datetime.date.fromisoformat(ctx["period_start"])).days + 1
+    except (TypeError, ValueError):
+        days = 365
+    years = max(1.0, days / 365.25)
+    gross_per_year = gross / years
 
     pdf = _MRVPDF(f"Project Monitoring Report | {project['name']}",
                   f"{_STATUS_FINAL if final else _STATUS_DRAFT} | VM0051 v1.1", draft=not final)
@@ -934,9 +943,17 @@ def generate_project_mrv_report_vm0051(ctx: dict) -> bytes:
         key: total(key) for key in ("e_baseline", "e_project", "delta_e_ch4", "delta_e_co2e", "unc_tco2e",
                                     "pe_n2o_tco2e", "final_issuance")}), (62, 48, 60),
         align=("LEFT", "RIGHT", "LEFT"), emphasize_last=True)
-    if gross > _QA3_PROJECT_GATE_TCO2E:
-        pdf.notice(f"Project gross reductions ({_n(gross, 0)} tCO2e) exceed the QA3 {_n(_QA3_PROJECT_GATE_TCO2E, 0)} "
-                   "tCO2e/yr gate (Section 8.6.3): the flat 15% uncertainty deduction is not valid at this size.", "red")
+    pdf.facts([
+        ("Gross reductions per year", f"{_n(gross_per_year, 2)} tCO2e/yr"
+                                      + (f" (period of {days} days averaged over {years:.2f} years)" if years > 1 else "")),
+        ("QA3 project-size limit", f"{_n(_QA3_PROJECT_GATE_TCO2E, 0)} tCO2e/yr (Section 8.6.3)"),
+    ])
+    if gross_per_year > _QA3_PROJECT_GATE_TCO2E:
+        pdf.notice(f"Project gross reductions ({_n(gross_per_year, 0)} tCO2e/yr) exceed the QA3 "
+                   f"{_n(_QA3_PROJECT_GATE_TCO2E, 0)} tCO2e/yr limit (Section 8.6.3): the flat 15% uncertainty "
+                   "deduction is not valid at this size.", "red")
+    else:
+        pdf.notice("Within the QA3 project-size limit: the flat 15% uncertainty deduction applies.", "green")
     pdf.note("Per-field parameters, satellite evidence and equation detail are in each field's monitoring report "
              "(evidence package folder fields/<field_id>/).")
 
