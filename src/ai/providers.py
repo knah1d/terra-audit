@@ -63,11 +63,14 @@ def provider_status() -> dict:
 # Groq counts a request as input tokens PLUS the reserved output tokens against
 # the model's per-minute limit (8,000 for openai/gpt-oss-20b on the free tier);
 # a larger request is rejected outright with HTTP 413.
-GROQ_PROMPT_OVERHEAD_TOKENS = 1200  # instructions + response schema + message framing
+GROQ_PROMPT_OVERHEAD_TOKENS = 1200  # instructions + response schema + message framing (measured ~1,070)
+# Packet sizes are estimated as characters / 4; JSON tokenizes denser, measured
+# at up to ~1.41 real tokens per estimated token with the o200k tokenizer.
+REAL_TOKENS_PER_ESTIMATED_TOKEN = 1.45
 
 
 def _groq_completion_tokens() -> int:
-    return int(os.environ.get("GROQ_MAX_TOKENS", "2500"))
+    return int(os.environ.get("GROQ_MAX_TOKENS", "2000"))
 
 
 def packet_token_budget() -> int | None:
@@ -79,7 +82,8 @@ def packet_token_budget() -> int | None:
     if os.environ.get("GROQ_PACKET_TOKENS"):
         return int(os.environ["GROQ_PACKET_TOKENS"])
     limit = int(os.environ.get("GROQ_TOKENS_PER_REQUEST", "8000"))
-    return max(1000, limit - GROQ_PROMPT_OVERHEAD_TOKENS - _groq_completion_tokens())
+    room = limit - GROQ_PROMPT_OVERHEAD_TOKENS - _groq_completion_tokens()
+    return max(1000, int(room / REAL_TOKENS_PER_ESTIMATED_TOKEN))
 
 
 def explanation_signature():
@@ -114,7 +118,7 @@ def _groq(instructions, data, schema, org_id, media, vision):
                 **({"reasoning_effort": os.environ.get("GROQ_REASONING_EFFORT", "low")}
                    if model.startswith("openai/gpt-oss") else {}),
                 "messages": [{"role": "system", "content": instructions},
-                             {"role": "user", "content": json.dumps(data, default=str, allow_nan=False)}],
+                             {"role": "user", "content": json.dumps(data, default=str, allow_nan=False, separators=(",", ":"))}],  # compact: ~10% fewer tokens
                 "response_format": {"type": "json_schema", "json_schema": {
                     "name": "evidence_response", "strict": True, "schema": schema}},
             })
