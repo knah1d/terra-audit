@@ -70,7 +70,25 @@ def _with_overdue(rows: list[dict]) -> list[dict]:
             except ValueError:
                 pass
         out.append({**r, "overdue": overdue})
-    return out
+    return _with_names(out)
+
+
+def _with_names(rows: list[dict]) -> list[dict]:
+    """Field, project and reviewer names so lists never show raw ids."""
+    if not rows:
+        return rows
+    from src.accounts.auth import list_org_users
+    from src.persistence.database import get_field
+    org_id = rows[0]["org_id"]
+    emails = {u["user_id"]: u["email"] for u in list_org_users(org_id)}
+    fields, projects = {}, {}
+    for r in rows:
+        if r["field_id"] not in fields:
+            fields[r["field_id"]] = (get_field(org_id, r["field_id"]) or {}).get("name")
+        if r["project_id"] not in projects:
+            projects[r["project_id"]] = (projects_db.get_project(org_id, r["project_id"]) or {}).get("name")
+    return [{**r, "field_name": fields[r["field_id"]], "project_name": projects[r["project_id"]],
+             "reviewer_email": emails.get(r.get("assigned_reviewer_id"))} for r in rows]
 
 
 def _owned_submission(org_id: str, submission_id: str) -> dict:

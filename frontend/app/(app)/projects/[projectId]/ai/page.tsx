@@ -23,7 +23,9 @@ export default function AIWorkspacePage() {
   const action = useAIAction(project.project_id);
   const toast = useToast();
   const [name, setName] = useState(""); const [model, setModel] = useState("random_forest"); const [split, setSplit] = useState("field");
-  const [chosenModel, setChosenModel] = useState(""); const [threshold, setThreshold] = useState("0.8"); const [reason, setReason] = useState("");
+  // null = untouched: the form shows the CURRENT activation, so saving a
+  // threshold change never silently disables predictions.
+  const [chosenModelEdit, setChosenModel] = useState<string | null>(null); const [thresholdEdit, setThreshold] = useState<string | null>(null); const [reason, setReason] = useState("");
   const [seasonId, setSeasonId] = useState(""); const [attachmentId, setAttachmentId] = useState(""); const [question, setQuestion] = useState("");
   const [extractionMode, setExtractionMode] = useState("auto");
   const data = query.data;
@@ -42,6 +44,8 @@ export default function AIWorkspacePage() {
   }
   if (query.isLoading) return <p>Loading AI workspace…</p>;
   if (query.error || !data) return <p role="alert">{query.error?.message ?? "Workspace unavailable"}</p>;
+  const chosenModel = chosenModelEdit ?? data.deployment.model_id ?? "";
+  const threshold = thresholdEdit ?? String(data.deployment.threshold ?? 0.8);
   const models = data.records.filter(r => r.kind === "model") as unknown as AIRecord<ModelData>[];
   const predictions = data.records.filter(r => r.kind === "prediction") as unknown as AIRecord<PredictionData>[];
   const answers = data.records.filter(r => r.kind === "answer") as unknown as AIRecord<AnswerData>[];
@@ -50,9 +54,9 @@ export default function AIWorkspacePage() {
   const disabled = !data.can_manage || action.isPending;
   const canTrain = !!corpus.data && corpus.data.examples.length >= 4 && new Set(corpus.data.examples.map(e => e.crop)).size >= 2;
   return <div className="ui-container space-y-6">
-    <p className="ui-secondary">Multi-crop AI supports monitoring and evidence preparation. Model scores are uncalibrated; outputs require human review and do not authorize carbon credits.</p>
+    <p className="ui-secondary">AI helps prepare evidence: read field documents, answer questions with citations, and suggest crop types. Every output needs human review and never changes a carbon calculation.</p>
     {!data.can_manage && <p className="text-sm">Project leads and organization admins can run AI workflows. You can view saved results.</p>}
-    <Card><h2 className="ui-section-title mb-3">AI provider</h2><p className="ui-secondary">{data.provider_status?.provider ?? "Unknown"} · {data.provider_status?.model || "No model configured"}. Configuration presence does not verify worker connectivity. Drafts still require human review.</p></Card>
+    <Card><h2 className="ui-section-title mb-3">AI provider</h2><p className="ui-secondary">{data.provider_status?.provider ?? "Unknown"} · {data.provider_status?.model || "No model configured"}. AI drafts always need human review.</p></Card>
     <Card><h2 className="ui-section-title mb-3">Train a crop model</h2>
       <p className="mb-3 text-sm text-text-secondary">Requires at least four eligible field-seasons, two crops, and independently reviewed labels. Training uses only active project fields and reserves independent groups for evaluation.</p>
       {corpus.error && <p role="alert" className="mb-3 text-sm text-danger-700">{corpus.error.message}</p>}
@@ -60,7 +64,7 @@ export default function AIWorkspacePage() {
       <form className="grid gap-3 sm:grid-cols-4" onSubmit={e => { e.preventDefault(); dispatch("/train", { name, model, split }); }}>
         <label className="text-sm">Version name<TextInput required maxLength={120} value={name} onChange={e => setName(e.target.value)} placeholder="September crop baseline" /></label>
         <label className="text-sm">Model<Select value={model} onChange={e => setModel(e.target.value)}><option value="random_forest">Random forest</option><option value="xgboost">XGBoost</option></Select></label>
-        <label className="text-sm">Hold out by<Select value={split} onChange={e => setSplit(e.target.value)}><option value="field">Field</option><option value="year">Year</option><option value="district">District</option></Select></label>
+        <label className="text-sm">Test the model on unseen<Select value={split} onChange={e => setSplit(e.target.value)}><option value="field">Field</option><option value="year">Year</option><option value="district">District</option></Select></label>
         <Button type="submit" disabled={disabled || !canTrain}>Train and evaluate</Button>
       </form>
     </Card>
@@ -69,7 +73,7 @@ export default function AIWorkspacePage() {
       {models.map(r => { const metric = r.payload.evaluation.models[r.payload.model]; return <div key={r.id} className="border-t border-border py-3 text-sm">
         <div className="flex flex-wrap justify-between gap-2"><strong>{r.payload.name}{data.deployment.model_id === r.id ? " · Active" : " · Candidate"}</strong><Button size="sm" variant="secondary" onClick={() => download(r, `model-${r.id}.json`)}>Download evaluation</Button></div>
         <p>{r.payload.classes.join(", ")} · {r.payload.districts.join(", ")} · Holdout: {r.payload.evaluation.split}</p>
-        <p>Macro F1: {metric?.report["macro avg"]?.["f1-score"]?.toFixed(3) ?? "—"} · Brier score: {metric?.brier_score.toFixed(3)} · Log loss: {metric?.log_loss.toFixed(3)}</p>
+        <p>Accuracy (F1, all crops): {metric?.report["macro avg"]?.["f1-score"]?.toFixed(3) ?? "—"} · Score calibration error (Brier): {metric?.brier_score.toFixed(3)} · Log loss: {metric?.log_loss.toFixed(3)}</p>
       </div>; })}
       <form className="mt-4 grid gap-3 sm:grid-cols-2" onSubmit={e => { e.preventDefault(); dispatch("/deployment", { model_id: chosenModel || null, threshold: Number(threshold), expected_revision: data.deployment.revision, reason }, "PUT"); }}>
         <label className="text-sm">Active model<Select value={chosenModel} onChange={e => setChosenModel(e.target.value)}><option value="">Disable predictions</option>{models.map(m => <option key={m.id} value={m.id}>{m.payload.name}</option>)}</Select></label>
@@ -83,7 +87,7 @@ export default function AIWorkspacePage() {
     <Card><h2 className="ui-section-title mb-3">Analyze a field-season</h2>
       <label className="text-sm">Crop season<Select value={seasonId} onChange={e => { setSeasonId(e.target.value); setAttachmentId(""); }}><option value="">Select a field-season</option>{data.seasons.map(s => <option key={s.season_id} value={s.season_id}>{s.field_name} · {s.name} · {s.crops.join(", ")}</option>)}</Select></label>
       <Button className="mt-3" disabled={disabled || !chosenSeason || !data.deployment.model_id} onClick={() => chosenSeason && dispatch("/predict", { field_id: chosenSeason.field_id, season_id: seasonId })}>Predict crop from satellite evidence</Button>
-      {predictions.map(r => <div key={r.id} className="mt-3 border-t border-border pt-3 text-sm"><strong>{r.payload.predicted_crop ?? "Insufficient evidence"}</strong> · {r.payload.field_id} · {r.payload.confidence === null ? "No score" : `${(r.payload.confidence * 100).toFixed(1)}% model score`}
+      {predictions.map(r => <div key={r.id} className="mt-3 border-t border-border pt-3 text-sm"><strong>{r.payload.predicted_crop ?? "Insufficient evidence"}</strong> · {data.seasons.find(x => x.field_id === r.payload.field_id)?.field_name ?? "Field"} · {r.payload.confidence === null ? "No score" : `${(r.payload.confidence * 100).toFixed(1)}% model score`}
         {r.payload.reasons.map(x => <p key={x}>{x}</p>)}{r.payload.in_training_data && <p className="text-warning-700">This field was represented in training; this result is not an independent evaluation.</p>}
         <Button size="sm" variant="ghost" onClick={() => download(r, `prediction-${r.id}.json`)}>Download provenance</Button></div>)}
     </Card>
@@ -93,7 +97,7 @@ export default function AIWorkspacePage() {
       <Select aria-label="Document" value={attachmentId} onChange={e => setAttachmentId(e.target.value)}><option value="">Select a document</option>{data.attachments.filter(a => a.field_id === chosenSeason?.field_id).map(a => <option key={a.attachment_id} value={a.attachment_id}>{a.filename}</option>)}</Select>
       <label className="mt-3 block text-sm">Extraction method<Select value={extractionMode} onChange={e => setExtractionMode(e.target.value)}><option value="auto">Automatic: text with OCR for sparse pages</option><option value="text">Text only: no images or handwriting</option><option value="vision" disabled={!data.vision_configured}>Visual: read every PDF page or image</option></Select></label>
       <p className="mt-2 text-xs text-text-secondary">Up to 10 visual pages per request. Choose visual mode when handwritten or scanned content appears beside existing text. Each visual page uses one provider request.</p>
-      {!data.vision_configured && <p className="mt-2 text-sm text-warning-700">Visual extraction is unavailable until OPENAI_VISION_MODEL is configured.</p>}
+      {!data.vision_configured && <p className="mt-2 text-sm text-warning-700">Reading scanned documents is not set up on this server yet — ask an administrator.</p>}
       {chosenSeason && <Link className="block mt-3 text-brand-700 underline" href={`/fields/${chosenSeason.field_id}/evidence-files?season=${seasonId}`}>Upload evidence for this season</Link>}
       <Button className="mt-3" disabled={disabled || !data.assistant_configured || !chosenSeason || !attachmentId} onClick={() => chosenSeason && dispatch("/documents", { field_id: chosenSeason.field_id, season_id: seasonId, attachment_id: attachmentId, extraction_mode: extractionMode })}>Extract proposals</Button>
       {documents.map(doc => <div key={doc.id} className="mt-4 border-t border-border pt-3"><h3 className="ui-subsection-title">{doc.payload.filename}</h3>
@@ -118,7 +122,7 @@ export default function AIWorkspacePage() {
         <Button size="sm" variant="secondary" className="mt-3" onClick={() => download(r, `draft-${r.id}.json`)}>Download cited draft</Button>
       </div>)}
     </Card>
-    <Card><h2 className="ui-section-title mb-3">Recent jobs</h2>{!data.jobs.length && <p className="text-sm">No AI jobs yet.</p>}{data.jobs.map(j => <div key={j.job_id} className="flex flex-wrap items-center justify-between gap-2 border-t border-border py-2 text-sm"><span>{j.job_type.replace("workspace_", "")} · {j.status} · {formatQueueTimestamp(j.created_at)}{j.error && <span className="block text-danger-700">{j.error}</span>}</span>{["pending", "running"].includes(j.status) && <Button size="sm" variant="secondary" disabled={disabled} onClick={() => dispatch(`/jobs/${j.job_id}/cancel`)}>Cancel</Button>}</div>)}</Card>
+    <Card><h2 className="ui-section-title mb-3">Recent jobs</h2>{!data.jobs.length && <p className="text-sm">No AI jobs yet.</p>}{data.jobs.map(j => <div key={j.job_id} className="flex flex-wrap items-center justify-between gap-2 border-t border-border py-2 text-sm"><span>{j.job_type.replace("workspace_", "").replace(/_/g, " ")} · {j.status.replace(/_/g, " ")} · {formatQueueTimestamp(j.created_at)}{j.error && <span className="block text-danger-700">{j.error}</span>}</span>{["pending", "running"].includes(j.status) && <Button size="sm" variant="secondary" disabled={disabled} onClick={() => dispatch(`/jobs/${j.job_id}/cancel`)}>Cancel</Button>}</div>)}</Card>
   </div>;
 }
 

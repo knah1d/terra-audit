@@ -87,7 +87,12 @@ export function useSetProjectApplicability(projectId: string) {
   return useMutation({
     mutationFn: (body: { accounting_pathway: string; bundle_id: string; reason: string }) =>
       apiFetch(`/projects/${projectId}/methodology-applicability`, { method: "POST", json: body }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["project-applicability", projectId] }),
+    onSuccess: () => {
+      // The AI library coverage depends on which version the project resolves to.
+      for (const key of [["project-applicability", projectId], ["methodology-library-coverage"]]) {
+        void queryClient.invalidateQueries({ queryKey: key });
+      }
+    },
   });
 }
 

@@ -62,6 +62,11 @@ export default function ProjectMrvPage() {
   }
 
   const data = summary.data;
+  if (project.pathways.length && !project.pathways.includes("vm0051_rice_awd")) {
+    return <div className="ui-container"><Alert tone="info" title="MRV report not available">
+      The project MRV report covers rice fields under VM0051. For cropland (VM0042), download each calculation&apos;s report from its Calculations tab.
+    </Alert></div>;
+  }
   return (
     <div className="ui-container space-y-6">
       <Card className="space-y-3">

@@ -383,6 +383,10 @@ export interface ReviewSubmissionOut {
   decided_at: string | null;
   decision_reason: string | null;
   overdue?: boolean;
+  /** Added by list endpoints so rows never show raw ids. */
+  field_name?: string | null;
+  project_name?: string | null;
+  reviewer_email?: string | null;
 }
 
 export interface FindingOut {

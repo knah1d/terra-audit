@@ -6,19 +6,20 @@ import Link from "next/link";
 import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 
-export function ProjectTabs({ projectId }: { projectId: string }) {
+export function ProjectTabs({ projectId, showMrv = true }: { projectId: string; showMrv?: boolean }) {
   const pathname = usePathname();
   const nav = useRef<HTMLElement>(null);
   useEffect(() => { revealNavigationItem(nav.current, nav.current?.querySelector<HTMLElement>('[aria-current="page"]') ?? null); }, [pathname]);
+  // Workflow first (fields → reviews → report), then settings, then optional tools.
   const options = [
     { href: `/projects/${projectId}/overview`, label: "Overview", icon: LayoutDashboard },
-    { href: `/projects/${projectId}/monitoring`, label: "Monitoring", icon: Activity },
     { href: `/projects/${projectId}/fields`, label: "Fields", icon: MapPinned },
+    { href: `/projects/${projectId}/reviews`, label: "Reviews", icon: LayoutList },
+    ...(showMrv ? [{ href: `/projects/${projectId}/mrv`, label: "MRV report", icon: FileText }] : []),
     { href: `/projects/${projectId}/methodology`, label: "Methodology", icon: ScrollText },
     { href: `/projects/${projectId}/members`, label: "Members", icon: Users },
+    { href: `/projects/${projectId}/monitoring`, label: "Crop monitoring", icon: Activity },
     { href: `/projects/${projectId}/ai`, label: "AI workspace", icon: BrainCircuit },
-    { href: `/reviews?project=${projectId}`, label: "Reviews", icon: LayoutList },
-    { href: `/projects/${projectId}/mrv`, label: "MRV report", icon: FileText },
   ];
   return (
     <nav ref={nav} aria-label="Project sections" className="flex gap-1 overflow-x-auto border-b border-border-subtle">

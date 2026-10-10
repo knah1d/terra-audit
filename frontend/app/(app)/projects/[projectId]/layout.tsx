@@ -32,7 +32,8 @@ export default async function ProjectLayout({
         </div>
         {project.description && <p className="ui-secondary mt-2">{project.description}</p>}
         <div className="mt-4">
-          <ProjectTabs projectId={project.project_id} />
+          {/* The MRV report covers VM0051 rice; hidden for cropland-only projects. */}
+          <ProjectTabs projectId={project.project_id} showMrv={!project.pathways?.length || project.pathways.includes("vm0051_rice_awd")} />
         </div>
       </div>
       {children}
