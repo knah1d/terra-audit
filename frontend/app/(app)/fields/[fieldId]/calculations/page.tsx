@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Calculator, CheckCircle2, Save, Satellite, Sprout, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useToast } from "@/components/ui/Toast";
 import { useSession } from "@/app/providers";
 import { ExplainButton } from "@/components/ai/ExplainDrawer";
@@ -52,19 +52,20 @@ const isBlocking = (c: ReadinessCheck) => ["missing", "needs_review", "unsupport
 
 type Run = { job_id: string; window_start: string; window_end: string; total_awd: number; season_length_days: number };
 
-// The last calculation request per field, for this browser tab. Coming back
-// to the page re-runs it (preview never writes), so the result and the things
-// to fix reappear — re-checked, so items fixed in the meantime drop off.
-type LastCalculation = { runChoice: string; manual: boolean; body: Record<string, unknown> };
+// The last calculation per field (request AND result), kept in this browser.
+// Coming back shows it instantly — no automatic re-run; "Recalculate" checks
+// again when the user has changed something.
+type PreviewResult = Awaited<ReturnType<ReturnType<typeof usePreviewCalculation>["mutateAsync"]>>;
+type LastCalculation = { runChoice: string; manual: boolean; body: Record<string, unknown>; result?: PreviewResult; at?: string };
 const lastCalculationKey = (fieldId: string) => `terra-audit:last-calculation:${fieldId}`;
 function loadLastCalculation(fieldId: string): LastCalculation | null {
   try {
-    const raw = window.sessionStorage.getItem(lastCalculationKey(fieldId));
+    const raw = window.localStorage.getItem(lastCalculationKey(fieldId));
     return raw ? JSON.parse(raw) as LastCalculation : null;
   } catch { return null; }
 }
 function storeLastCalculation(fieldId: string, value: LastCalculation) {
-  try { window.sessionStorage.setItem(lastCalculationKey(fieldId), JSON.stringify(value)); } catch { /* storage unavailable */ }
+  try { window.localStorage.setItem(lastCalculationKey(fieldId), JSON.stringify(value)); } catch { /* storage unavailable */ }
 }
 
 function download(value: unknown, name: string) {
@@ -147,6 +148,9 @@ function CalculationsView() {
   const [supersedes, setSupersedes] = useState("");
   const [dirty, setDirty] = useState(true);
   const [lastBody, setLastBody] = useState<Record<string, unknown> | null>(null);
+  // false until the user edits or recalculates: until then the remembered result is shown.
+  const [touched, setTouched] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
   const [saved, setSaved] = useState<{ id: string; status: string; version: number; projectId: string | null } | null>(null);
   const toast = useToast();
 
@@ -177,7 +181,13 @@ function CalculationsView() {
     !context.start || !context.end ? "Set both monitoring dates under Advanced." :
     context.end < context.start ? "The period end must be on or after its start." : "";
   const busy = preview.isPending || commit.isPending || determination.isPending || createSubmission.isPending;
-  const result = !dirty ? preview.data : undefined;
+  const lastMatchesEarly = !!last?.result && !!context && !contextIssue && (last.body.project_id ?? "") === projectId
+    && last.body.monitoring_period_start === context.start && last.body.monitoring_period_end === context.end
+    && JSON.stringify(last.body.season_ids) === JSON.stringify(context.seasons);
+  const cached = !touched && lastMatchesEarly ? last : null;
+  const result = !dirty ? preview.data : cached?.result;
+  // What Save commits: the live calculation, or the remembered one being shown.
+  const bodyForSave = !dirty ? lastBody : cached ? { ...cached.body, signal_run_id: evidenceRun?.job_id ?? null } : null;
   const blocking = result ? result.readiness.filter(isBlocking) : [];
   const openCalculations = (history.data ?? []).filter((r) => !r.legacy && r.status !== "superseded");
   // A saved, reviewable project calculation overlapping this period: saving a
@@ -195,19 +205,7 @@ function CalculationsView() {
   const lastInputs = lastMatches ? last!.body.engine_inputs as Record<string, unknown> : undefined;
   const lastAmendment = (lastInputs?.project_amendments as [string, number][] | undefined)?.[0];
 
-  const runPreview = preview.mutateAsync;
-  const contextReady = !!context && seasons.isSuccess;
-  const restored = useRef(false);
-  useEffect(() => {
-    if (restored.current || !contextReady) return;
-    restored.current = true;
-    if (!writable || !lastMatches) return;
-    const body = { ...last!.body, signal_run_id: evidenceRun?.job_id ?? null };
-    runPreview(body).then(() => { setLastBody(body); setDirty(false); })
-      .catch(() => { /* inputs no longer valid — the user recalculates */ });
-  }, [contextReady, writable, lastMatches, last, evidenceRun, runPreview]);
-
-  function markDirty() { setDirty(true); setSaved(null); }
+  function markDirty() { setDirty(true); setSaved(null); setTouched(true); }
 
   async function perform(title: string, action: () => Promise<void>) {
     try {
@@ -256,12 +254,12 @@ function CalculationsView() {
     return perform("Couldn't save calculation", async () => {
       // Freeze the evidence files of these seasons into the snapshot, so they
       // travel with the calculation into the MRV evidence package.
-      const seasonIds = ((lastBody?.season_ids as string[] | undefined) ?? []).join(",");
+      const seasonIds = ((bodyForSave?.season_ids as string[] | undefined) ?? []).join(",");
       const evidence = await apiFetch<{ attachment_id: string }[]>(`${base}/calculation-evidence?season_ids=${encodeURIComponent(seasonIds)}`);
-      const out = await commit.mutateAsync({ body: { ...lastBody, monitoring_run_ids: [], attachment_ids: evidence.map((a) => a.attachment_id),
+      const out = await commit.mutateAsync({ body: { ...bodyForSave, monitoring_run_ids: [], attachment_ids: evidence.map((a) => a.attachment_id),
         supersedes_calculation_id: supersedesId }, idempotencyKey: crypto.randomUUID() });
       setSaved({ id: out.calculation.calculation_id, status: out.calculation.status, version: out.calculation.version,
-        projectId: (lastBody?.project_id as string | null) ?? null });
+        projectId: (bodyForSave?.project_id as string | null) ?? null });
       toast.success("Calculation saved", { description: (out.calculation.status === "ready_for_review"
         ? `Version ${out.calculation.version} · ready for review` : `Version ${out.calculation.version} · draft — fix the listed items before review`)
         + (evidence.length ? ` · ${evidence.length} evidence file(s) included` : "") });
@@ -314,7 +312,7 @@ function CalculationsView() {
           {contextIssue && <p role="status" className="text-warning-700">{contextIssue}</p>}
         </div>
 
-        <form key={`${run?.job_id}:${manual}`} className="grid gap-3 sm:grid-cols-2" onChange={markDirty} onSubmit={(e) => {
+        <form ref={formRef} key={`${run?.job_id}:${manual}`} className="grid gap-3 sm:grid-cols-2" onChange={markDirty} onSubmit={(e) => {
           e.preventDefault();
           const form = e.currentTarget;
           void perform("Couldn't calculate", async () => {
@@ -322,9 +320,9 @@ function CalculationsView() {
             const body = { project_id: projectId || null, accounting_pathway: pathway, season_ids: context.seasons,
               monitoring_period_start: context.start, monitoring_period_end: context.end,
               engine_inputs: readInputs(form), signal_run_id: evidenceRun?.job_id ?? null };
-            await preview.mutateAsync(body);
-            setLastBody(body); setDirty(false); setSaved(null);
-            const remembered = { runChoice: manual ? "" : run?.job_id ?? "", manual, body };
+            const out = await preview.mutateAsync(body);
+            setLastBody(body); setDirty(false); setSaved(null); setTouched(true);
+            const remembered = { runChoice: manual ? "" : run?.job_id ?? "", manual, body, result: out, at: new Date().toISOString() };
             storeLastCalculation(field.field_id, remembered); setLast(remembered);
           });
         }}>
@@ -355,6 +353,15 @@ function CalculationsView() {
 
       {result && (
         <Card className="space-y-4">
+          {cached && (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-surface-muted/50 px-3 py-2 text-sm">
+              <span className="text-text-secondary">
+                Your last calculation{cached.at ? ` (${formatQueueTimestamp(cached.at)})` : ""}. Changed something since? Recalculate to check again.
+              </span>
+              {writable && !notMember && <Button size="sm" variant="secondary" icon={Calculator} loading={preview.isPending}
+                onClick={() => formRef.current?.requestSubmit()}>Recalculate</Button>}
+            </div>
+          )}
           <div className="grid gap-3 sm:grid-cols-3">
             <StatCard label="Estimated reductions (tCO2e)" value={formatNumber(result.result.final_issuance as number | null, "tco2e")} tone="success" />
             {isRice && <StatCard label="Baseline CH4 (kg CH4)" value={formatNumber(result.result.e_baseline as number | null)} />}
@@ -397,10 +404,10 @@ function CalculationsView() {
                   <Button loading={createSubmission.isPending} disabled={busy || submissions.isLoading} onClick={() => void submitForReview(projectId, accounted.calculation_id)}>Submit v{accounted.version} for review</Button>
                 ))}
                 {accounted.project_id === projectId && (
-                  <Button variant="secondary" icon={Save} loading={commit.isPending} disabled={busy || !lastBody} onClick={() => void saveCalculation(accounted.calculation_id)}>Save as a correction of v{accounted.version}</Button>
+                  <Button variant="secondary" icon={Save} loading={commit.isPending} disabled={busy || !bodyForSave} onClick={() => void saveCalculation(accounted.calculation_id)}>Save as a correction of v{accounted.version}</Button>
                 )}
               </>
-            ) : <Button icon={Save} loading={commit.isPending} disabled={busy || !lastBody} onClick={() => void saveCalculation(supersedes || null)}>Save calculation</Button>)}
+            ) : <Button icon={Save} loading={commit.isPending} disabled={busy || !bodyForSave} onClick={() => void saveCalculation(supersedes || null)}>Save calculation</Button>)}
             {saved?.status === "ready_for_review" && saved.projectId && (
               submissionFor(saved.id)
                 ? <ButtonLink href={`/reviews/${encodeURIComponent(submissionFor(saved.id)!.submission_id)}`}>Open review</ButtonLink>

@@ -181,9 +181,9 @@ def recent_activity(org_id: str, limit: int = 5) -> list[dict]:
     season) — the basis for "Continue where you left off"."""
     with get_db_connection() as conn:
         rows = conn.execute(text("""
-            SELECT field_id, 'calculation' AS kind, created_at AS at FROM calculations WHERE org_id = :o
+            SELECT field_id, 'calculation' AS kind, CAST(created_at AS TEXT) AS at FROM calculations WHERE org_id = :o
             UNION ALL
-            SELECT field_id, 'crop_season' AS kind, created_at AS at FROM crop_seasons WHERE org_id = :o
+            SELECT field_id, 'crop_season' AS kind, CAST(created_at AS TEXT) AS at FROM crop_seasons WHERE org_id = :o
         """), {"o": org_id}).mappings().fetchall()
         jobs = conn.execute(text("""
             SELECT payload_json, finished_at AS at FROM background_jobs
@@ -194,6 +194,7 @@ def recent_activity(org_id: str, limit: int = 5) -> list[dict]:
     events += [{"field_id": json.loads(j["payload_json"] or "{}").get("field_id"), "kind": "signal_run", "at": j["at"]}
                for j in jobs]
     latest = {}
-    for e in sorted((e for e in events if e["field_id"] and e["at"]), key=lambda e: str(e["at"]), reverse=True):
+    # Postgres TIMESTAMP text uses a space, isoformat a "T": compare them alike.
+    for e in sorted((e for e in events if e["field_id"] and e["at"]), key=lambda e: str(e["at"]).replace(" ", "T"), reverse=True):
         latest.setdefault(e["field_id"], {**e, "at": str(e["at"])})
     return list(latest.values())[:limit]
