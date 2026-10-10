@@ -54,23 +54,31 @@ export function useProjectFields(projectId: string | undefined) {
   });
 }
 
+// Everything that shows which project a field is in, or the project's fields.
+function invalidateMembership(queryClient: ReturnType<typeof useQueryClient>, projectId: string | undefined) {
+  for (const key of [["project-fields", projectId], ["fields"], ["field-workflow"], ["project-workflow", projectId],
+    ["project-eligible-area", projectId], ["monitoring-dashboard", projectId], ["project-mrv", projectId], ["dashboard-summary"]]) {
+    void queryClient.invalidateQueries({ queryKey: key });
+  }
+}
+
 export function useAssignFieldToProject(projectId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body: { field_id: string; effective_start_date?: string }) =>
       apiFetch<FieldMembershipRow>(`/projects/${projectId}/fields`, { method: "POST", json: body }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["project-fields", projectId] }),
+    onSuccess: () => invalidateMembership(queryClient, projectId),
   });
 }
 
 export function useEndFieldMembership(projectId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ membershipId, reason }: { membershipId: string; reason: string }) =>
+    mutationFn: ({ membershipId, reason, end }: { membershipId: string; reason: string; end: string }) =>
       apiFetch<FieldMembershipRow>(`/projects/${projectId}/fields/${membershipId}/end`, {
-        method: "POST", json: { reason },
+        method: "POST", json: { reason, effective_end_date: end },
       }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["project-fields", projectId] }),
+    onSuccess: () => invalidateMembership(queryClient, projectId),
   });
 }
 
@@ -81,11 +89,7 @@ export function useChangeFieldMembershipStart(projectId: string | undefined) {
       apiFetch<FieldMembershipRow>(`/projects/${projectId}/fields/${membershipId}`, {
         method: "PATCH", json: { effective_start_date: start },
       }),
-    onSuccess: () => {
-      for (const key of [["project-fields", projectId], ["fields"], ["field-workflow"], ["project-workflow", projectId]]) {
-        void queryClient.invalidateQueries({ queryKey: key });
-      }
-    },
+    onSuccess: () => invalidateMembership(queryClient, projectId),
   });
 }
 

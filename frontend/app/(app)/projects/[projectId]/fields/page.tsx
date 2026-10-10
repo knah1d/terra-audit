@@ -7,7 +7,9 @@ import { useToast } from "@/components/ui/Toast";
 import { useProjectContext } from "@/components/projects/ProjectContext";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { Alert } from "@/components/ui/Alert";
 import { Card } from "@/components/ui/Card";
+import { Skeleton } from "@/components/ui/Skeleton";
 import { Select, TextInput } from "@/components/ui/Field";
 import { useFields } from "@/hooks/use-fields";
 import { useAssignFieldToProject, useChangeFieldMembershipStart, useEndFieldMembership, useProjectFields } from "@/hooks/use-projects";
@@ -29,7 +31,7 @@ export default function ProjectFieldsPage() {
 
   return (
     <div className="ui-container space-y-6">
-      <Card>
+      {project.can_manage && <Card>
         <h3 className="ui-subsection-title mb-3">Assign an existing field</h3>
         <p className="ui-meta mb-3">
           Only standalone fields are listed — a field belongs to one project at a time. Its history is kept.{" "}
@@ -42,20 +44,23 @@ export default function ProjectFieldsPage() {
         }}>
           <Select aria-label="Field to assign" value={fieldId} onChange={(e) => setFieldId(e.target.value)} required className="max-w-xs">
             <option value="">Choose a field…</option>
-            {assignable.map((f) => <option key={f.field_id} value={f.field_id}>{f.name} ({f.field_id})</option>)}
+            {assignable.map((f) => <option key={f.field_id} value={f.field_id}>{f.name}{f.district ? ` · ${f.district}` : ""}</option>)}
           </Select>
-          <label className="ui-label">Effective start date<TextInput type="date" required value={effectiveDate} onChange={e => setEffectiveDate(e.target.value)} /></label>
+          <label className="ui-label">In the project from<TextInput type="date" required value={effectiveDate} onChange={e => setEffectiveDate(e.target.value)} /></label>
           <Button type="submit" loading={assign.isPending}>Assign to project</Button>
         </form>
-      </Card>
+      </Card>}
 
       <Card>
         <h3 className="ui-subsection-title mb-3">Fields in this project</h3>
-        {!openMemberships.length ? <p className="ui-secondary">No fields assigned yet.</p> : (
+        {memberships.isLoading ? <Skeleton className="h-24" /> : memberships.error ? (
+          <Alert tone="danger" title="Could not load this project's fields">{memberships.error.message}</Alert>
+        ) : !openMemberships.length ? <p className="ui-secondary">No fields assigned yet.</p> : (
           <div className="space-y-2">
             {openMemberships.map((m) => (
               <EndMembershipRow key={m.membership_id} membershipId={m.membership_id} fieldId={m.field_id}
-                                 name={fields.data?.find(f => f.field_id === m.field_id)?.name ?? m.field_id} start={m.effective_start_date} onEnd={endMembership} projectId={project.project_id} />
+                                 name={fields.data?.find(f => f.field_id === m.field_id)?.name ?? m.field_id} start={m.effective_start_date} onEnd={endMembership} projectId={project.project_id}
+                                 canManage={project.can_manage} />
             ))}
           </div>
         )}
@@ -64,11 +69,14 @@ export default function ProjectFieldsPage() {
   );
 }
 
-function EndMembershipRow({ membershipId, fieldId, name, start, onEnd, projectId }: {
+const todayIso = () => new Date().toISOString().slice(0, 10);
+
+function EndMembershipRow({ membershipId, fieldId, name, start, onEnd, projectId, canManage }: {
   membershipId: string; fieldId: string; name: string; start: string;
-  onEnd: ReturnType<typeof useEndFieldMembership>; projectId: string;
+  onEnd: ReturnType<typeof useEndFieldMembership>; projectId: string; canManage: boolean;
 }) {
   const [reason, setReason] = useState("");
+  const [end, setEnd] = useState(todayIso);
   const [open, setOpen] = useState(false);
   const toast = useToast();
   const changeStart = useChangeFieldMembershipStart(projectId);
@@ -77,9 +85,9 @@ function EndMembershipRow({ membershipId, fieldId, name, start, onEnd, projectId
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border py-2 text-sm first:border-t-0">
       <div>
-        <Link className="underline" href={`/fields/${fieldId}/enrollment`}>{name}</Link> <span className="ui-meta">{fieldId}</span>
+        <Link className="font-medium underline" href={`/fields/${encodeURIComponent(fieldId)}/overview`}>{name}</Link>
         <Badge tone="neutral" className="ml-2">since {formatDate(start)}</Badge>
-        {!editingStart ? (
+        {!canManage ? null : !editingStart ? (
           <Button variant="ghost" size="sm" className="ml-1" onClick={() => setEditingStart(true)}>Change start date</Button>
         ) : (
           <form className="mt-2 flex flex-wrap items-center gap-2" onSubmit={(e) => {
@@ -93,16 +101,21 @@ function EndMembershipRow({ membershipId, fieldId, name, start, onEnd, projectId
           </form>
         )}
       </div>
-      {!open ? (
-        <Button variant="ghost" size="sm" onClick={() => setOpen(true)}>End membership</Button>
+      {!canManage ? null : !open ? (
+        <Button variant="ghost" size="sm" onClick={() => setOpen(true)}>Remove from project</Button>
       ) : (
-        <form className="flex gap-2" onSubmit={(e) => {
+        <form className="flex flex-wrap items-center gap-2" onSubmit={(e) => {
           e.preventDefault();
-          onEnd.mutateAsync({ membershipId, reason }).then(() => { setOpen(false); toast.success("Membership ended"); }).catch(e => toast.error(e, "Could not end membership"));
+          onEnd.mutateAsync({ membershipId, reason, end }).then(() => { setOpen(false); toast.success("Field removed from the project", { description: "Its history is kept." }); })
+            .catch(e => toast.error(e, "Could not remove the field"));
         }}>
-          <TextInput aria-label="Reason for ending membership" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason" required className="max-w-xs" />
+          <label className="ui-meta">Last day in project
+            <TextInput aria-label="Last day in the project" type="date" value={end} min={start} onChange={(e) => setEnd(e.target.value)} required className="max-w-44" />
+          </label>
+          <TextInput aria-label="Reason for removing the field" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason" required className="max-w-xs" />
           <Button type="submit" variant="danger" size="sm" loading={onEnd.isPending}>Confirm</Button>
           <Button type="button" variant="secondary" size="sm" onClick={() => setOpen(false)}>Cancel</Button>
+          <p className="ui-meta w-full">The field can join another project from the day after its last day here.</p>
         </form>
       )}
     </div>
