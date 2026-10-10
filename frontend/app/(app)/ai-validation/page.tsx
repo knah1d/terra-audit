@@ -8,6 +8,7 @@ import { ConfusionMatrixHeatmap } from "@/components/ai/ConfusionMatrixHeatmap";
 import { FeatureImportanceBar } from "@/components/ai/FeatureImportanceBar";
 import { RocCurveChart } from "@/components/ai/RocCurveChart";
 import { Alert } from "@/components/ui/Alert";
+import { useToast } from "@/components/ui/Toast";
 import { Button } from "@/components/ui/Button";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { RoleGate } from "@/components/ui/RoleGate";
@@ -23,19 +24,27 @@ const MODEL_OPTIONS: Array<{ key: "random_forest" | "xgboost"; label: string }> 
 
 function ModelSection({ modelKey, label }: { modelKey: "random_forest" | "xgboost"; label: string }) {
   const train = useTrainModel();
+  const toast = useToast();
   const [jobId, setJobId] = useState<string | null>(null);
   const jobPoll = useJobPoll(jobId ? `/ai/train/${jobId}` : null);
   const validation = useModelValidation(modelKey);
 
   const jobResult = jobId && jobPoll.data?.status === "done" ? (jobPoll.data.result as unknown as AiTrainResult) : null;
   const result = jobResult ?? validation.data ?? null;
-  const training = train.isPending || (jobId !== null && jobPoll.data?.status !== "done" && jobPoll.data?.status !== "error");
+  // Stops spinning on any settled state, including a cancelled job or a failed status check.
+  const training = train.isPending || (jobId !== null && !jobPoll.isError
+    && !["done", "error", "cancelled"].includes(jobPoll.data?.status ?? ""));
   const jobError = jobId && jobPoll.data?.status === "error" ? jobPoll.data.error : null;
 
   async function handleTrain() {
     setJobId(null);
-    const accepted = await train.mutateAsync({ model_key: modelKey, k: 3 });
-    setJobId(accepted.job_id);
+    try {
+      const accepted = await train.mutateAsync({ model_key: modelKey, k: 3 });
+      setJobId(accepted.job_id);
+      toast.info(`${label} training started`);
+    } catch (e) {
+      toast.error(e, `Couldn't start ${label} training`);
+    }
   }
 
   return (
@@ -49,7 +58,8 @@ function ModelSection({ modelKey, label }: { modelKey: "random_forest" | "xgboos
         </RoleGate>
       </div>
 
-      {jobError && <Alert tone="danger">{jobError}</Alert>}
+      {jobError && <Alert tone="danger" title="Training failed">{jobError}</Alert>}
+      {jobPoll.isError && <Alert tone="danger" title="Could not check the training status">{jobPoll.error.message}</Alert>}
       {!result && !training && (
         <p className="text-sm text-text-tertiary">Not trained yet in this session.</p>
       )}
@@ -107,6 +117,7 @@ function ModelSection({ modelKey, label }: { modelKey: "random_forest" | "xgboos
 
 export default function AiValidationPage() {
   const buildDataset = useBuildDataset();
+  const toast = useToast();
   const awdModel = useQuery({
     queryKey: ["awd-model-metrics"],
     queryFn: () => apiFetch<{ research_benchmark: ResearchMetrics | null }>("/ai/awd-model/metrics"),
@@ -132,7 +143,10 @@ export default function AiValidationPage() {
               Build the labeled training dataset from cached field timeseries before training either model.
             </span>
           </div>
-          <Button variant="secondary" size="sm" loading={buildDataset.isPending} onClick={() => buildDataset.mutate()}>
+          <Button variant="secondary" size="sm" loading={buildDataset.isPending} onClick={() => buildDataset.mutate(undefined, {
+            onSuccess: (d) => toast.success("Dataset built", { description: `${d.row_count} rows across ${d.field_window_groups} field/window groups` }),
+            onError: (e) => toast.error(e, "Couldn't build the dataset"),
+          })}>
             Build / Rebuild Dataset
           </Button>
         </div>

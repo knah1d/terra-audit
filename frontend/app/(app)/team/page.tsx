@@ -60,7 +60,7 @@ function InviteSheet({ open, onClose }: { open: boolean; onClose: () => void }) 
 }
 
 export default function TeamPage() {
-  const { data: users, isLoading } = useTeamUsers();
+  const { data: users, isLoading, error } = useTeamUsers();
   const [inviting, setInviting] = useState(false);
 
   return (
@@ -73,6 +73,7 @@ export default function TeamPage() {
         />
 
         {isLoading && <Skeleton className="h-64" />}
+        {error && <Alert tone="danger" title="Could not load the team">{error.message}</Alert>}
 
         {users && users.length === 0 && (
           <EmptyState icon={Users} title="No teammates yet" description="Invite a teammate to give them access." />

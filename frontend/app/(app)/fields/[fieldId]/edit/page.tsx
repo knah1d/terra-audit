@@ -14,6 +14,7 @@ import { useUpdateField } from "@/hooks/use-fields";
 import { useDetectedDistrict, useDetectedLandUse } from "@/hooks/use-geometry";
 import { firstStepPath } from "@/lib/field-steps";
 import { LAND_USE_OPTIONS, fieldUpdateSchema, type FieldUpdateForm } from "@/lib/schemas/field";
+import { RoleGate } from "@/components/ui/RoleGate";
 
 export default function EditFieldPage() {
   const field = useFieldContext();
@@ -81,6 +82,7 @@ export default function EditFieldPage() {
   }
 
   return (
+    <RoleGate allow={["admin", "analyst"]} fallback={<div className="ui-container"><p className="ui-secondary">You have view-only access. Ask an analyst or administrator to make this change.</p></div>}>
     <div className="ui-container-narrow">
       <Card>
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
@@ -117,5 +119,6 @@ export default function EditFieldPage() {
         </form>
       </Card>
     </div>
+    </RoleGate>
   );
 }

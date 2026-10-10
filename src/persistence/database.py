@@ -591,7 +591,20 @@ def get_portfolio_summary(org_id: str) -> list:
             """),
             {"org_id": org_id},
         ).mappings().fetchall()
+        # Current calculations (src.carbon.calculations) win over the legacy
+        # credit_history rows, which are no longer written.
+        current_rows = conn.execute(
+            text("""
+                SELECT field_id, final_issuance, created_at AS calculated_at
+                FROM calculations
+                WHERE org_id = :org_id AND status != 'superseded'
+                ORDER BY created_at DESC
+            """),
+            {"org_id": org_id},
+        ).mappings().fetchall()
     latest_by_field = {row["field_id"]: row for row in latest_rows}
+    for row in reversed(current_rows):  # newest last, so it wins
+        latest_by_field[row["field_id"]] = row
 
     summary = []
     for f in field_rows:

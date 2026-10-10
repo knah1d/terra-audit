@@ -4,7 +4,9 @@ import { useCropSeasons } from "@/hooks/use-crop-seasons";
 import { formatDate, parseQueueTimestamp } from "@/lib/format";
 import { Play, Satellite } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useSession } from "@/app/providers";
+import { useToast } from "@/components/ui/Toast";
 import { AuditTrailTable } from "@/components/signal/AuditTrailTable";
 import { SignalTimeseriesChart } from "@/components/signal/SignalTimeseriesChart";
 import { useFieldContext } from "@/components/fields/FieldContext";
@@ -87,6 +89,10 @@ function SignalAnalyticsView() {
 
   const run = useRunSignalAnalysis(field.field_id);
   const cancel = useCancelSignalRun(field.field_id);
+  const session = useSession();
+  const toast = useToast();
+  // Running or cancelling an analysis is analyst/admin work (server: require_writer).
+  const writable = session?.role === "admin" || session?.role === "analyst";
   const jobPoll = useJobPoll(jobId ? `/signal-runs/${jobId}` : null);
   const queryClient = useQueryClient();
   const jobDone = jobId !== null && jobPoll.data?.status === "done";
@@ -147,12 +153,19 @@ function SignalAnalyticsView() {
       } else {
         setResult(body);
       }
-    } catch {
-      // The mutation error is displayed below; retain all selected inputs.
+    } catch (e) {
+      toast.error(e, "Couldn't start the analysis"); // all selected inputs are kept
     }
   }
 
   const jobStatus = jobId ? jobPoll.data?.status : null;
+  // Announce the finish once per job (the user may be looking elsewhere on the page).
+  const announced = useRef<string | null>(null);
+  useEffect(() => {
+    if (!jobId || announced.current === jobId) return;
+    if (jobStatus === "done") { announced.current = jobId; toast.success("Analysis complete", { description: "The results are saved and ready for Calculations." }); }
+    if (jobStatus === "error") { announced.current = jobId; toast.error(new Error(jobPoll.data?.error ?? "The analysis failed"), "Analysis failed"); }
+  }, [jobId, jobStatus, jobPoll.data?.error, toast]);
   const jobActive = jobId !== null && !["done", "error", "cancelled"].includes(jobStatus ?? "");
   const isRunning = run.isPending || jobActive;
   const processing = jobStatus === "running" || jobStatus === "cancel_requested";
@@ -215,12 +228,16 @@ function SignalAnalyticsView() {
 
           <Switch checked={forceRefresh} onChange={setForceRefresh} label="Bypass local cache (query live GEE)" />
 
-          <Button icon={Play} onClick={handleRun} loading={run.isPending || (processing && !jobPoll.isError)} disabled={rangeInvalid || jobActive || !activeRuns.isFetchedAfterMount || activeRuns.isError}>
+          {writable && <Button icon={Play} onClick={handleRun} loading={run.isPending || (processing && !jobPoll.isError)} disabled={rangeInvalid || jobActive || !activeRuns.isFetchedAfterMount || activeRuns.isError}>
             {jobStatus === "pending" ? "Analysis queued" : "Run Analytics Engine"}
-          </Button>
-          {jobActive && <Button variant="secondary" loading={cancel.isPending} disabled={jobStatus === "cancel_requested"} onClick={() => {
-            if (jobId) cancel.mutate(jobId, { onSuccess: () => { void jobPoll.refetch(); } });
+          </Button>}
+          {writable && jobActive && <Button variant="secondary" loading={cancel.isPending} disabled={jobStatus === "cancel_requested"} onClick={() => {
+            if (jobId) cancel.mutate(jobId, {
+              onSuccess: () => { void jobPoll.refetch(); toast.info("Cancellation requested"); },
+              onError: (e) => toast.error(e, "Couldn't cancel the analysis"),
+            });
           }}>Cancel analysis</Button>}
+          {!writable && <p className="ui-meta">Analysts and administrators can run analyses. You can view the saved results.</p>}
         </div>
 
         <div className="flex flex-col gap-4">
@@ -234,8 +251,6 @@ function SignalAnalyticsView() {
           {jobStatus === "cancelled" && <Alert tone="info" title="Analysis cancelled">You can submit a new analysis when ready.</Alert>}
           {jobPoll.isError && <Alert tone="danger" title="Unable to check analysis status">{jobPoll.error.message}</Alert>}
           {jobPoll.isError && jobActive && <Button variant="secondary" onClick={() => void jobPoll.refetch()}>Retry status check</Button>}
-          {cancel.isError && <Alert tone="danger" title="Unable to cancel analysis">{cancel.error.message}</Alert>}
-          {run.isError && <Alert tone="danger" title="Run failed">{run.error.message}</Alert>}
           {jobError && <Alert tone="danger" title="Job failed">{jobError}</Alert>}
 
           {!effectiveResult && !isRunning && (

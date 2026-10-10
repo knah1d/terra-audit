@@ -10,6 +10,7 @@ import { ButtonLink } from "@/components/ui/Button";
 import { backendFetch, BackendError } from "@/lib/backend";
 import { getSessionToken } from "@/lib/session";
 import type { FieldDetailOut } from "@/types/api";
+import { RoleGate } from "@/components/ui/RoleGate";
 
 const FIELD_TYPE_LABELS: Record<string, string> = {
   rice_awd: "Rice — AWD (VM0051)",
@@ -54,9 +55,11 @@ export default async function FieldLayout({
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <ButtonLink href={`/fields/${field.field_id}/edit`} variant="secondary" size="sm" icon={Pencil}>
-              Edit
-            </ButtonLink>
+            <RoleGate allow={["admin", "analyst"]}>
+              <ButtonLink href={`/fields/${field.field_id}/edit`} variant="secondary" size="sm" icon={Pencil}>
+                Edit
+              </ButtonLink>
+            </RoleGate>
             <DeleteFieldButton fieldId={field.field_id} fieldName={field.name} />
           </div>
         </div>

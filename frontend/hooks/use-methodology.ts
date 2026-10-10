@@ -61,7 +61,9 @@ export function useCreateQuantificationUnit(fieldId: string) {
   return useMutation({
     mutationFn: (body: { name: string; area_ha: number; eligibility_status: string; exclusion_reason?: string }) =>
       apiFetch<QuantificationUnit>(`/fields/${fieldId}/quantification-units`, { method: "POST", json: body }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["quantification-units", fieldId] }),
+    onSuccess: () => {
+      for (const key of [["quantification-units", fieldId], ["project-eligible-area"]]) void queryClient.invalidateQueries({ queryKey: key });
+    },
   });
 }
 

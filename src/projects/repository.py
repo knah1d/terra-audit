@@ -659,6 +659,14 @@ def get_attachment(org_id: str, attachment_id: str) -> dict | None:
     return dict(row) if row else None
 
 
+def list_field_attachments(org_id: str, field_id: str) -> list[dict]:
+    with get_db_connection() as conn:
+        rows = conn.execute(text("""
+            SELECT * FROM attachments WHERE org_id = :org_id AND field_id = :field_id ORDER BY uploaded_at
+        """), {"org_id": org_id, "field_id": field_id}).mappings().fetchall()
+    return [dict(r) for r in rows]
+
+
 def list_attachments(org_id: str, target_type: str, target_id: str) -> list[dict]:
     with get_db_connection() as conn:
         rows = conn.execute(text("""

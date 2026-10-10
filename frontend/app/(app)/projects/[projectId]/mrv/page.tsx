@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { FileArchive, FileDown } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
+import { ProjectDocuments } from "@/components/projects/ProjectDocuments";
 import { useProjectContext } from "@/components/projects/ProjectContext";
 import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
@@ -152,6 +153,8 @@ export default function ProjectMrvPage() {
           )}
         </>
       )}
+
+      <ProjectDocuments project={project} />
     </div>
   );
 }

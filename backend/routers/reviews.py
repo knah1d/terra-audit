@@ -122,7 +122,8 @@ def _require_current_reviewer(user: dict, submission: dict) -> None:
 @router.post("/projects/{project_id}/submissions", status_code=status.HTTP_201_CREATED)
 def create_submission(project_id: str, body: SubmissionCreate, user=Depends(require_writer)):
     org_id = user["org_id"]
-    _require_project_access(user, project_id)
+    from backend.access import require_project_contributor
+    require_project_contributor(org_id, project_id, user)  # a project viewer may not submit
     if projects_db.get_project(org_id, project_id) is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Project not found")
 

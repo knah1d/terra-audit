@@ -1,6 +1,5 @@
 "use client";
 
-import { useQueryClient } from "@tanstack/react-query";
 import { FolderPlus } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -12,8 +11,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Select, TextInput } from "@/components/ui/Field";
 import { Sheet } from "@/components/ui/Sheet";
-import { useProjects } from "@/hooks/use-projects";
-import { apiFetch } from "@/lib/api";
+import { useAssignFieldToProject, useProjects } from "@/hooks/use-projects";
 import type { CurrentProject } from "@/types/api";
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -22,7 +20,6 @@ const today = () => new Date().toISOString().slice(0, 10);
  * lets a standalone field join a project — same field, all history kept. */
 export function FieldProjectControl({ fieldId, project }: { fieldId: string; project: CurrentProject | null }) {
   const router = useRouter();
-  const queryClient = useQueryClient();
   const session = useSession();
   const toast = useToast();
   const projects = useProjects();
@@ -31,17 +28,16 @@ export function FieldProjectControl({ fieldId, project }: { fieldId: string; pro
   const [projectId, setProjectId] = useState("");
   const [start, setStart] = useState(today);
   const [busy, setBusy] = useState(false);
+  const assignToProject = useAssignFieldToProject(projectId || undefined);
   const canEdit = session?.role === "admin" || session?.role === "analyst";
 
   async function assign() {
     setBusy(true);
     try {
-      await apiFetch(`/projects/${encodeURIComponent(projectId)}/fields`, {
-        method: "POST", json: { field_id: fieldId, effective_start_date: start },
-      });
+      // The shared hook refreshes every project and field view.
+      await assignToProject.mutateAsync({ field_id: fieldId, effective_start_date: start });
       setOpen(false);
       toast.success("Added to project");
-      for (const key of [["fields"], ["field-workflow", fieldId], ["dashboard-summary"]]) void queryClient.invalidateQueries({ queryKey: key });
       router.refresh();
     } catch (err) {
       toast.error(err, "Couldn't add to project");
@@ -66,7 +62,8 @@ export function FieldProjectControl({ fieldId, project }: { fieldId: string; pro
           <label className="text-sm">Project
             <Select value={projectId} onChange={(e) => setProjectId(e.target.value)}>
               <option value="">Select a project</option>
-              {(projects.data ?? []).map((p) => <option key={p.project_id} value={p.project_id}>{p.name}</option>)}
+              {/* Only projects where the user may add fields (lead/admin). */}
+              {(projects.data ?? []).filter((p) => p.can_manage).map((p) => <option key={p.project_id} value={p.project_id}>{p.name}</option>)}
             </Select>
           </label>
           <Button type="button" variant="ghost" size="sm" onClick={() => setCreating(true)}>+ Create a new project</Button>

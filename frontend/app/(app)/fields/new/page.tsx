@@ -16,13 +16,13 @@ import { ErrorText, FieldLabel, Select, TextInput } from "@/components/ui/Field"
 import { PageHeader } from "@/components/ui/PageHeader";
 import { NewProjectSheet } from "@/components/projects/NewProjectSheet";
 import { useCreateField } from "@/hooks/use-fields";
-import { useProjects } from "@/hooks/use-projects";
+import { useAssignFieldToProject, useProjects } from "@/hooks/use-projects";
 import { useComputedArea, useDetectedDistrict, useDetectedLandUse } from "@/hooks/use-geometry";
 import {
   FIELD_TYPE_OPTIONS, LAND_USE_OPTIONS, SUGGESTED_METHODOLOGY, fieldCreateSchema, type FieldCreateForm,
 } from "@/lib/schemas/field";
-import { apiFetch } from "@/lib/api";
 import { firstStepPath } from "@/lib/field-steps";
+import { RoleGate } from "@/components/ui/RoleGate";
 
 /**
  * The "pending geometry" concept — the direct client-side replacement for
@@ -51,6 +51,7 @@ export default function NewFieldPage() {
   const [projectStart, setProjectStart] = useState(() => new Date().toISOString().slice(0, 10));
   const [creatingProject, setCreatingProject] = useState(false);
   const [savedFieldPath, setSavedFieldPath] = useState<string | null>(null);
+  const assignToProject = useAssignFieldToProject(projectId || undefined);
 
   const {
     register,
@@ -95,9 +96,8 @@ export default function NewFieldPage() {
       const fieldPath = firstStepPath(field.field_id, field.field_type);
       if (projectId) {
         try {
-          await apiFetch(`/projects/${encodeURIComponent(projectId)}/fields`, {
-            method: "POST", json: { field_id: field.field_id, effective_start_date: projectStart },
-          });
+          // Through the shared hook so every project view refreshes.
+          await assignToProject.mutateAsync({ field_id: field.field_id, effective_start_date: projectStart });
         } catch (err) {
           setSavedFieldPath(fieldPath);
           toast.error(err, "Field saved, but not added to the project", { label: "Open the field", href: fieldPath });
@@ -112,6 +112,7 @@ export default function NewFieldPage() {
   }
 
   return (
+    <RoleGate allow={["admin", "analyst"]} fallback={<div className="ui-container"><p className="ui-secondary">You have view-only access. Ask an analyst or administrator to make this change.</p></div>}>
     <div className="ui-container">
       <PageHeader
         title="Register a Field"
@@ -223,7 +224,7 @@ export default function NewFieldPage() {
               <FieldLabel htmlFor="field-project">Project</FieldLabel>
               <Select id="field-project" value={projectId} onChange={(e) => setProjectId(e.target.value)}>
                 <option value="">{projectMode ? "Select a project" : "Standalone (no project)"}</option>
-                {(projects.data ?? []).map((p) => <option key={p.project_id} value={p.project_id}>{p.name}</option>)}
+                {(projects.data ?? []).filter((p) => p.can_manage).map((p) => <option key={p.project_id} value={p.project_id}>{p.name}</option>)}
               </Select>
               <Button type="button" variant="ghost" size="sm" className="mt-1" onClick={() => setCreatingProject(true)}>+ Create a new project</Button>
               {projectId && (
@@ -241,5 +242,6 @@ export default function NewFieldPage() {
       )}
       <NewProjectSheet open={creatingProject} onClose={() => setCreatingProject(false)} onCreated={(p) => setProjectId(p.project_id)} />
     </div>
+    </RoleGate>
   );
 }

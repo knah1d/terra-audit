@@ -10,9 +10,11 @@ import { RoleGate } from "@/components/ui/RoleGate";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useQueueStatus } from "@/hooks/use-monitoring-ops";
 import { formatQueueTimestamp } from "@/lib/format";
+import { useSession } from "@/app/providers";
 
 export default function QueueStatusPage() {
-  const queue = useQueueStatus();
+  const session = useSession();
+  const queue = useQueueStatus(session?.role === "admin");
   const alive = queue.data?.workers.some(worker => worker.health === "alive");
   function sourceRoute(job: NonNullable<NonNullable<typeof queue.data>["recent_jobs"]>[number]) {
     if (job.job_type === "methodology_ingest") return "/admin/setup";

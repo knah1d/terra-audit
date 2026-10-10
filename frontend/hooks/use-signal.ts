@@ -68,7 +68,9 @@ export function useRunSignalAnalysis(fieldId: string) {
 
 /** Everything that shows "the latest/saved signal runs" for this field. */
 export function invalidateSignalViews(queryClient: QueryClient, fieldId: string) {
-  for (const queryKey of [["signal-run", "latest", fieldId], ["signal-evidence", fieldId], ["external-awd-comparison", fieldId]]) {
+  // A finished run also completes the Signal Analytics step (tab dots, overview, dashboard).
+  for (const queryKey of [["signal-run", "latest", fieldId], ["signal-evidence", fieldId], ["external-awd-comparison", fieldId],
+    ["field-workflow", fieldId], ["project-workflow"], ["guided-enrollment", fieldId], ["dashboard-summary"]]) {
     void queryClient.invalidateQueries({ queryKey });
   }
 }

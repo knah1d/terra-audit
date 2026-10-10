@@ -14,6 +14,7 @@ import { IconTile } from "@/components/ui/IconTile";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useFields } from "@/hooks/use-fields";
+import { RoleGate } from "@/components/ui/RoleGate";
 
 const FIELD_TYPE_LABELS: Record<string, string> = {
   rice_awd: "Rice — AWD (VM0051)",
@@ -35,10 +36,12 @@ export default function FieldsPage() {
       <PageHeader
         title="Fields"
         actions={
-          <div className="flex flex-wrap gap-2">
-            <ButtonLink href="/fields/new" variant="secondary" icon={Plus}>Register standalone field</ButtonLink>
-            <ButtonLink href="/fields/new?mode=project" icon={Plus}>Register project field</ButtonLink>
-          </div>
+          <RoleGate allow={["admin", "analyst"]}>
+            <div className="flex flex-wrap gap-2">
+              <ButtonLink href="/fields/new" variant="secondary" icon={Plus}>Register standalone field</ButtonLink>
+              <ButtonLink href="/fields/new?mode=project" icon={Plus}>Register project field</ButtonLink>
+            </div>
+          </RoleGate>
         }
       />
 
@@ -95,7 +98,7 @@ export default function FieldsPage() {
           title="No fields registered yet"
           description="Register a standalone field for analysis, or a field inside a carbon project."
           action={
-            <ButtonLink href="/fields/new" icon={Plus}>Register a field</ButtonLink>
+            <RoleGate allow={["admin", "analyst"]}><ButtonLink href="/fields/new" icon={Plus}>Register a field</ButtonLink></RoleGate>
           }
         />
       )}

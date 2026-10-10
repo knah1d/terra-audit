@@ -96,6 +96,7 @@ function Dashboard() {
 
   return (
     <div className="ui-container">
+      {summary.error && <Alert tone="danger" title="Could not load your recent work">{summary.error.message}</Alert>}
       <PageHeader
         title="Dashboard"
         actions={canCreate && <div className="flex flex-wrap gap-2">
@@ -177,7 +178,9 @@ function Dashboard() {
             <h2 className="ui-subsection-title">Recent projects</h2>
             <Link className="ui-meta underline" href="/projects">All projects</Link>
           </div>
-          {projects.isLoading ? <Skeleton className="h-24" /> : !recentProjects.length ? (
+          {projects.isLoading ? <Skeleton className="h-24" /> : projects.error ? (
+            <Alert tone="danger" title="Could not load projects">{projects.error.message}</Alert>
+          ) : !recentProjects.length ? (
             <Card><p className="ui-secondary">No projects yet.</p></Card>
           ) : (
             <div className="grid gap-2">
@@ -188,7 +191,7 @@ function Dashboard() {
                       <IconTile icon={FolderKanban} size="sm" />
                       <span className="truncate font-medium">{p.name}</span>
                     </span>
-                    <Badge tone="brand">{p.status}</Badge>
+                    <Badge tone="brand" className="capitalize">{p.status.replace(/_/g, " ")}</Badge>
                   </Card>
                 </Link>
               ))}
@@ -200,7 +203,9 @@ function Dashboard() {
             <h2 className="ui-subsection-title">Recent fields</h2>
             <Link className="ui-meta underline" href="/fields">All fields</Link>
           </div>
-          {fields.isLoading ? <Skeleton className="h-24" /> : !recentFields.length ? (
+          {fields.isLoading ? <Skeleton className="h-24" /> : fields.error ? (
+            <Alert tone="danger" title="Could not load fields">{fields.error.message}</Alert>
+          ) : !recentFields.length ? (
             <Card><p className="ui-secondary">No fields yet.</p></Card>
           ) : (
             <div className="grid gap-2">

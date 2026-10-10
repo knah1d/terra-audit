@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 
-from backend.deps import get_current_user, get_owned_field, get_spatial_engine
+from backend.deps import get_current_user, get_owned_field, get_spatial_engine, require_writer
 from backend.job_handlers import _run_signal_pipeline
 from backend.schemas.signal import JobStatusOut, SignalRunAccepted, SignalResult, SignalRunRequest
 from src.persistence.database import check_cache, get_job, get_latest_signal_result
@@ -14,7 +14,8 @@ router = APIRouter(tags=["signal-analytics"])
 def submit_signal_run(
     field_id: str, body: SignalRunRequest,
     response: Response,
-    user: dict = Depends(get_current_user),
+    # Runs feed calculations: analyst/admin only, never an org viewer.
+    user: dict = Depends(require_writer),
     # require_sar rejects cropland_alm_vm0042 (and any future non-satellite
     # field type) with a 422 instead of silently running the rice AWD
     # detector against a field that has no timeseries.
@@ -59,7 +60,7 @@ def get_active_signal_runs(field_id: str, user=Depends(get_current_user),
 
 
 @router.post("/fields/{field_id}/signal-runs/{job_id}/cancel")
-def cancel_signal_run(field_id: str, job_id: str, user: dict = Depends(get_current_user),
+def cancel_signal_run(field_id: str, job_id: str, user: dict = Depends(require_writer),
                        field: dict = Depends(get_owned_field(require_sar=True))):
     from src.jobs.queue import get_job_row, request_cancel
     job = get_job_row(user["org_id"], job_id)

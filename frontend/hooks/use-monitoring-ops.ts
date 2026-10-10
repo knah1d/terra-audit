@@ -124,10 +124,11 @@ export interface QueueStatus {
   workers: Array<{ worker_id: string; hostname: string; started_at: string; last_heartbeat_at: string; stopped_at: string | null; health?: "alive" | "stale" | "stopped" }>;
 }
 
-export function useQueueStatus() {
+export function useQueueStatus(enabled = true) {
   return useQuery({
     queryKey: ["queue-status"],
     queryFn: () => apiFetch<QueueStatus>("/admin/queue-status"),
     refetchInterval: 10000,
+    enabled,
   });
 }

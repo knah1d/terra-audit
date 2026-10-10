@@ -1,6 +1,6 @@
 "use client";
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MutationCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "next-themes";
 import { createContext, useContext, useState } from "react";
 import { ToastProvider } from "@/components/ui/Toast";
@@ -29,14 +29,24 @@ function AccountProviders({ session, children }: {
   session: SessionClaims | null;
   children: React.ReactNode;
 }) {
-  const [queryClient] = useState(
-    () =>
-      new QueryClient({
-        defaultOptions: {
-          queries: { staleTime: 30_000, retry: 1 },
+  const [queryClient] = useState(() => {
+    const client: QueryClient = new QueryClient({
+      defaultOptions: {
+        queries: { staleTime: 30_000, retry: 1 },
+      },
+      // Workflow status is derived from saved records, so ANY successful save
+      // can change it: refresh the step dots, enrollment and dashboard after
+      // every mutation instead of relying on each hook to remember them.
+      mutationCache: new MutationCache({
+        onSuccess: () => {
+          for (const key of [["field-workflow"], ["project-workflow"], ["guided-enrollment"], ["dashboard-summary"]]) {
+            void client.invalidateQueries({ queryKey: key });
+          }
         },
       }),
-  );
+    });
+    return client;
+  });
 
   return (
     <ThemeProvider attribute="data-theme" defaultTheme="system" enableSystem disableTransitionOnChange>

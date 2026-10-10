@@ -96,7 +96,11 @@ def get_project_eligible_area(project_id: str, user=Depends(get_current_user)):
 
 @router.get("/fields/{field_id}/guided-enrollment")
 def get_guided_enrollment(field_id: str, user=Depends(get_current_user), field=Depends(_field)):
-    return readiness_engine.guided_enrollment(user["org_id"], field)
+    # The field's current project decides the methodology version (a pinned
+    # bundle), exactly as calculations resolve it.
+    from src.projects.workflow import current_projects
+    project = current_projects(user["org_id"]).get(field_id)
+    return readiness_engine.guided_enrollment(user["org_id"], field, project["project_id"] if project else None)
 
 
 # --------------------------------------------------------------------------

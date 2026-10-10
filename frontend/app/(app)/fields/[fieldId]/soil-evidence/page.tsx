@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { FieldLabel, Select, TextInput } from "@/components/ui/Field";
+import { RoleGate } from "@/components/ui/RoleGate";
 import {
   useCreateCustodyEvent, useCreateLabResult, useCreatePlan, useCreateSample, useCreateSocEvidenceReview,
   useCreateStratum, useCustodyEvents, useLabResults, useSocEvidence, useSoilPlans, useSoilSamples, useSoilStrata,
@@ -53,18 +54,19 @@ function SampleRow({ fieldId, planId, sample }: { fieldId: string; planId: strin
               ))}
               {labResults.data?.length === 0 && <li className="ui-meta">No lab results recorded yet.</li>}
             </ul>
-            <form
+            <RoleGate allow={["admin", "analyst"]}><form
               className="grid grid-cols-2 gap-2 sm:grid-cols-5"
               onSubmit={(e) => {
                 e.preventDefault();
-                const data = new FormData(e.currentTarget);
+                const form = e.currentTarget; // React clears currentTarget after the handler
+                const data = new FormData(form);
                 createLabResult.mutate(
                   {
                     analyte: data.get("analyte"), method: data.get("method"), unit: data.get("unit"),
                     value: Number(data.get("value")), lab_name: data.get("lab_name"),
                     analyzed_at: data.get("analyzed_at") || null, notes: "",
                   },
-                  { onError: (err) => toast.error(err, "Couldn't save"), onSuccess: () => { toast.success("Saved"); e.currentTarget?.reset(); } },
+                  { onError: (err) => toast.error(err, "Couldn't save"), onSuccess: () => { toast.success("Saved"); form.reset(); } },
                 );
               }}
             >
@@ -80,7 +82,7 @@ function SampleRow({ fieldId, planId, sample }: { fieldId: string; planId: strin
               <TextInput name="lab_name" placeholder="Lab name" />
               <TextInput name="analyzed_at" type="date" className="col-span-2" />
               <Button type="submit" size="sm" loading={createLabResult.isPending}>Add result</Button>
-            </form>
+            </form></RoleGate>
           </div>
           <div>
             <h4 className="ui-meta mb-2 font-semibold uppercase tracking-wide">Chain of custody</h4>
@@ -93,14 +95,15 @@ function SampleRow({ fieldId, planId, sample }: { fieldId: string; planId: strin
               ))}
               {custodyEvents.data?.length === 0 && <li className="ui-meta">No custody events recorded yet.</li>}
             </ul>
-            <form
+            <RoleGate allow={["admin", "analyst"]}><form
               className="grid grid-cols-2 gap-2 sm:grid-cols-4"
               onSubmit={(e) => {
                 e.preventDefault();
-                const data = new FormData(e.currentTarget);
+                const form = e.currentTarget; // React clears currentTarget after the handler
+                const data = new FormData(form);
                 createCustodyEvent.mutate(
                   { event_type: data.get("event_type"), event_at: data.get("event_at"), actor: data.get("actor"), location: data.get("location"), notes: "" },
-                  { onError: (err) => toast.error(err, "Couldn't save"), onSuccess: () => { toast.success("Saved"); e.currentTarget?.reset(); } },
+                  { onError: (err) => toast.error(err, "Couldn't save"), onSuccess: () => { toast.success("Saved"); form.reset(); } },
                 );
               }}
             >
@@ -117,7 +120,7 @@ function SampleRow({ fieldId, planId, sample }: { fieldId: string; planId: strin
               <TextInput name="actor" placeholder="Actor" />
               <TextInput name="location" placeholder="Location" />
               <Button type="submit" size="sm" className="col-span-2 sm:col-span-4 w-fit" loading={createCustodyEvent.isPending}>Add event</Button>
-            </form>
+            </form></RoleGate>
           </div>
         </div>
       )}
@@ -150,11 +153,12 @@ function SocEvidenceReviewPanel({ fieldId }: { fieldId: string }) {
                 <p className="mb-2 font-mono text-xs text-text-tertiary">{cell.values.length} value(s): {cell.values.join(", ") || "none"}</p>
                 {cell.note && <p className="ui-meta mb-2">{cell.note}</p>}
                 <p className="mb-2 text-xs text-text-secondary">{cell.eligible_sample_ids.length} eligible sample(s) recorded for this cell.</p>
-                <form
+                <RoleGate allow={["admin", "analyst"]}><form
                   className="space-y-2"
                   onSubmit={(e) => {
                     e.preventDefault();
-                    const data = new FormData(e.currentTarget);
+                    const form = e.currentTarget; // React clears currentTarget after the handler
+                const data = new FormData(form);
                     const selectedIds = data.getAll("sample_id").map(String);
                     review.mutate(
                       { site_type: siteType, timepoint, sample_ids: selectedIds, status: String(data.get("status")), reason: String(data.get("reason")) },
@@ -179,7 +183,7 @@ function SocEvidenceReviewPanel({ fieldId }: { fieldId: string }) {
                     <TextInput name="reason" placeholder="Reason (required)" required className="flex-1" />
                   </div>
                   <Button type="submit" size="sm" loading={review.isPending}>Save decision</Button>
-                </form>
+                </form></RoleGate>
               </div>
             );
           }),
@@ -214,18 +218,19 @@ export default function SoilEvidencePage() {
       {writable && (
         <Card>
           <h3 className="ui-subsection-title mb-3">New sampling plan</h3>
-          <form
+          <RoleGate allow={["admin", "analyst"]}><form
             className="grid gap-3 sm:grid-cols-2"
             onSubmit={(e) => {
               e.preventDefault();
-              const data = new FormData(e.currentTarget);
+              const form = e.currentTarget; // React clears currentTarget after the handler
+                const data = new FormData(form);
               createPlan.mutate(
                 {
                   name: String(data.get("name")), description: String(data.get("description") ?? ""),
                   measurement_method: String(data.get("measurement_method")),
                   remeasurement_interval_years: data.get("remeasurement_interval_years") ? Number(data.get("remeasurement_interval_years")) : null,
                 },
-                { onError: (err) => toast.error(err, "Couldn't save"), onSuccess: () => { toast.success("Saved"); e.currentTarget?.reset(); } },
+                { onError: (err) => toast.error(err, "Couldn't save"), onSuccess: () => { toast.success("Saved"); form.reset(); } },
               );
             }}
           >
@@ -251,7 +256,7 @@ export default function SoilEvidencePage() {
               <TextInput id="field-4" name="remeasurement_interval_years" type="number" step="any" />
             </div>
             <Button type="submit" className="w-fit" loading={createPlan.isPending}>Create plan</Button>
-          </form>
+          </form></RoleGate>
         </Card>
       )}
 
@@ -274,21 +279,22 @@ export default function SoilEvidencePage() {
           {writable && (
             <Card>
               <h3 className="ui-subsection-title mb-3">New stratum</h3>
-              <form
+              <RoleGate allow={["admin", "analyst"]}><form
                 className="flex flex-wrap gap-2"
                 onSubmit={(e) => {
                   e.preventDefault();
-                  const data = new FormData(e.currentTarget);
+                  const form = e.currentTarget; // React clears currentTarget after the handler
+                const data = new FormData(form);
                   createStratum.mutate(
                     { name: String(data.get("name")), description: "", area_ha: data.get("area_ha") ? Number(data.get("area_ha")) : null },
-                    { onError: (err) => toast.error(err, "Couldn't save"), onSuccess: () => { toast.success("Saved"); e.currentTarget?.reset(); } },
+                    { onError: (err) => toast.error(err, "Couldn't save"), onSuccess: () => { toast.success("Saved"); form.reset(); } },
                   );
                 }}
               >
                 <TextInput name="name" placeholder="Stratum name" required />
                 <TextInput name="area_ha" type="number" step="any" placeholder="Area (ha)" />
                 <Button type="submit" loading={createStratum.isPending}>Add stratum</Button>
-              </form>
+              </form></RoleGate>
               <ul className="mt-3 flex flex-wrap gap-2 text-xs">
                 {strata.data?.map((s) => <li key={s.stratum_id}><Badge tone="neutral">{s.name}{s.area_ha ? ` (${s.area_ha}ha)` : ""}</Badge></li>)}
               </ul>
@@ -298,11 +304,12 @@ export default function SoilEvidencePage() {
           {writable && (
             <Card>
               <h3 className="ui-subsection-title mb-3">New sample</h3>
-              <form
+              <RoleGate allow={["admin", "analyst"]}><form
                 className="grid gap-2 sm:grid-cols-3"
                 onSubmit={(e) => {
                   e.preventDefault();
-                  const data = new FormData(e.currentTarget);
+                  const form = e.currentTarget; // React clears currentTarget after the handler
+                const data = new FormData(form);
                   createSample.mutate(
                     {
                       stratum_id: data.get("stratum_id") || null,
@@ -317,7 +324,7 @@ export default function SoilEvidencePage() {
                       lab_name: data.get("lab_name") || "", lab_method: data.get("lab_method") || "",
                       chain_of_custody_ref: data.get("chain_of_custody_ref") || "", notes: "",
                     },
-                    { onError: (err) => toast.error(err, "Couldn't save"), onSuccess: () => { toast.success("Saved"); e.currentTarget?.reset(); } },
+                    { onError: (err) => toast.error(err, "Couldn't save"), onSuccess: () => { toast.success("Saved"); form.reset(); } },
                   );
                 }}
               >
@@ -339,7 +346,7 @@ export default function SoilEvidencePage() {
                 <TextInput name="lab_method" placeholder="Lab method" />
                 <TextInput name="chain_of_custody_ref" placeholder="Custody ref (summary)" />
                 <Button type="submit" className="w-fit" loading={createSample.isPending}>Add sample</Button>
-              </form>
+              </form></RoleGate>
             </Card>
           )}
 

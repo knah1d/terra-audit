@@ -126,3 +126,25 @@ def delete_attachment(attachment_id: str, user=Depends(require_writer)):
     get_storage().delete(attachment["storage_key"])
     projects_db.delete_attachment_record(user["org_id"], attachment_id)
     return None
+
+
+@router.get("/fields/{field_id}/calculation-evidence", response_model=list[AttachmentOut])
+def calculation_evidence(field_id: str, season_ids: str = "", user=Depends(get_current_user)):
+    """The evidence files a calculation over these seasons freezes into its
+    snapshot: the field's own files and soil evidence, plus files on the
+    selected seasons and their observations and practice events — never
+    files belonging to other seasons."""
+    org_id = user["org_id"]
+    if get_field(org_id, field_id) is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Field not found")
+    seasons = {s for s in season_ids.split(",") if s}
+    in_scope = set(seasons)
+    for table in ("field_observations", "practice_events"):
+        for sid in seasons:
+            in_scope.update(r["id"] for r in monitoring.records(table, org_id, field_id, sid))
+    keep = []
+    for a in projects_db.list_field_attachments(org_id, field_id):
+        if a["target_type"] in ("season", "observation", "practice_event") and a["target_id"] not in in_scope:
+            continue
+        keep.append(AttachmentOut(**a))
+    return keep

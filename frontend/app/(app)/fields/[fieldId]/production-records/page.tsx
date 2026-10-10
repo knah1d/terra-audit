@@ -16,6 +16,8 @@ import { useProjects } from "@/hooks/use-projects";
 import { useProjectApplicability } from "@/hooks/use-methodology";
 import type { LeakageAssessment } from "@/hooks/use-production-records";
 import type { ProductionRecordOut } from "@/types/api";
+import { Alert } from "@/components/ui/Alert";
+import { Skeleton } from "@/components/ui/Skeleton";
 
 function RecordsTable({ records }: { records: ProductionRecordOut[] }) {
   return (
@@ -53,14 +55,16 @@ function RecordsTable({ records }: { records: ProductionRecordOut[] }) {
 
 function LeakageCalculator({ fieldId, commodities, writable }: { fieldId: string; commodities: string[]; writable: boolean }) {
   const saved = useLeakageAssessments(fieldId);
+  const projectList = useProjects();
+  const projectName = (id: string) => projectList.data?.find((x) => x.project_id === id)?.name ?? "Project";
   const [selected, setSelected] = useState("");
   const initial = saved.data?.find((a) => a.assessment_id === selected);
   return <Card>
     <h3 className="ui-subsection-title">Saved leakage assessments</h3>
-    {saved.error && <p role="alert">Unable to load saved assessments.</p>}
+    {saved.error && <Alert tone="danger" title="Could not load saved assessments">{saved.error.message}</Alert>}
     <Select value={selected} onChange={(e) => setSelected(e.target.value)}>
       <option value="">New assessment</option>
-      {saved.data?.map((a) => <option key={a.assessment_id} value={a.assessment_id}>{formatDate(a.period_start)} – {formatDate(a.period_end)} · {a.project_id} · {formatQueueTimestamp(a.created_at)}</option>)}
+      {saved.data?.map((a) => <option key={a.assessment_id} value={a.assessment_id}>{formatDate(a.period_start)} – {formatDate(a.period_end)} · {projectName(a.project_id)} · {formatQueueTimestamp(a.created_at)}</option>)}
     </Select>
     {initial && <ExplainButton projectId={initial.project_id} request={{ action: "explain_leakage", field_id: fieldId, assessment_id: initial.assessment_id }}>Explain this leakage result</ExplainButton>}
     {initial && <details className="my-2 text-sm"><summary>Stored evidence and parameters</summary><pre className="overflow-auto whitespace-pre-wrap text-xs">{JSON.stringify(initial.payload, null, 2)}</pre></details>}
@@ -71,8 +75,10 @@ function LeakageCalculator({ fieldId, commodities, writable }: { fieldId: string
 function LeakageAssessmentForm({ fieldId, commodities, initial }: { fieldId: string; commodities: string[]; initial?: LeakageAssessment }) {
   const save = useSaveLeakageAssessment(fieldId);
   const projects = useProjects();
+  const field = useFieldContext();
   const p = initial?.payload ?? {};
-  const [projectId, setProjectId] = useState(String(p.project_id ?? ""));
+  // One project per field: a new assessment belongs to the field's current project.
+  const [projectId, setProjectId] = useState(String(p.project_id ?? field.current_project?.project_id ?? ""));
   const applicability = useProjectApplicability(projectId, projectId ? "vm0042_alm" : undefined);
   const toast = useToast();
   const params = (p.commodity_params ?? {}) as Record<string, Record<string, unknown>>;
@@ -109,7 +115,7 @@ function LeakageAssessmentForm({ fieldId, commodities, initial }: { fieldId: str
     save.mutate(body, { onError: (err) => toast.error(err, "Couldn't save assessment"), onSuccess: () => toast.success("Leakage assessment saved") });
   }}>
     <div className="grid gap-3 sm:grid-cols-2">
-      <label>Project<Select required value={projectId} onChange={(e) => setProjectId(e.target.value)}><option value="">Select project</option>{projects.data?.map((project) => <option key={project.project_id} value={project.project_id}>{project.name}</option>)}</Select></label>
+      <label>Project<Select required value={projectId} onChange={(e) => setProjectId(e.target.value)}><option value="">Select project</option>{projects.data?.filter((project) => project.project_id === field.current_project?.project_id || project.project_id === p.project_id).map((project) => <option key={project.project_id} value={project.project_id}>{project.name}</option>)}</Select></label>
       <p className="text-sm">Methodology: {applicability.data?.resolved_bundle?.bundle_version ?? "Select a project with an applicable bundle"}</p>
       {[["project_start", "Project start"], ["historical_start", "History start"], ["historical_end", "History end (inclusive)"], ["monitoring_period_start", "Monitoring start"], ["monitoring_period_end", "Monitoring end (inclusive)"]].map(([key, label]) => <label key={key}>{label}<TextInput name={key} type="date" defaultValue={defaultText(key)} required /></label>)}
       <label>Years since project start<TextInput name="years_elapsed" type="number" min={1} step={1} defaultValue={defaultText("years_elapsed") || "1"} required /></label>
@@ -254,7 +260,8 @@ export default function ProductionRecordsPage() {
 
       <Card>
         <h3 className="ui-subsection-title mb-3">Records</h3>
-        <RecordsTable records={records.data ?? []} />
+        {records.error ? <Alert tone="danger" title="Could not load production records">{records.error.message}</Alert>
+          : records.isLoading ? <Skeleton className="h-24" /> : <RecordsTable records={records.data ?? []} />}
       </Card>
 
       <LeakageCalculator fieldId={fieldId} commodities={commodities} writable={writable} />

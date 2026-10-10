@@ -3,6 +3,7 @@
 import { FlaskConical, Save } from "lucide-react";
 import { useState } from "react";
 import { useFieldContext } from "@/components/fields/FieldContext";
+import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { FieldLabel, Select, TextArea, TextInput } from "@/components/ui/Field";
@@ -204,8 +205,9 @@ const SOC_LABELS: Array<{ key: "project_t_start" | "project_t_final" | "control_
 ];
 
 function SocMeasurementsForm({ fieldId }: { fieldId: string }) {
-  const { data: soc, isLoading } = useSocMeasurements(fieldId);
+  const { data: soc, isLoading, error } = useSocMeasurements(fieldId);
 
+  if (error) return <Alert tone="danger" title="Could not load SOC samples">{error.message}</Alert>;
   if (isLoading || !soc) {
     return <Skeleton className="h-48" />;
   }
@@ -273,8 +275,8 @@ function SocMeasurementsFormBody({
 
 export default function PracticeDataPage() {
   const field = useFieldContext();
-  const { data: schedule, isLoading } = usePracticeSchedule(field.field_id);
-  const { data: livestock, isLoading: livestockLoading } = useLivestockSchedule(field.field_id);
+  const { data: schedule, isLoading, error: scheduleError } = usePracticeSchedule(field.field_id);
+  const { data: livestock, isLoading: livestockLoading, error: livestockError } = useLivestockSchedule(field.field_id);
 
   return (
     <div className="ui-container flex flex-col gap-6">
@@ -282,7 +284,11 @@ export default function PracticeDataPage() {
         <IconTile icon={FlaskConical} size="sm" />
         Practice &amp; Soil Data
       </h2>
-      {isLoading ? (
+      {scheduleError ? (
+        <Alert tone="danger" title="Could not load the practice schedules">
+          {scheduleError.message} The forms are hidden so an empty form cannot overwrite saved data. Reload to try again.
+        </Alert>
+      ) : isLoading ? (
         <div className="grid grid-cols-2 gap-4">
           <Skeleton className="h-64" />
           <Skeleton className="h-64" />
@@ -293,7 +299,11 @@ export default function PracticeDataPage() {
           <PracticeScenarioForm fieldId={field.field_id} scenario="project" initial={schedule?.project ?? null} />
         </div>
       )}
-      {livestockLoading ? (
+      {livestockError ? (
+        <Alert tone="danger" title="Could not load the livestock schedules">
+          {livestockError.message} The forms are hidden so an empty form cannot overwrite saved data. Reload to try again.
+        </Alert>
+      ) : livestockLoading ? (
         <div className="grid grid-cols-2 gap-4">
           <Skeleton className="h-40" />
           <Skeleton className="h-40" />

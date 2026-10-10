@@ -51,7 +51,7 @@ def _crop_seasons(org_id: str, field_id: str, seasons: list) -> dict:
     if rejected:
         return _step("needs_attention", f"{rejected} observation(s) rejected")
     if pending:
-        return _step("in_progress", f"{pending} observation(s) awaiting review")
+        return _step("in_progress", f"{pending} observation(s) awaiting review by another team member")
     return _step("completed", f"{len(seasons)} season(s)")
 
 
@@ -61,11 +61,12 @@ def _enrollment(org_id: str, field: dict, seasons: list, project_id: str | None)
     from src.methodology.readiness import guided_enrollment
     enrollment = guided_enrollment(org_id, field, project_id)
     unrecognized = [c for c in enrollment["declared_crops"] if not c.get("recognized", True)]
-    if enrollment["missing_evidence"]:
-        return _step("needs_attention", enrollment["missing_evidence"][0])
+    # Gaps that later steps own (satellite run, practice schedules, SOC
+    # samples) are reported on those steps, not here — otherwise "Next step"
+    # sends users to Enrollment, which cannot fix them.
     if unrecognized:
         return _step("needs_attention", "A declared crop needs reviewer confirmation")
-    return _step("ready", "No evidence gaps flagged")
+    return _step("ready", "Crops recognised for this methodology")
 
 
 def _signal(org_id: str, field_id: str) -> dict:

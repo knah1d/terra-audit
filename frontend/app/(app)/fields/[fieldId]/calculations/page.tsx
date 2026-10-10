@@ -9,6 +9,7 @@ import { useToast } from "@/components/ui/Toast";
 import { useSession } from "@/app/providers";
 import { ExplainButton } from "@/components/ai/ExplainDrawer";
 import { useFieldContext } from "@/components/fields/FieldContext";
+import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import { Card, StatCard } from "@/components/ui/Card";
@@ -136,8 +137,13 @@ function CalculationsView() {
   const [periodEnd, setPeriodEnd] = useState(() => urlDate("end") || String(restoring?.monitoring_period_end ?? ""));
   const [manualSeasons, setManualSeasons] = useState<string[]>(() => (restoring?.season_ids as string[] | undefined) ?? search.getAll("season"));
   const [runChoice, setRunChoice] = useState(() => last?.runChoice ?? "");
-  const [projectId, setProjectId] = useState(() => search.get("project")
-    ?? (last ? (last.body.project_id as string | null) ?? "" : field.current_project?.project_id ?? ""));
+  // One project per field: a calculation is either under the field's current
+  // project or standalone (preliminary) — never another project.
+  const fieldProject = field.current_project?.project_id ?? "";
+  const [projectId, setProjectId] = useState(() => {
+    const wanted = search.get("project") ?? (last ? (last.body.project_id as string | null) ?? "" : fieldProject);
+    return wanted === "" || wanted === fieldProject ? wanted : fieldProject;
+  });
   const [supersedes, setSupersedes] = useState("");
   const [dirty, setDirty] = useState(true);
   const [lastBody, setLastBody] = useState<Record<string, unknown> | null>(null);
@@ -161,6 +167,9 @@ function CalculationsView() {
   // A saved run is only used as evidence when its window matches exactly.
   const evidenceRun = isRice ? (runs.data ?? []).find((r) => r.window_start === context?.start && r.window_end === context?.end) : undefined;
   const project = projects.data?.find((p) => p.project_id === projectId);
+  // Saving or submitting under a project needs lead/contributor rights there.
+  const notMember = !!projectId && projects.isSuccess && !project;
+  const canWork = writable && (!projectId || !!project?.can_contribute);
 
   const contextIssue = !pathway ? "This field has no supported calculation pathway." :
     !context ? "" :
@@ -180,7 +189,8 @@ function CalculationsView() {
   const submissions = useProjectSubmissions(projectId);
   const submissionFor = (calculationId: string) => submissions.data?.find((s) => s.calculation_id === calculationId && s.status !== "withdrawn");
   // The remembered request applies only while the page still shows the same context.
-  const lastMatches = !!last && !!context && !contextIssue && last.body.monitoring_period_start === context.start
+  const lastMatches = !!last && !!context && !contextIssue && (last.body.project_id ?? "") === projectId
+    && last.body.monitoring_period_start === context.start
     && last.body.monitoring_period_end === context.end && JSON.stringify(last.body.season_ids) === JSON.stringify(context.seasons);
   const lastInputs = lastMatches ? last!.body.engine_inputs as Record<string, unknown> : undefined;
   const lastAmendment = (lastInputs?.project_amendments as [string, number][] | undefined)?.[0];
@@ -244,12 +254,17 @@ function CalculationsView() {
 
   function saveCalculation(supersedesId: string | null) {
     return perform("Couldn't save calculation", async () => {
-      const out = await commit.mutateAsync({ body: { ...lastBody, monitoring_run_ids: [], attachment_ids: [],
+      // Freeze the evidence files of these seasons into the snapshot, so they
+      // travel with the calculation into the MRV evidence package.
+      const seasonIds = ((lastBody?.season_ids as string[] | undefined) ?? []).join(",");
+      const evidence = await apiFetch<{ attachment_id: string }[]>(`${base}/calculation-evidence?season_ids=${encodeURIComponent(seasonIds)}`);
+      const out = await commit.mutateAsync({ body: { ...lastBody, monitoring_run_ids: [], attachment_ids: evidence.map((a) => a.attachment_id),
         supersedes_calculation_id: supersedesId }, idempotencyKey: crypto.randomUUID() });
       setSaved({ id: out.calculation.calculation_id, status: out.calculation.status, version: out.calculation.version,
         projectId: (lastBody?.project_id as string | null) ?? null });
-      toast.success("Calculation saved", { description: out.calculation.status === "ready_for_review"
-        ? `Version ${out.calculation.version} · ready for review` : `Version ${out.calculation.version} · draft — fix the listed items before review` });
+      toast.success("Calculation saved", { description: (out.calculation.status === "ready_for_review"
+        ? `Version ${out.calculation.version} · ready for review` : `Version ${out.calculation.version} · draft — fix the listed items before review`)
+        + (evidence.length ? ` · ${evidence.length} evidence file(s) included` : "") });
       await queryClient.invalidateQueries({ queryKey: ["calculations", field.field_id] });
       await queryClient.invalidateQueries({ queryKey: ["field-workflow", field.field_id] });
     });
@@ -275,7 +290,10 @@ function CalculationsView() {
     <div className="ui-container space-y-6">
       <h2 className="ui-section-title">Calculations</h2>
 
-      {writable && <Card>
+      {notMember && <Alert tone="warning" title="You are not a member of this field's project">
+        Ask a lead of {field.current_project?.name} to add you as a contributor to calculate and save here.
+      </Alert>}
+      {writable && !notMember && <Card>
         <div className="mb-4 space-y-1 text-sm">
           {isRice && !manual && (
             <label className="block">Based on
@@ -290,7 +308,7 @@ function CalculationsView() {
             <p className="text-text-secondary">
               Period {formatDate(context.start)} – {formatDate(context.end)} ·{" "}
               {context.seasons.map((id) => allSeasons.find((s) => s.id === id)?.payload.name).filter(Boolean).join(", ") || "no crop season"} ·{" "}
-              {project ? `Project: ${project.name}` : "Standalone (preliminary)"} · {field.area_ha?.toFixed(2)} ha
+              {projectId && field.current_project ? `Project: ${field.current_project.name}` : "Standalone (preliminary)"} · {field.area_ha?.toFixed(2)} ha
             </p>
           )}
           {contextIssue && <p role="status" className="text-warning-700">{contextIssue}</p>}
@@ -364,7 +382,8 @@ function CalculationsView() {
             <p className="flex items-center gap-2 text-sm font-medium text-success-700"><CheckCircle2 className="size-4" />Ready to save{projectId ? " and submit for review" : ""}.</p>
           )}
 
-          <div className="flex flex-wrap items-center gap-2">
+          {!canWork && <p className="ui-meta">You can calculate here, but saving needs a lead or contributor role in {field.current_project?.name ?? "the project"}.</p>}
+          {canWork && <div className="flex flex-wrap items-center gap-2">
             {!saved && (accounted ? (
               <>
                 <p className="w-full text-sm text-text-secondary">
@@ -388,7 +407,7 @@ function CalculationsView() {
                 : <Button loading={createSubmission.isPending} onClick={() => void submitForReview(saved.projectId!, saved.id)}>Submit for review</Button>
             )}
             {saved && !saved.projectId && <span className="ui-meta">Standalone calculation — add the field to a project to submit it for review.</span>}
-          </div>
+          </div>}
         </Card>
       )}
 
@@ -420,7 +439,7 @@ function CalculationsView() {
           <label className="block">Project
             <Select value={projectId} disabled={busy} onChange={(e) => { setProjectId(e.target.value); markDirty(); }}>
               <option value="">No project (preliminary)</option>
-              {(projects.data ?? []).map((p) => <option key={p.project_id} value={p.project_id}>{p.name}</option>)}
+              {field.current_project && <option value={field.current_project.project_id}>{field.current_project.name}</option>}
             </Select>
           </label>
           {!!openCalculations.length && (
@@ -484,7 +503,7 @@ function CalculationsView() {
                 <div className="flex flex-wrap gap-2">
                   {!row.legacy && row.status === "ready_for_review" && row.project_id && (submissionFor(row.calculation_id)
                     ? <ButtonLink variant="secondary" size="sm" href={`/reviews/${encodeURIComponent(submissionFor(row.calculation_id)!.submission_id)}`}>Open review</ButtonLink>
-                    : writable && row.project_id === projectId && <Button variant="secondary" size="sm" loading={createSubmission.isPending} onClick={() => void submitForReview(row.project_id!, row.calculation_id)}>Submit for review</Button>)}
+                    : canWork && row.project_id === projectId && <Button variant="secondary" size="sm" loading={createSubmission.isPending} onClick={() => void submitForReview(row.project_id!, row.calculation_id)}>Submit for review</Button>)}
                   <Button variant="ghost" size="sm" onClick={() => download(row, row.legacy ? `credit-history-${row.credit_history_id}.json` : `calculation-${row.calculation_id}.json`)}>JSON</Button>
                   {!row.legacy && <Button variant="ghost" size="sm" onClick={() => void perform("Download failed", async () => {
                     downloadBlob(await apiFetchBlob(`/calculations/${row.calculation_id}/evidence/pdf`), `${isRice ? "mrv-report" : "calculation"}-${row.calculation_id}.pdf`);

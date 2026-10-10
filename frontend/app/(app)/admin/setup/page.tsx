@@ -8,7 +8,7 @@ import { MethodologyLibrarySetup } from "@/components/ai/MethodologyLibrarySetup
 interface Setup { checks: { name: string; ready: boolean; detail: string }[]; counts: Record<string, number>; queued_jobs: number; notice: string }
 export default function SetupPage() {
   const query = useQuery({ queryKey: ["product-readiness"], queryFn: () => apiFetch<Setup>("/admin/product-readiness") });
-  return <RoleGate allow={["admin"]}><div className="ui-container space-y-6"><h1 className="ui-page-title">Product setup</h1>
+  return <RoleGate allow={["admin"]} fallback={<div className="ui-container"><p className="ui-secondary">Product setup is for administrators.</p></div>}><div className="ui-container space-y-6"><h1 className="ui-page-title">Product setup</h1>
     {query.isLoading && <p>Loading setup status…</p>}{query.error && <p role="alert">{query.error.message}</p>}
     <MethodologyLibrarySetup />
     <Card><h2 className="ui-section-title">Start your first project</h2><ol className="mt-3 list-inside list-decimal space-y-2 text-sm"><li><Link className="text-brand-700" href="/team">Invite teammates</Link>, then assign their project roles.</li><li><Link className="text-brand-700" href="/projects">Create a project</Link> and assign registered fields.</li><li>Add crop seasons, practices, attachments, and independent field observations.</li><li>Collect satellite evidence from the project monitoring page.</li><li>Review labels, train and evaluate a crop model in the AI workspace.</li><li>Prepare calculations and submit them through the review workflow.</li></ol></Card>
