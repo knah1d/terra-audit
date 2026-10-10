@@ -60,6 +60,28 @@ def provider_status() -> dict:
             "worker_credentials_verified": False}
 
 
+# Groq counts a request as input tokens PLUS the reserved output tokens against
+# the model's per-minute limit (8,000 for openai/gpt-oss-20b on the free tier);
+# a larger request is rejected outright with HTTP 413.
+GROQ_PROMPT_OVERHEAD_TOKENS = 1200  # instructions + response schema + message framing
+
+
+def _groq_completion_tokens() -> int:
+    return int(os.environ.get("GROQ_MAX_TOKENS", "2500"))
+
+
+def packet_token_budget() -> int | None:
+    """Context budget for an explanation packet on the configured provider, or
+    None for the default. For Groq it is derived from the per-request token
+    limit so the whole request fits; reference text is dropped first."""
+    if provider_name() != "groq":
+        return None
+    if os.environ.get("GROQ_PACKET_TOKENS"):
+        return int(os.environ["GROQ_PACKET_TOKENS"])
+    limit = int(os.environ.get("GROQ_TOKENS_PER_REQUEST", "8000"))
+    return max(1000, limit - GROQ_PROMPT_OVERHEAD_TOKENS - _groq_completion_tokens())
+
+
 def explanation_signature():
     """Non-secret identity shared by the API and worker; invalidates fake caches."""
     from src.ai.validate import RESPONSE_SCHEMA, EXPLANATION_PROMPT_VERSION
@@ -86,7 +108,11 @@ def _groq(instructions, data, schema, org_id, media, vision):
             response = client.post(base + "/chat/completions", headers={
                 "Authorization": f"Bearer {os.environ['GROQ_API_KEY']}"}, json={
                 "model": model, "temperature": 0,
-                "max_completion_tokens": int(os.environ.get("GROQ_MAX_TOKENS", "8000")),
+                "max_completion_tokens": _groq_completion_tokens(),
+                # gpt-oss models reason before answering; keep that short so the
+                # answer fits in the reserved output tokens.
+                **({"reasoning_effort": os.environ.get("GROQ_REASONING_EFFORT", "low")}
+                   if model.startswith("openai/gpt-oss") else {}),
                 "messages": [{"role": "system", "content": instructions},
                              {"role": "user", "content": json.dumps(data, default=str, allow_nan=False)}],
                 "response_format": {"type": "json_schema", "json_schema": {
@@ -95,7 +121,16 @@ def _groq(instructions, data, schema, org_id, media, vision):
         if response.status_code == 429:
             raise ValueError("Groq rate limit reached; wait and request a new explanation")
         if response.status_code != 200:
-            raise ValueError(f"Groq request failed (HTTP {response.status_code}); check API key, model and schema configuration")
+            try:  # Groq's own reason, e.g. "Request too large ... Limit 8000, Requested 15234"
+                reason = str((response.json().get("error") or {}).get("message") or "")[:300]
+            except ValueError:
+                reason = ""
+            if response.status_code == 413:
+                raise ValueError("Groq rejected the request as too large for the model's tokens-per-minute limit"
+                                 + (f" ({reason})" if reason else "")
+                                 + ". Set GROQ_TOKENS_PER_REQUEST to your plan's limit, or lower GROQ_MAX_TOKENS.")
+            raise ValueError(f"Groq request failed (HTTP {response.status_code})" + (f": {reason}" if reason else "")
+                             + "; check API key, model and schema configuration")
         body = response.json()
         choice = (body.get("choices") or [{}])[0]
         message = choice.get("message") or {}

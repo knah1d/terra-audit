@@ -51,6 +51,11 @@ def request_explanation(project_id: str, body: ExplainRequest, user=Depends(get_
         raise HTTPException(403, str(exc)) from exc
     except TypeError as exc:
         raise HTTPException(422, "Parameters do not match the selected explanation action") from exc
+    except ValueError as exc:  # e.g. too large for the provider's limit, or nothing to explain yet
+        from src.ai.packets import PacketTooLargeError
+        detail = ("This explanation needs more context than the AI provider's per-request limit allows. "
+                  "Raise GROQ_TOKENS_PER_REQUEST if your Groq plan allows more.") if isinstance(exc, PacketTooLargeError) else str(exc)
+        raise HTTPException(422, detail) from exc
     with timings.measure("cache_lookup"):
         saved = cached(user["org_id"], project_id, packet)
     if saved:
