@@ -11,6 +11,7 @@ import datetime
 import json
 
 from fpdf import FPDF
+from fpdf.fonts import FontFace
 
 
 # ---------------------------------------------------------------------------
@@ -36,6 +37,7 @@ def _s(text: str) -> str:
         "₂": "2",   # ₂
         "₄": "4",   # ₄
         "μ": "u",   # μ
+        "≥": ">=", "≤": "<=", "’": "'", "‘": "'", "“": '"', "”": '"',
     }
     for k, v in replacements.items():
         text = text.replace(k, v)
@@ -419,36 +421,30 @@ def generate_timeseries_csv(df) -> str:
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
-# VM0051 monitoring (MRV) report — from an immutable calculation snapshot
+# VM0051 monitoring (MRV) reports — field and project level
 # ---------------------------------------------------------------------------
 
-class _MRVPDF(_PDF):
-    """Report pages carry a diagonal DRAFT watermark until the calculation
-    has been internally approved."""
-    draft = True
+_INK = (33, 37, 41)
+_MUTED = (108, 117, 125)
+_BRAND = (22, 101, 52)
+_BRAND_TINT = (232, 243, 236)
+_ZEBRA = (248, 250, 249)
+_RULE = (210, 215, 220)
+_TONES = {  # text colour, fill colour
+    "amber": ((146, 64, 14), (254, 243, 199)),
+    "green": ((22, 101, 52), (220, 252, 231)),
+    "red": ((153, 27, 27), (254, 226, 226)),
+}
+# VM0051 §8.6.3: the QA3 flat uncertainty deduction is valid only up to this
+# project-wide annual size; per-field checks cannot see the project total.
+_QA3_PROJECT_GATE_TCO2E = 60000.0
 
-    def header(self):
-        super().header()
-        if self.draft:
-            with self.local_context(text_color=(225, 225, 225)):
-                self.set_font("Helvetica", "B", 46)
-                mark = "DRAFT - NOT APPROVED"
-                with self.rotation(45, x=105, y=148):
-                    self.text(105 - self.get_string_width(mark) / 2, 152, mark)
-            self.set_y(20)
 
-    def table(self, headers: list[str], rows: list[list], widths: tuple):
-        """Simple bordered table; cells wrap."""
-        self.set_font("Helvetica", "", 8)
-        with super().table(col_widths=widths, text_align="LEFT", line_height=4.5, padding=1) as t:
-            head = t.row()
-            for h in headers:
-                head.cell(_s(h))
-            for r in rows:
-                row = t.row()
-                for c in r:
-                    row.cell(_s("" if c is None else str(c)))
-        self.ln(2)
+def _n(value, decimals: int = 2) -> str:
+    try:
+        return f"{float(value):,.{decimals}f}"
+    except (TypeError, ValueError):
+        return "-"
 
 
 def _date(value) -> str:
@@ -459,6 +455,239 @@ def _who(users: dict, user_id) -> str:
     return users.get(user_id, user_id or "-")
 
 
+def _positions(geojson) -> list:
+    """Every [lon, lat] in a GeoJSON geometry, Feature or FeatureCollection."""
+    if not isinstance(geojson, dict):
+        return []
+    if geojson.get("type") == "FeatureCollection":
+        return [p for f in geojson.get("features") or [] for p in _positions(f)]
+    if geojson.get("type") == "Feature":
+        return _positions(geojson.get("geometry"))
+    out, stack = [], [geojson.get("coordinates") or []]
+    while stack:
+        item = stack.pop()
+        if isinstance(item, (list, tuple)) and len(item) >= 2 and all(isinstance(v, (int, float)) for v in item[:2]):
+            out.append(item)
+        elif isinstance(item, (list, tuple)):
+            stack.extend(item)
+    return out
+
+
+def _label(value) -> str:
+    return str(value or "-").replace("_", " ").capitalize()
+
+
+class _MRVPDF(FPDF):
+    """Shared layout for the VM0051 monitoring reports: running header and
+    footer, numbered sections, fact and data tables, status notices, and a
+    diagonal DRAFT watermark until internal approval."""
+
+    def __init__(self, running_title: str, status_label: str, draft: bool):
+        super().__init__(orientation="P", unit="mm", format="A4")
+        self.running_title, self.status_label, self.draft = running_title, status_label, draft
+        self.generated = datetime.datetime.now(datetime.timezone.utc)
+        self.set_margins(left=20, top=22, right=20)
+        self.set_auto_page_break(auto=True, margin=20)
+        self.set_title(_s(running_title))
+        self.set_author("Terra Audit")
+        self.set_creator("Terra Audit")
+        self.set_draw_color(*_RULE)
+        self.set_line_width(0.2)
+        self.add_page()
+
+    @property
+    def content_width(self) -> float:
+        return self.w - self.l_margin - self.r_margin
+
+    def header(self):
+        if self.draft:
+            with self.local_context(text_color=(234, 234, 234)):
+                self.set_font("Helvetica", "B", 46)
+                mark = "DRAFT - NOT APPROVED"
+                with self.rotation(45, x=105, y=148):
+                    self.text(105 - self.get_string_width(mark) / 2, 152, mark)
+        self.set_y(10)
+        self.set_font("Helvetica", "B", 8)
+        self.set_text_color(*_BRAND)
+        self.cell(self.content_width / 2, 5, "TERRA AUDIT")
+        self.set_font("Helvetica", "", 8)
+        self.set_text_color(*_MUTED)
+        self.cell(self.content_width / 2, 5, _s(self.running_title), align="R")
+        self.set_draw_color(*_RULE)
+        self.line(self.l_margin, 16.5, self.w - self.r_margin, 16.5)
+        self.set_xy(self.l_margin, 22)
+        self.set_text_color(*_INK)
+
+    def footer(self):
+        self.set_y(-15)
+        self.set_draw_color(*_RULE)
+        self.line(self.l_margin, self.get_y(), self.w - self.r_margin, self.get_y())
+        self.ln(2)
+        self.set_font("Helvetica", "", 7.5)
+        self.set_text_color(*_MUTED)
+        third = self.content_width / 3
+        self.cell(third, 4, _s(self.status_label))
+        self.cell(third, 4, f"Generated {self.generated:%d %b %Y %H:%M} UTC", align="C")
+        self.cell(third, 4, f"Page {self.page_no()} of {{nb}}", align="R")
+
+    # ---- building blocks ---------------------------------------------------
+    def _room(self, height: float):
+        if self.get_y() + height > self.page_break_trigger:
+            self.add_page()
+
+    def title_block(self, kicker: str, title: str, subtitle: str):
+        self.ln(2)
+        self.set_font("Helvetica", "B", 8.5)
+        self.set_text_color(*_BRAND)
+        self.cell(0, 5, _s(kicker.upper()), new_x="LMARGIN", new_y="NEXT")
+        self.ln(1)
+        self.set_font("Helvetica", "B", 20)
+        self.set_text_color(*_INK)
+        self.multi_cell(0, 9, _s(title), align="L", new_x="LMARGIN", new_y="NEXT")
+        self.ln(0.5)
+        self.set_font("Helvetica", "", 10)
+        self.set_text_color(*_MUTED)
+        self.multi_cell(0, 5.2, _s(subtitle), align="L", new_x="LMARGIN", new_y="NEXT")
+        self.set_text_color(*_INK)
+        self.ln(5)
+
+    def notice(self, text: str, tone: str = "amber"):
+        ink, fill = _TONES[tone]
+        self.set_font("Helvetica", "B", 9)
+        self._room(14)
+        top = self.get_y()
+        self.set_fill_color(*fill)
+        self.set_text_color(*ink)
+        self.multi_cell(0, 5, _s(text), fill=True, align="L", padding=(2.5, 3, 2.5, 4.5),
+                        new_x="LMARGIN", new_y="NEXT")
+        self.set_fill_color(*ink)
+        self.rect(self.l_margin, top, 1.2, self.get_y() - top, style="F")
+        self.set_fill_color(255, 255, 255)
+        self.set_text_color(*_INK)
+        self.ln(4)
+
+    def section(self, title: str):
+        self._room(32)
+        self.ln(3)
+        self.set_font("Helvetica", "B", 12)
+        self.set_text_color(*_BRAND)
+        self.cell(0, 7, _s(title), new_x="LMARGIN", new_y="NEXT")
+        self.set_draw_color(*_BRAND)
+        self.set_line_width(0.5)
+        self.line(self.l_margin, self.get_y() + 0.5, self.l_margin + 14, self.get_y() + 0.5)
+        self.set_line_width(0.2)
+        self.set_draw_color(*_RULE)
+        self.set_text_color(*_INK)
+        self.ln(4)
+
+    def subsection(self, title: str):
+        self._room(20)
+        self.set_font("Helvetica", "B", 9.5)
+        self.set_text_color(*_INK)
+        self.cell(0, 6, _s(title), new_x="LMARGIN", new_y="NEXT")
+        self.ln(0.5)
+
+    def paragraph(self, text: str):
+        self.set_font("Helvetica", "", 9)
+        self.set_text_color(*_INK)
+        self.multi_cell(0, 4.8, _s(text), align="L", new_x="LMARGIN", new_y="NEXT")
+        self.ln(2)
+
+    def note(self, text: str):
+        self.set_font("Helvetica", "I", 8)
+        self.set_text_color(*_MUTED)
+        self.multi_cell(0, 4.2, _s(text), align="L", new_x="LMARGIN", new_y="NEXT")
+        self.set_text_color(*_INK)
+        self.ln(2)
+
+    def numbered(self, items: list[str]):
+        self.set_font("Helvetica", "", 8.5)
+        for i, item in enumerate(items, 1):
+            self._room(10)
+            self.cell(7, 4.6, f"{i}.")
+            self.multi_cell(0, 4.6, _s(item), align="L", new_x="LMARGIN", new_y="NEXT")
+            self.ln(0.8)
+        self.ln(1)
+
+    def facts(self, rows: list[tuple], label_width: float = 50):
+        """Two-column label/value list. A value given as ("mono", text) is
+        set in a fixed-width face (identifiers, hashes)."""
+        self.set_font("Helvetica", "", 9)
+        self.set_fill_color(255, 255, 255)
+        label_style = FontFace(emphasis="B", color=_MUTED)
+        mono = FontFace(family="Courier", size_pt=8)
+        with self.table(col_widths=(label_width, self.content_width - label_width), width=self.content_width,
+                        first_row_as_headings=False, borders_layout="HORIZONTAL_LINES", text_align="LEFT",
+                        line_height=4.8, padding=(1.4, 1.5)) as table:
+            for label, value in rows:
+                row = table.row()
+                row.cell(_s(label), style=label_style)
+                if isinstance(value, tuple) and value[0] == "mono":
+                    row.cell(_s(str(value[1])), style=mono)
+                else:
+                    row.cell(_s("-" if value in (None, "") else str(value)))
+        self.ln(4)
+
+    def data_table(self, headers: list[str], rows: list[list], widths: tuple, align: tuple | None = None,
+                   mono: tuple = (), emphasize_last: bool = False):
+        self.set_font("Helvetica", "", 8)
+        self.set_fill_color(*_ZEBRA)
+        scale = self.content_width / sum(widths)
+        heading = FontFace(emphasis="B", color=_BRAND, fill_color=_BRAND_TINT)
+        mono_face = FontFace(family="Courier", size_pt=7)
+        total_face = FontFace(emphasis="B", fill_color=_TONES["green"][1])
+        with self.table(col_widths=tuple(w * scale for w in widths), width=self.content_width,
+                        text_align=align or "LEFT", line_height=4.2, padding=(1.5, 1.8),
+                        headings_style=heading, cell_fill_color=_ZEBRA, cell_fill_mode="ROWS",
+                        borders_layout="HORIZONTAL_LINES") as table:
+            head = table.row()
+            for h in headers:
+                head.cell(_s(h))
+            for index, values in enumerate(rows):
+                last = emphasize_last and index == len(rows) - 1
+                row = table.row(style=total_face if last else None)
+                for col, value in enumerate(values):
+                    row.cell(_s("-" if value in (None, "") else str(value)),
+                             style=mono_face if col in mono and not last else None)
+        self.set_fill_color(255, 255, 255)
+        self.ln(4)
+
+
+_STATUS_FINAL = "FINAL - internally approved"
+_STATUS_DRAFT = "DRAFT - not internally approved"
+_METHODOLOGY = "Verra VM0051 v1.1 - Improved Rice Cultivation (Alternate Wetting and Drying), QA3"
+_DECLARATION = ("This monitoring report presents calculated greenhouse gas emission reductions for internal "
+                "and verifier use. It does not constitute issued Verified Carbon Units (VCUs). Issuance requires "
+                "validation and verification by an accredited validation/verification body (VVB) and "
+                "registration under the Verra VCS Program.")
+
+
+def _quantification_rows(r: dict) -> list[list]:
+    """VM0051 QA3 quantification as Item / Value / Reference rows; `r` is one
+    calculation result or a project-level sum of results."""
+    rows = []
+    if r.get("ef_c_used") is not None:
+        rows += [
+            ["Emission factor EF_c", f"{r['ef_c_used']} kg CH4/ha/day", "IPCC 2019, Table 5.11 (South Asia default)"],
+            ["Baseline water scaling factor SF_w", "1.00 (continuous flooding)", "Eq. 6, Table 5.12"],
+            ["Project water scaling factor SF_w", f"{r['sf_w_project']} ({_awd_label(r['sf_w_project'])})", "Eq. 6, Table 5.12"],
+            ["Pre-season water regime SC_p", _n(r.get("sc_preseason"), 2), "Eq. 6, Table 5.13"],
+            ["Organic amendment SC_o (baseline / project)",
+             f"{_n(r.get('sc_organic_bsl'), 4)} / {_n(r.get('sc_organic_wp'), 4)}", "Eq. 7, Table 5.14"],
+        ]
+    rows += [
+        ["Baseline CH4 emissions", f"{_n(r.get('e_baseline'))} kg CH4", "Eq. 6, Eq. 8"],
+        ["Project CH4 emissions", f"{_n(r.get('e_project'))} kg CH4", "Eq. 6, Eq. 8"],
+        ["CH4 emissions avoided", f"{_n(r.get('delta_e_ch4'))} kg CH4", "Baseline - project"],
+        ["Gross emission reductions", f"{_n(r.get('delta_e_co2e'), 4)} tCO2e", "GWP CH4 = 28 (AR5, 100-yr)"],
+        ["Uncertainty deduction (15%)", f"-{_n(r.get('unc_tco2e'), 4)} tCO2e", "QA3 flat rate, Section 8.6.3"],
+        ["N2O irrigation correction (PE_Red-Irri)", f"-{_n(r.get('pe_n2o_tco2e'), 4)} tCO2e",
+         "Eq. 25, CF_N2O = 0.00314; GWP N2O = 265"],
+        ["Net emission reductions", f"{_n(r.get('final_issuance'), 4)} tCO2e", "Eq. 29"],
+    ]
+    return rows
+
+
 def generate_mrv_report_vm0051(ctx: dict) -> bytes:
     """VM0051 v1.1 monitoring report for ONE committed calculation version,
     built only from its frozen snapshot plus the internal review record —
@@ -467,62 +696,49 @@ def generate_mrv_report_vm0051(ctx: dict) -> bytes:
     calc, snap, users = ctx["calculation"], ctx["snapshot"], ctx["users"]
     carbon, field, period = calc["result"], snap["field"], snap["monitoring_period"]
     inputs, provenance = snap["engine_inputs"], snap.get("signal_input_provenance") or {}
-    signal, submission, project = ctx.get("signal"), ctx.get("submission"), ctx.get("project")
+    signal, submission, project = ctx.get("signal"), ctx.get("submission"), ctx.get("project") or {}
     final = ctx["status"] == "final"
 
-    pdf = _MRVPDF(orientation="P", unit="mm", format="A4")
-    pdf.draft = not final
-    pdf.methodology_label = "Verra VM0051 v1.1"
-    pdf.set_margins(left=18, top=20, right=18)
-    pdf.set_auto_page_break(auto=True, margin=16)
-    pdf.add_page()
+    pdf = _MRVPDF(f"Field Monitoring Report | {field['name']}",
+                  f"{_STATUS_FINAL if final else _STATUS_DRAFT} | VM0051 v1.1", draft=not final)
+    pdf.title_block("Field monitoring report", field["name"],
+                    f"{_METHODOLOGY}\nMonitoring period {period['start']} to {period['end']}")
+    pdf.notice(_STATUS_FINAL + "." if final else
+               _STATUS_DRAFT + ". Not for submission to a registry or VVB.", "green" if final else "amber")
+    pdf.facts([
+        ("Project", f"{project.get('name', '-')}"),
+        ("Field", f"{field['name']} ({field['field_id']})"),
+        ("Monitoring period", f"{period['start']} to {period['end']}"),
+        ("Net emission reductions", f"{_n(carbon.get('final_issuance'), 4)} tCO2e (calculated estimate, not issued credits)"),
+        ("Calculation", ("mono", f"{calc['calculation_id']}  v{calc['version']}")),
+        ("Report status", "Final" if final else "Draft"),
+        ("Prepared", f"{_date(calc['created_at'])} by {_who(users, calc['created_by'])}"),
+        ("Generated by", ctx.get("generated_by") or "-"),
+    ])
 
-    # ---- Title -------------------------------------------------------------
-    pdf.set_font("Helvetica", "B", 15)
-    pdf.set_text_color(20, 40, 80)
-    pdf.ln(2)
-    pdf.cell(0, 9, "Monitoring Report - VM0051 v1.1 (Rice AWD)", align="C", new_x="LMARGIN", new_y="NEXT")
-    pdf.set_font("Helvetica", "", 9)
-    pdf.set_text_color(90, 90, 90)
-    pdf.cell(0, 6, _s(f"{(project or {}).get('name', 'No project')}  |  {field['name']}  |  "
-                      f"{period['start']} - {period['end']}"), align="C", new_x="LMARGIN", new_y="NEXT")
-    pdf.set_text_color(0, 0, 0)
-    pdf.banner("FINAL - internally approved" if final else
-               "DRAFT - not internally approved. Not for submission to a registry or VVB.", ok=final)
+    # ---- 1. Project boundary ----------------------------------------------
+    pdf.section("1. Project Boundary")
+    points = _positions(field.get("geojson_geometry"))
+    bounds = "-"
+    if points:
+        lons, lats = [pt[0] for pt in points], [pt[1] for pt in points]
+        bounds = (f"{len(points)} boundary vertices; longitude {min(lons):.5f} to {max(lons):.5f}, "
+                  f"latitude {min(lats):.5f} to {max(lats):.5f} (WGS 84)")
+    pdf.facts([
+        ("Field ID", ("mono", field["field_id"])),
+        ("Field name", field["name"]),
+        ("District", field.get("district") or "-"),
+        ("Area", f"{_n(field['area_ha'], 4)} ha"),
+        ("Boundary", bounds),
+    ])
+    pdf.note("The full boundary geometry is frozen in the calculation snapshot (see Section 8).")
 
-    # ---- 1. Summary --------------------------------------------------------
-    pdf.section("1. Report Summary")
-    pdf.kv("Project", f"{(project or {}).get('name', '-')}  ({snap.get('project_id') or '-'})")
-    if project and project.get("geography"):
-        pdf.kv("Geography", project["geography"])
-    pdf.kv("Methodology", "Verra VM0051 v1.1 - Improved Rice Cultivation, QA3 (default emission factors)")
-    pdf.kv("Monitoring period", f"{period['start']} to {period['end']}")
-    pdf.kv("Calculation", f"{calc['calculation_id']}  (version {calc['version']}, chain {calc['chain_id']})")
-    pdf.kv("Net GHG emission reductions", f"{carbon.get('final_issuance', 0):.4f} tCO2e  (calculated estimate, not issued credits)")
-    pdf.kv("Report status", "FINAL" if final else "DRAFT")
-    pdf.kv("Prepared", f"{_date(calc['created_at'])} by {_who(users, calc['created_by'])}")
-    pdf.kv("Generated", f"{datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')} by {ctx.get('generated_by') or '-'}")
-
-    # ---- 2. Project boundary ----------------------------------------------
-    pdf.section("2. Project Boundary - Field")
-    pdf.kv("Field ID", field["field_id"])
-    pdf.kv("Field name", field["name"])
-    pdf.kv("District", field.get("district") or "-")
-    pdf.kv("Area", f"{float(field['area_ha']):.4f} ha")
-    geometry = field.get("geojson_geometry") or {}
-    ring = (geometry.get("coordinates") or [[]])[0] if geometry.get("type") == "Polygon" else []
-    if ring:
-        lons, lats = [pt[0] for pt in ring], [pt[1] for pt in ring]
-        pdf.kv("Boundary", f"Polygon, {len(ring)} vertices; bounds lon {min(lons):.5f} to {max(lons):.5f}, "
-                           f"lat {min(lats):.5f} to {max(lats):.5f} (WGS84)")
-    pdf.note("The full boundary geometry is frozen in the calculation snapshot (see section 9).")
-
-    # ---- 3. Crop seasons and field evidence ---------------------------------
-    pdf.section("3. Crop Seasons and Field Evidence")
+    # ---- 2. Crop seasons and field evidence ---------------------------------
+    pdf.section("2. Crop Seasons and Field Evidence")
     for entry in snap.get("seasons", []):
         sp = entry["season"]["payload"]
-        pdf.kv("Season", f"{sp.get('name')}  ({sp.get('start_date')} to {sp.get('end_date')}, version {entry.get('version')})")
-        pdf.kv("Declared crops", ", ".join(sp.get("crops") or []) or "-")
+        pdf.subsection(f"{sp.get('name')}  ({sp.get('start_date')} to {sp.get('end_date')}, version {entry.get('version')})")
+        pdf.facts([("Declared crops", ", ".join(sp.get("crops") or []) or "-")])
         reviews = {}
         for r in entry.get("reviews", []):
             reviews.setdefault(r["payload"].get("observation_id"), []).append(r)
@@ -530,128 +746,143 @@ def generate_mrv_report_vm0051(ctx: dict) -> bytes:
         for o in entry.get("observations", []):
             op = o["payload"]
             latest = (reviews.get(o["id"]) or [None])[-1]
-            decision = (f"{latest['payload'].get('decision')} by {_who(users, latest['payload'].get('reviewed_by'))}"
-                        if latest else "not reviewed")
-            rows.append([_date(op.get("observed_at")), op.get("kind"), op.get("value"), op.get("source"),
+            decision = (f"{_label(latest['payload'].get('decision'))} by {_who(users, latest['payload'].get('reviewed_by'))}"
+                        if latest else "Not reviewed")
+            rows.append([_date(op.get("observed_at")), _label(op.get("kind")), op.get("value"), _label(op.get("source")),
                          op.get("evidence_reference"), _who(users, op.get("created_by")), decision])
         if rows:
-            pdf.table(["Date", "Type", "Value", "Source", "Evidence ref.", "Recorded by", "Review"], rows,
-                      (18, 20, 24, 22, 34, 28, 28))
+            pdf.data_table(["Date", "Observation", "Value", "Source", "Evidence ref.", "Recorded by", "Independent review"],
+                           rows, (17, 20, 17, 21, 24, 28, 33))
         else:
             pdf.note("No field observations recorded for this season.")
         events = [e["payload"] for e in entry.get("practice_events", [])]
         if events:
-            pdf.table(["Date", "Practice event", "Source"],
-                      [[_date(e.get("event_date")), e.get("kind"), e.get("source")] for e in events], (30, 80, 64))
+            pdf.data_table(["Date", "Practice event", "Source"],
+                           [[_date(e.get("event_date")), _label(e.get("kind")), _label(e.get("source"))] for e in events],
+                           (25, 85, 50))
     attachments = snap.get("attachments") or []
     if attachments:
-        pdf.kv("Attached documents", str(len(attachments)))
-        pdf.table(["File", "Size", "SHA-256"],
-                  [[a.get("filename"), f"{a.get('size_bytes', 0)} B", a.get("sha256")] for a in attachments], (60, 20, 94))
+        pdf.subsection("Supporting documents")
+        pdf.data_table(["File", "Size", "SHA-256"],
+                       [[a.get("filename"), f"{_n((a.get('size_bytes') or 0) / 1024, 1)} KB", a.get("sha256")] for a in attachments],
+                       (50, 16, 104), mono=(2,))
 
-    # ---- 4. Monitored data and parameters ---------------------------------
-    pdf.section("4. Data and Parameters Monitored")
+    # ---- 3. Monitored data and parameters ---------------------------------
+    pdf.section("3. Data and Parameters Monitored")
     from_signal = provenance.get("mode") == "saved_signal"
-    signal_src = f"Sentinel-1 SAR run {str(provenance.get('job_id', ''))[:8]}" if from_signal else "Manual entry"
+    signal_src = f"Sentinel-1 analysis {str(provenance.get('job_id', ''))[:8]}" if from_signal else "Manual entry"
     overridden = set(provenance.get("overridden_inputs") or [])
     amend = (inputs.get("project_amendments") or [[None, None]])[0]
-    rows = [
-        ["Number of drainage (AWD) events", inputs.get("awd_events"), "events",
-         signal_src + (" (overridden manually)" if "awd_events" in overridden else ""), "Eq. 6 / Table 5.12"],
-        ["Cultivation period length", inputs.get("season_length_days"), "days",
-         signal_src + (" (overridden manually)" if "season_length_days" in overridden else ""), "Eq. 6"],
-        ["Field area", f"{float(field['area_ha']):.4f}", "ha", "Registered field boundary", "Eq. 6"],
-        ["Pre-season water regime", inputs.get("preseason_category"), "category", "Operator declaration", "Table 5.13"],
-        ["Organic amendment", f"{amend[0]} @ {amend[1]}", "t/ha", "Operator declaration", "Eq. 7 / Table 5.14"],
-        ["Synthetic N input (Q_N)", inputs.get("q_n_kg_per_ha"), "kg N/ha", "Operator declaration", "Eq. 25"],
-        ["Emission factor EF_c", carbon.get("ef_c_used"), "kg CH4/ha/day", "IPCC 2019 Table 5.11 default", "Eq. 6"],
-    ]
-    pdf.table(["Parameter", "Value", "Unit", "Source", "Methodology ref."], rows, (46, 24, 22, 50, 32))
+    pdf.data_table(["Parameter", "Value", "Unit", "Source", "Reference"], [
+        ["Drainage (AWD) events", inputs.get("awd_events"), "events",
+         signal_src + (" (manually overridden)" if "awd_events" in overridden else ""), "Eq. 6, Table 5.12"],
+        ["Cultivation period", inputs.get("season_length_days"), "days",
+         signal_src + (" (manually overridden)" if "season_length_days" in overridden else ""), "Eq. 6"],
+        ["Field area", _n(field["area_ha"], 4), "ha", "Registered field boundary", "Eq. 6"],
+        ["Pre-season water regime", _label(inputs.get("preseason_category")), "-", "Operator declaration", "Table 5.13"],
+        ["Organic amendment", f"{_label(amend[0])}, {amend[1]}", "t/ha", "Operator declaration", "Eq. 7, Table 5.14"],
+        ["Synthetic N input (Q_N)", _n(inputs.get("q_n_kg_per_ha"), 1), "kg N/ha", "Operator declaration", "Eq. 25"],
+        ["Emission factor EF_c", carbon.get("ef_c_used"), "kg CH4/ha/day", "IPCC 2019 default", "Eq. 6"],
+    ], (42, 22, 22, 50, 30), align=("LEFT", "RIGHT", "LEFT", "LEFT", "LEFT"))
 
-    # ---- 5. Remote-sensing evidence ----------------------------------------
-    pdf.section("5. Remote Sensing Evidence (Sentinel-1 SAR)")
+    # ---- 4. Remote-sensing evidence ----------------------------------------
+    pdf.section("4. Remote Sensing Evidence (Sentinel-1 SAR)")
     if from_signal:
-        pdf.kv("Signal run", f"{provenance.get('job_id')}  (completed {_date(provenance.get('finished_at'))})")
-        pdf.kv("Detector", provenance.get("detector") or "-")
-        pdf.kv("Analysis window", f"{provenance.get('window_start')} to {provenance.get('window_end')}")
+        facts = [
+            ("Analysis run", ("mono", provenance.get("job_id"))),
+            ("Completed", _date(provenance.get("finished_at"))),
+            ("Detector", provenance.get("detector") or "-"),
+            ("Analysis window", f"{provenance.get('window_start')} to {provenance.get('window_end')}"),
+            ("Sensor", "Sentinel-1 C-band SAR GRD, IW mode, VV and VH, 10 m"),
+        ]
         if signal:
-            pdf.kv("Observations", str(signal.get("n_observations", "-")))
-            if signal.get("vv_mean") is not None:
-                pdf.kv("VV mean / std", f"{signal['vv_mean']:.4f} dB / {signal.get('vv_std', 0):.4f} dB")
-            pdf.kv("Drydown dates", ", ".join(signal.get("awd_dates") or []) or "None detected")
-            pdf.kv("Sowing / harvest", f"{signal.get('sowing_date') or '-'} / {signal.get('harvest_date') or '-'}"
-                                       + ("" if signal.get("from_phenology") else "  (fallback estimate)"))
-        pdf.kv("Sensor", "Sentinel-1 C-band SAR GRD, IW mode, VV + VH, 10 m")
+            facts += [
+                ("Observations", signal.get("n_observations", "-")),
+                ("VV backscatter mean / std", f"{_n(signal.get('vv_mean'), 2)} dB / {_n(signal.get('vv_std'), 2)} dB"),
+                ("Drydown dates", ", ".join(signal.get("awd_dates") or []) or "None detected"),
+                ("Sowing / harvest", f"{signal.get('sowing_date') or '-'} / {signal.get('harvest_date') or '-'}"
+                                     + ("" if signal.get("from_phenology") else " (fallback estimate)")),
+            ]
+        pdf.facts(facts)
         if overridden:
             pdf.note(f"Values entered manually instead of the satellite result: {', '.join(sorted(overridden))}.")
         if provenance.get("notice"):
             pdf.note(provenance["notice"])
     else:
-        pdf.note(provenance.get("notice") or "No satellite run linked; monitored values were entered manually.")
+        pdf.note(provenance.get("notice") or "No satellite analysis linked; monitored values were entered manually.")
 
-    # ---- 6. Quantification --------------------------------------------------
-    if not _rice_quantification(pdf, carbon, "6. Quantification of GHG Emission Reductions (VM0051 v1.1, QA3)",
-                                "subject to validation/verification by an accredited VVB."):
-        pdf.note("Quantification stops here: the QA3 pathway is not valid for this result.")
-    pdf.note("Leakage (VM0051 §8.4) and biomass burning are not quantified by this platform; see section 10.")
+    # ---- 5. Quantification --------------------------------------------------
+    pdf.section("5. Quantification of Emission Reductions")
+    if not carbon.get("qa3_pathway_valid", True):
+        pdf.notice("QA3 pathway not valid: " + str(carbon.get("qa3_block_reason") or
+                   "the project exceeds the 60,000 tCO2e/yr QA3 gate (Section 8.6.3)."), "red")
+    else:
+        pdf.data_table(["Item", "Value", "Reference"], _quantification_rows(carbon), (62, 48, 60),
+                       align=("LEFT", "RIGHT", "LEFT"), emphasize_last=True)
+    pdf.note("Leakage (Section 8.4) and biomass burning are not quantified by this platform; see Section 9.")
 
-    # ---- 7. Methodology conformance ----------------------------------------
-    pdf.section("7. Methodology Requirements Checklist")
-    pdf.table(["Requirement", "Status", "Basis"],
-              [[c.get("requirement_id"), c.get("status"),
-                (c.get("explanation") or "") + (f"  Decided by {_who(users, c.get('decided_by'))}: {c.get('reason')}"
-                                                 if c.get("decided_by") else "")]
-               for c in calc.get("readiness") or []], (48, 22, 104))
+    # ---- 6. Methodology conformance ----------------------------------------
+    pdf.section("6. Methodology Requirements")
+    pdf.data_table(["Requirement", "Status", "Basis"],
+                   [[c.get("requirement_id"), _label(c.get("status")),
+                     (c.get("explanation") or "") + (f" Decided by {_who(users, c.get('decided_by'))}: {c.get('reason')}"
+                                                     if c.get("decided_by") else "")]
+                    for c in calc.get("readiness") or []], (60, 20, 90), mono=(0,))
 
-    # ---- 8. Internal review (QA/QC) -----------------------------------------
-    pdf.section("8. Internal Review (QA/QC)")
+    # ---- 7. Internal review (QA/QC) -----------------------------------------
+    pdf.section("7. Internal Review (QA/QC)")
     if not submission:
         pdf.note("This calculation version has not been submitted for internal review.")
     else:
-        pdf.kv("Submission", f"{submission['submission_id']}  (status: {submission['status'].replace('_', ' ')})")
-        pdf.kv("Submitted", f"{_date(submission['submitted_at'])} by {_who(users, submission['submitted_by'])}")
-        pdf.kv("Reviewer", _who(users, submission.get("assigned_reviewer_id")))
-        if submission.get("decided_at"):
-            pdf.kv("Decision", f"{_date(submission['decided_at'])}: {submission.get('decision_reason') or '-'}")
+        pdf.facts([
+            ("Submission", ("mono", submission["submission_id"])),
+            ("Status", _label(submission["status"])),
+            ("Submitted", f"{_date(submission['submitted_at'])} by {_who(users, submission['submitted_by'])}"),
+            ("Reviewer", _who(users, submission.get("assigned_reviewer_id"))),
+            ("Decision", f"{_date(submission['decided_at'])}: {submission.get('decision_reason') or '-'}"
+                         if submission.get("decided_at") else "Pending"),
+        ])
         if ctx.get("events"):
-            pdf.table(["Date", "Change", "By", "Reason"],
-                      [[_date(e["created_at"]), f"{e['from_status']} -> {e['to_status']}", _who(users, e["actor"]),
-                        e.get("reason") or ""] for e in ctx["events"]], (22, 50, 40, 62))
+            pdf.subsection("Review history")
+            pdf.data_table(["Date", "Change", "By", "Reason"],
+                           [[_date(e["created_at"]), f"{_label(e['from_status'])} to {_label(e['to_status'])}",
+                             _who(users, e["actor"]), e.get("reason") or ""] for e in ctx["events"]], (20, 46, 44, 60))
         if ctx.get("findings"):
-            pdf.table(["Severity", "Finding", "Status / resolution"],
-                      [[f["severity"], f["description"] + (f"  Action: {f['requested_action']}" if f.get("requested_action") else ""),
-                        f["status"] + (f": {f.get('close_reason')}" if f.get("close_reason") else "")]
-                       for f in ctx["findings"]], (22, 96, 56))
+            pdf.subsection("Findings")
+            pdf.data_table(["Severity", "Finding", "Status / resolution"],
+                           [[_label(f["severity"]),
+                             f["description"] + (f" Requested: {f['requested_action']}" if f.get("requested_action") else ""),
+                             _label(f["status"]) + (f": {f.get('close_reason')}" if f.get("close_reason") else "")]
+                            for f in ctx["findings"]], (20, 95, 55))
 
-    # ---- 9. Evidence integrity ---------------------------------------------
-    pdf.section("9. Data Integrity and Traceability")
+    # ---- 8. Data integrity ---------------------------------------------------
+    pdf.section("8. Data Integrity and Traceability")
     bundle = snap.get("methodology_bundle") or {}
-    pdf.kv("Methodology bundle", f"{bundle.get('bundle_id', '-')}  ({calc.get('methodology_version')})")
-    for d in bundle.get("documents") or []:
-        pdf.kv("  Source document", f"{d.get('title') or d.get('document_id')} {d.get('version') or ''}".strip())
-    pdf.kv("Engine version", calc.get("engine_version") or "-")
-    pdf.kv("Snapshot schema", snap.get("schema_version") or "-")
-    pdf.kv("Evidence fingerprint", snap.get("evidence_fingerprint") or "-")
-    pdf.kv("Snapshot SHA-256", ctx["snapshot_sha256"])
-    pdf.note("The calculation snapshot is immutable: every value in this report is read from it, so the report "
-             "can be regenerated identically. The SHA-256 above lets a verifier check the exported JSON snapshot.")
+    pdf.facts([
+        ("Methodology bundle", f"{bundle.get('bundle_id', '-')} ({calc.get('methodology_version')})"),
+        ("Engine version", calc.get("engine_version") or "-"),
+        ("Snapshot schema", snap.get("schema_version") or "-"),
+        ("Evidence fingerprint", ("mono", snap.get("evidence_fingerprint") or "-")),
+        ("Snapshot SHA-256", ("mono", ctx["snapshot_sha256"])),
+    ])
+    documents = bundle.get("documents") or []
+    if documents:
+        pdf.data_table(["Source document", "Version"],
+                       [[d.get("title") or d.get("document_id"), d.get("version") or "-"] for d in documents], (140, 30))
+    pdf.note("Every value in this report is read from the immutable calculation snapshot, so the report can be "
+             "regenerated identically; the SHA-256 lets a verifier check the exported JSON snapshot.")
 
-    # ---- 10. Assumptions, limitations, declaration --------------------------
-    pdf.section("10. Assumptions and Limitations")
-    for i, a in enumerate(_rice_assumptions(carbon) + _RICE_LIMITATIONS, 1):
-        pdf.set_x(pdf.l_margin + 8)
-        pdf.set_font("Helvetica", "", 9)
-        pdf.multi_cell(0, 6, f"{i}. {_s(a)}", new_x="LMARGIN", new_y="NEXT")
-    pdf.section("11. Declaration")
-    pdf.body("This monitoring report presents calculated emission reductions for internal and verifier use. "
-             "It does not constitute issued Verified Carbon Units. Issuance requires validation and verification "
-             "by an accredited validation/verification body (VVB) and registration under the Verra VCS Program.")
+    # ---- 9. Assumptions, limitations, declaration --------------------------
+    pdf.section("9. Assumptions and Limitations")
+    pdf.numbered(_rice_assumptions(carbon) + _RICE_LIMITATIONS)
+    pdf.section("10. Declaration and Sign-off")
+    pdf.paragraph(_DECLARATION)
+    pdf.facts([
+        ("Prepared by", f"{_who(users, calc['created_by'])}, {_date(calc['created_at'])}"),
+        ("Internal reviewer", _who(users, submission.get("assigned_reviewer_id")) if submission else "-"),
+        ("Internal approval", _date(submission.get("decided_at")) if final and submission else "Not yet approved"),
+    ])
     return bytes(pdf.output())
-
-
-# VM0051 §8.6.3: the QA3 flat uncertainty deduction is valid only up to this
-# project-wide annual size; per-field checks cannot see the project total.
-_QA3_PROJECT_GATE_TCO2E = 60000.0
 
 
 def generate_project_mrv_report_vm0051(ctx: dict) -> bytes:
@@ -662,121 +893,89 @@ def generate_project_mrv_report_vm0051(ctx: dict) -> bytes:
     backend/routers/export.py (_project_mrv)."""
     project, items, users = ctx["project"], ctx["included"], ctx["users"]
     final = ctx["status"] == "final"
-
-    pdf = _MRVPDF(orientation="P", unit="mm", format="A4")
-    pdf.draft = not final
-    pdf.methodology_label = "Verra VM0051 v1.1"
-    pdf.set_margins(left=18, top=20, right=18)
-    pdf.set_auto_page_break(auto=True, margin=16)
-    pdf.add_page()
-
+    period = f"{ctx['period_start']} to {ctx['period_end']}"
+    field = lambda i: i["calculation"]["snapshot"]["field"]
     total = lambda key: sum(float(i["calculation"]["result"].get(key) or 0) for i in items)
-    area = sum(float(i["calculation"]["snapshot"]["field"]["area_ha"]) for i in items)
+    area = sum(float(field(i)["area_ha"]) for i in items)
     net, gross = total("final_issuance"), total("delta_e_co2e")
 
-    pdf.set_font("Helvetica", "B", 15)
-    pdf.set_text_color(20, 40, 80)
-    pdf.ln(2)
-    pdf.cell(0, 9, "Project Monitoring Report - VM0051 v1.1", align="C", new_x="LMARGIN", new_y="NEXT")
-    pdf.set_font("Helvetica", "", 9)
-    pdf.set_text_color(90, 90, 90)
-    pdf.cell(0, 6, _s(f"{project['name']}  |  monitoring period {ctx['period_start']} - {ctx['period_end']}"),
-             align="C", new_x="LMARGIN", new_y="NEXT")
-    pdf.set_text_color(0, 0, 0)
-    pdf.banner("FINAL - every included field calculation is internally approved" if final else
+    pdf = _MRVPDF(f"Project Monitoring Report | {project['name']}",
+                  f"{_STATUS_FINAL if final else _STATUS_DRAFT} | VM0051 v1.1", draft=not final)
+    pdf.title_block("Project monitoring report", project["name"], f"{_METHODOLOGY}\nMonitoring period {period}")
+    pdf.notice("FINAL - every included field calculation is internally approved." if final else
                "DRAFT - not every included field calculation is internally approved. "
-               "Not for submission to a registry or VVB.", ok=final)
+               "Not for submission to a registry or VVB.", "green" if final else "amber")
+    pdf.facts([
+        ("Project ID", ("mono", project["project_id"])),
+        ("Geography", project.get("geography") or "-"),
+        ("Description", project.get("description") or "-"),
+        ("Monitoring period", period),
+        ("Fields reported", f"{len(items)} ({_n(area, 2)} ha)"),
+        ("Net emission reductions", f"{_n(net, 4)} tCO2e (calculated estimate, not issued credits)"),
+        ("Report status", "Final" if final else "Draft"),
+        ("Generated by", ctx.get("generated_by") or "-"),
+    ])
 
-    # ---- 1. Summary --------------------------------------------------------
-    pdf.section("1. Project Summary")
-    pdf.kv("Project", f"{project['name']}  ({project['project_id']})")
-    if project.get("geography"):
-        pdf.kv("Geography", project["geography"])
-    if project.get("description"):
-        pdf.kv("Description", project["description"])
-    pdf.kv("Methodology", "Verra VM0051 v1.1 - Improved Rice Cultivation, QA3 (default emission factors)")
-    pdf.kv("Monitoring period", f"{ctx['period_start']} to {ctx['period_end']}")
-    pdf.kv("Fields reported", f"{len(items)}  ({area:.4f} ha)")
-    pdf.kv("Net GHG emission reductions", f"{net:.4f} tCO2e  (calculated estimate, not issued credits)")
-    pdf.kv("Report status", "FINAL" if final else "DRAFT")
-    pdf.kv("Generated", f"{datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')} by {ctx.get('generated_by') or '-'}")
-
-    # ---- 2. Fields ----------------------------------------------------------
-    pdf.section("2. Project Fields in this Monitoring Period")
-    pdf.table(["Field", "Area (ha)", "Period", "AWD events", "Net tCO2e", "Internal review"],
-              [[f"{i['calculation']['snapshot']['field']['name']} ({i['calculation']['field_id']})",
-                f"{float(i['calculation']['snapshot']['field']['area_ha']):.2f}",
-                f"{i['calculation']['monitoring_period_start']} - {i['calculation']['monitoring_period_end']}",
-                i["calculation"]["snapshot"]["engine_inputs"].get("awd_events"),
-                f"{float(i['calculation']['result'].get('final_issuance') or 0):.4f}",
-                i["review_status"].replace("_", " ")] for i in items], (44, 18, 38, 18, 24, 32))
+    pdf.section("1. Fields in this Monitoring Period")
+    pdf.data_table(["Field", "Area (ha)", "Monitoring period", "AWD events", "Net tCO2e", "Internal review"],
+                   [[f"{field(i)['name']} ({i['calculation']['field_id']})", _n(field(i)["area_ha"], 2),
+                     f"{i['calculation']['monitoring_period_start']} to {i['calculation']['monitoring_period_end']}",
+                     i["calculation"]["snapshot"]["engine_inputs"].get("awd_events"),
+                     _n(i["calculation"]["result"].get("final_issuance"), 4), _label(i["review_status"])] for i in items]
+                   + [["Total", _n(area, 2), " ", " ", _n(net, 4), " "]],
+                   (44, 18, 40, 16, 24, 28), align=("LEFT", "RIGHT", "LEFT", "RIGHT", "RIGHT", "LEFT"), emphasize_last=True)
     if ctx.get("excluded"):
-        pdf.note("Project fields NOT included in this report:")
-        pdf.table(["Field", "Reason"], [[f"{e['name']} ({e['field_id']})", e["reason"]] for e in ctx["excluded"]], (60, 114))
+        pdf.subsection("Project fields not included")
+        pdf.data_table(["Field", "Reason"], [[f"{e['name']} ({e['field_id']})", e["reason"]] for e in ctx["excluded"]],
+                       (70, 100))
 
-    # ---- 3. Aggregated quantification --------------------------------------
-    pdf.section("3. Quantification of GHG Emission Reductions (sum of fields)")
-    pdf.kv("Baseline CH4 emissions", f"{total('e_baseline'):.4f} kg CH4  (Eq. 6/8)")
-    pdf.kv("Project CH4 emissions", f"{total('e_project'):.4f} kg CH4  (Eq. 6/8)")
-    pdf.kv("Gross CH4 avoided", f"{total('delta_e_ch4'):.4f} kg CH4")
-    pdf.kv("Gross reductions (before UNC)", f"{gross:.6f} tCO2e")
-    pdf.kv("Uncertainty deduction (QA3)", f"{total('unc_tco2e'):.6f} tCO2e  (15%, §8.6.3)")
-    pdf.kv("N2O correction (Eq. 25)", f"{total('pe_n2o_tco2e'):.6f} tCO2e")
-    pdf.kv("NET REDUCTIONS (Eq. 29)", f"{net:.6f} tCO2e")
+    pdf.section("2. Quantification of Emission Reductions")
+    pdf.data_table(["Item", "Value (sum of fields)", "Reference"], _quantification_rows({
+        key: total(key) for key in ("e_baseline", "e_project", "delta_e_ch4", "delta_e_co2e", "unc_tco2e",
+                                    "pe_n2o_tco2e", "final_issuance")}), (62, 48, 60),
+        align=("LEFT", "RIGHT", "LEFT"), emphasize_last=True)
     if gross > _QA3_PROJECT_GATE_TCO2E:
-        pdf.banner(f"Project gross reductions ({gross:,.0f} tCO2e) exceed the QA3 {_QA3_PROJECT_GATE_TCO2E:,.0f} "
-                   "tCO2e/yr gate (§8.6.3): the flat 15% uncertainty deduction is not valid at this size.", ok=False)
-    pdf.note("Per-field parameters, satellite evidence and equation detail are in each field's report "
-             "(evidence package: fields/<field_id>/).")
+        pdf.notice(f"Project gross reductions ({_n(gross, 0)} tCO2e) exceed the QA3 {_n(_QA3_PROJECT_GATE_TCO2E, 0)} "
+                   "tCO2e/yr gate (Section 8.6.3): the flat 15% uncertainty deduction is not valid at this size.", "red")
+    pdf.note("Per-field parameters, satellite evidence and equation detail are in each field's monitoring report "
+             "(evidence package folder fields/<field_id>/).")
 
-    # ---- 4. Monitoring approach --------------------------------------------
-    pdf.section("4. Monitoring Approach")
-    pdf.body(_RICE_METHOD_TEXT)
+    pdf.section("3. Monitoring Approach")
+    pdf.paragraph(_RICE_METHOD_TEXT)
 
-    # ---- 5. QA/QC ------------------------------------------------------------
-    pdf.section("5. Internal Review (QA/QC)")
-    rows = []
-    for i in items:
-        sub = i.get("submission")
-        rows.append([i["calculation"]["snapshot"]["field"]["name"], f"v{i['calculation']['version']}",
-                     _who(users, sub.get("assigned_reviewer_id")) if sub else "-",
-                     i["review_status"].replace("_", " "),
-                     _date(sub.get("decided_at")) if sub and sub.get("decided_at") else "-"])
-    pdf.table(["Field", "Version", "Reviewer", "Status", "Decided"], rows, (50, 18, 50, 34, 22))
+    pdf.section("4. Internal Review (QA/QC)")
+    pdf.data_table(["Field", "Version", "Reviewer", "Status", "Decided"],
+                   [[field(i)["name"], f"v{i['calculation']['version']}",
+                     _who(users, i["submission"].get("assigned_reviewer_id")) if i.get("submission") else "-",
+                     _label(i["review_status"]),
+                     _date(i["submission"].get("decided_at")) if i.get("submission") and i["submission"].get("decided_at") else "-"]
+                    for i in items], (46, 16, 52, 32, 24))
 
-    # ---- 6. Requirements across fields ---------------------------------------
-    pdf.section("6. Methodology Requirements Across Fields")
+    pdf.section("5. Methodology Requirements Across Fields")
     statuses: dict[str, dict[str, int]] = {}
     for i in items:
         for c in i["calculation"].get("readiness") or []:
             counts = statuses.setdefault(c["requirement_id"], {})
             counts[c["status"]] = counts.get(c["status"], 0) + 1
-    pdf.table(["Requirement", "Status across fields"],
-              [[rid, ", ".join(f"{k}: {v}" for k, v in sorted(counts.items()))] for rid, counts in sorted(statuses.items())],
-              (80, 94))
-    pdf.note("'unsupported' requirements are not quantified by this platform and must be addressed in the "
+    pdf.data_table(["Requirement", "Status across fields"],
+                   [[rid, ", ".join(f"{_label(k)}: {v}" for k, v in sorted(counts.items()))]
+                    for rid, counts in sorted(statuses.items())], (85, 85), mono=(0,))
+    pdf.note("Requirements marked 'Unsupported' are not quantified by this platform and must be addressed in the "
              "project documentation for the verifier.")
 
-    # ---- 7. Evidence package ---------------------------------------------------
-    pdf.section("7. Evidence Package and Data Integrity")
-    pdf.table(["Field", "Calculation", "Snapshot SHA-256"],
-              [[i["calculation"]["snapshot"]["field"]["name"], i["calculation"]["calculation_id"][:12], i["snapshot_sha256"]]
-               for i in items], (40, 30, 104))
+    pdf.section("6. Evidence Package and Data Integrity")
+    pdf.data_table(["Field", "Calculation", "Snapshot SHA-256"],
+                   [[field(i)["name"], i["calculation"]["calculation_id"][:12], i["snapshot_sha256"]] for i in items],
+                   (34, 26, 110), mono=(1, 2))
     pdf.note("The evidence package (ZIP) holds this report, each field's monitoring report, each frozen calculation "
              "snapshot (JSON), the Sentinel-1 analysis results, the attached field documents, and manifest.json "
              "listing the SHA-256 of every file.")
 
-    # ---- 8. Assumptions, declaration ----------------------------------------
-    pdf.section("8. Assumptions and Limitations")
+    pdf.section("7. Assumptions and Limitations")
     sample = items[0]["calculation"]["result"] if items else {"ef_c_used": "-"}
-    for n, a in enumerate(_rice_assumptions(sample) + _RICE_LIMITATIONS, 1):
-        pdf.set_x(pdf.l_margin + 8)
-        pdf.set_font("Helvetica", "", 9)
-        pdf.multi_cell(0, 6, f"{n}. {_s(a)}", new_x="LMARGIN", new_y="NEXT")
-    pdf.section("9. Declaration")
-    pdf.body("This monitoring report presents calculated emission reductions for internal and verifier use. "
-             "It does not constitute issued Verified Carbon Units. Issuance requires validation and verification "
-             "by an accredited validation/verification body (VVB) and registration under the Verra VCS Program.")
+    pdf.numbered(_rice_assumptions(sample) + _RICE_LIMITATIONS)
+    pdf.section("8. Declaration")
+    pdf.paragraph(_DECLARATION)
     return bytes(pdf.output())
 
 
