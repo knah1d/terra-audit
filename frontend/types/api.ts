@@ -268,6 +268,12 @@ export interface ProjectOut {
   status: ProjectStatus;
   created_by: string | null;
   created_at: string | null;
+  /** The caller's project role and what the server lets them do here. */
+  my_role: "lead" | "contributor" | "viewer" | null;
+  can_manage: boolean;
+  can_contribute: boolean;
+  /** Accounting pathways of the fields currently in the project (detail only). */
+  pathways: AccountingPathway[];
 }
 
 export interface FarmOut {

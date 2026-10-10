@@ -26,6 +26,15 @@ def require_project_access(org_id: str, project_id: str, user: dict) -> str | No
     return role
 
 
+def require_project_contributor(org_id: str, project_id: str, user: dict) -> None:
+    """Write actions on project work (monitoring runs, issues): an org admin,
+    or a project lead/contributor — a project viewer may only look."""
+    if user["role"] == "admin":
+        return
+    if project_role(org_id, project_id, user["user_id"]) not in ("lead", "contributor"):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Only a project lead or contributor can do this")
+
+
 def require_project_lead(org_id: str, project_id: str, user: dict) -> None:
     if user["role"] == "admin":
         return

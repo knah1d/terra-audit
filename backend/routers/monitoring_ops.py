@@ -10,7 +10,7 @@ from src.jobs import queue as jobs_db
 from src.evidence import monitoring
 from src.evidence import operations as monitoring_ops
 from src.projects import repository as projects_db
-from backend.access import require_project_access
+from backend.access import require_project_access, require_project_contributor
 from src.persistence.database import get_field
 from src.signals.processing import MULTICROP_VERSION
 
@@ -30,7 +30,7 @@ def bulk_run_monitoring(project_id: str, body: BulkMonitoringRequest, user=Depen
     selected field-season. Bulk actions are restricted to project
     members (or org admins) — never a bare org-writer check alone."""
     org_id = user["org_id"]
-    require_project_access(org_id, project_id, user)
+    require_project_contributor(org_id, project_id, user)
     if projects_db.get_project(org_id, project_id) is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Project not found")
     if len(body.field_seasons) > MAX_BULK_MONITORING_ITEMS:
@@ -94,7 +94,7 @@ def cancel_batch(batch_id: str, user=Depends(require_writer)):
     org_id = user["org_id"]
     batch = _owned_batch(org_id, batch_id)
     if batch["project_id"]:
-        require_project_access(org_id, batch["project_id"], user)
+        require_project_contributor(org_id, batch["project_id"], user)
     cancelled = []
     for child in jobs_db.list_batch_jobs(org_id, batch_id):
         if child["status"] in ("pending", "running", "cancel_requested"):
@@ -110,7 +110,7 @@ def retry_failed(batch_id: str, body: RetryFailedRequest, user=Depends(require_w
     org_id = user["org_id"]
     batch = _owned_batch(org_id, batch_id)
     if batch["project_id"]:
-        require_project_access(org_id, batch["project_id"], user)
+        require_project_contributor(org_id, batch["project_id"], user)
     new_job_ids = []
     for child in jobs_db.list_batch_jobs(org_id, batch_id):
         if child["status"] == "error":
@@ -139,19 +139,37 @@ def get_issues(project_id: str, status_filter: str | None = None, user=Depends(g
     return monitoring_ops.list_issues(user["org_id"], project_id=project_id, status_filter=status_filter)
 
 
-@router.post("/issues/{issue_id}/acknowledge")
-def acknowledge_issue(issue_id: str, body: IssueDecision, user=Depends(require_writer)):
+def _require_issue_writer(user: dict, issue_id: str) -> dict:
+    """An issue belongs to a field; only a lead/contributor of a project the
+    field currently belongs to (or an org admin) may triage it."""
     issue = monitoring_ops.get_issue(user["org_id"], issue_id)
     if issue is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Issue not found")
+    if user["role"] != "admin":
+        projects = [m["project_id"] for m in projects_db.list_projects_for_field(user["org_id"], issue["field_id"])
+                    if m["removed_at"] is None]
+        if not any(_is_contributor(user, p) for p in projects):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Only a lead or contributor of this field's project can do this")
+    return issue
+
+
+def _is_contributor(user: dict, project_id: str) -> bool:
+    try:
+        require_project_contributor(user["org_id"], project_id, user)
+        return True
+    except HTTPException:
+        return False
+
+
+@router.post("/issues/{issue_id}/acknowledge")
+def acknowledge_issue(issue_id: str, body: IssueDecision, user=Depends(require_writer)):
+    _require_issue_writer(user, issue_id)
     return monitoring_ops.acknowledge_issue(user["org_id"], issue_id, user["user_id"], body.reason)
 
 
 @router.post("/issues/{issue_id}/resolve")
 def resolve_issue(issue_id: str, body: IssueResolve, user=Depends(require_writer)):
-    issue = monitoring_ops.get_issue(user["org_id"], issue_id)
-    if issue is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Issue not found")
+    _require_issue_writer(user, issue_id)
     return monitoring_ops.resolve_issue(user["org_id"], issue_id, user["user_id"], body.reason)
 
 

@@ -34,6 +34,13 @@ class ProjectOut(BaseModel):
     status: str
     created_by: str | None
     created_at: datetime | None
+    # The caller's standing in this project, so the UI only offers actions
+    # the server will accept (backend/access.py).
+    my_role: str | None = None
+    can_manage: bool = False
+    can_contribute: bool = False
+    # Accounting pathways of the fields currently in the project.
+    pathways: list[str] = []
 
 
 class ProjectMemberCreate(BaseModel):

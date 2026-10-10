@@ -71,11 +71,19 @@ def _project_mrv(org_id: str, project_id: str, user: dict, start: date | None, e
     project = projects_db.get_project(org_id, project_id)
     if project is None:
         raise HTTPException(404, "Project not found")
+    if start and end and start > end:
+        raise HTTPException(422, "The period start must be on or before its end.")
     users = {u["user_id"]: u["email"] for u in list_org_users(org_id)}
     in_period = lambda c: ((start is None or c["monitoring_period_start"] >= start.isoformat())
                            and (end is None or c["monitoring_period_end"] <= end.isoformat()))
-    current = [c for c in list_calculations(org_id, project_id=project_id, latest_only=True)
-               if c["accounting_pathway"] == "vm0051_rice_awd" and in_period(c)]
+    rice = [c for c in list_calculations(org_id, project_id=project_id, latest_only=True)
+            if c["accounting_pathway"] == "vm0051_rice_awd"]
+    current = [c for c in rice if in_period(c)]
+    # Calculations that only partly overlap the chosen period are not
+    # included (the report never splits a calculation) but are named.
+    partial = {c["field_id"] for c in rice if not in_period(c)
+               and (end is None or c["monitoring_period_start"] <= end.isoformat())
+               and (start is None or c["monitoring_period_end"] >= start.isoformat())}
     included = [_mrv_context(org_id, c, user, users) for c in current if c["status"] == "ready_for_review"]
     for item in included:
         sub = item["submission"]
@@ -84,13 +92,24 @@ def _project_mrv(org_id: str, project_id: str, user: dict, start: date | None, e
 
     reported = {i["calculation"]["field_id"] for i in included}
     drafts = {c["field_id"] for c in current if c["status"] != "ready_for_review"}
+    # Fields that belonged to the project during the period (only current
+    # members when no period is chosen).
+    def member_in_period(m: dict) -> bool:
+        if start is None and end is None:
+            return m["removed_at"] is None
+        m_end = m.get("effective_end_date")
+        return ((end is None or str(m["effective_start_date"]) <= end.isoformat())
+                and (start is None or m_end is None or str(m_end) >= start.isoformat()))
+
     excluded = []
-    for field_id in sorted({m["field_id"] for m in projects_db.list_project_fields(org_id, project_id)} - reported):
+    members = {m["field_id"] for m in projects_db.list_project_fields(org_id, project_id) if member_in_period(m)}
+    for field_id in sorted(members - reported):
         field = get_field(org_id, field_id)
         if field is None or field["field_type"] != "rice_awd":
             continue
         excluded.append({"field_id": field_id, "name": field["name"],
                          "reason": "Latest calculation is a draft (open readiness items)" if field_id in drafts
+                                   else "Its calculation period extends outside the chosen period" if field_id in partial
                                    else "No saved calculation in this period"})
 
     starts = [i["calculation"]["monitoring_period_start"] for i in included]

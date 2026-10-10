@@ -155,7 +155,7 @@ export default function SubmissionDetailPage() {
   // Every org user a lead may pick; non-members are added to the project first.
   const candidates = useQuery({
     queryKey: ["project-member-candidates", submission?.project_id],
-    queryFn: () => apiFetch<{ user_id: string; email: string }[]>(`/projects/${submission!.project_id}/member-candidates`),
+    queryFn: () => apiFetch<{ user_id: string; email: string; role: string }[]>(`/projects/${submission!.project_id}/member-candidates`),
     enabled: !!submission && isLead,
   });
   const addMember = useAddProjectMember(submission?.project_id);
@@ -183,7 +183,8 @@ export default function SubmissionDetailPage() {
     ? session?.role === "admin" || isSubmitter || isLead
     : isReviewer && !(o.value === "internally_approved" && isSubmitter));
   const canRaiseFinding = !closed && (session?.role === "admin" || isReviewer || myProjectRole === "lead" || myProjectRole === "contributor");
-  const reviewerOptions = (candidates.data ?? projectMembers.data ?? []).filter((u) => u.user_id !== submission.submitted_by);
+  // Reviewers need analyst/admin access (org viewers cannot act) and cannot be the submitter.
+  const reviewerOptions = (candidates.data ?? []).filter((u) => u.user_id !== submission.submitted_by && u.role !== "viewer");
   const calculationsHref = `/fields/${encodeURIComponent(calculation.field_id)}/calculations`;
   const reviewer = who(submission.assigned_reviewer_id);
   const nextStep = {
@@ -269,7 +270,7 @@ export default function SubmissionDetailPage() {
         <h3 className="ui-subsection-title mb-2">Reviewer</h3>
         <p className="text-sm">Assigned reviewer: <strong>{reviewer}</strong></p>
         {isLead && !closed && <>
-          <p className="ui-meta mt-1">Anyone in your organisation except the submitter. Someone outside the project is added to it as a contributor first.</p>
+          <p className="ui-meta mt-1">Any analyst or admin in your organisation except the submitter. Someone outside the project is added to it as a contributor first.</p>
           <form className="mt-3 flex flex-wrap gap-2" onSubmit={(e) => {
             e.preventDefault();
             void perform(async () => {

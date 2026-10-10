@@ -20,26 +20,29 @@ export default function ProjectOverviewPage() {
   const pid = encodeURIComponent(project.project_id);
   const rows = workflow.data ?? [];
   const attention = rows.filter((r) => Object.values(r.steps).some((s) => s.status === "needs_attention"));
-  const ready = rows.filter((r) => r.steps.calculations?.status === "ready");
+  // Saved and ready but not yet sent to review (approved fields are counted separately).
+  const ready = rows.filter((r) => r.steps.review?.status === "ready");
   const approved = rows.filter((r) => r.steps.review?.status === "completed");
 
   return (
     <div className="ui-container space-y-6">
-      <div className="flex flex-wrap justify-end gap-2">
+      {project.can_manage && <div className="flex flex-wrap justify-end gap-2">
         <ButtonLink size="sm" variant="secondary" href={`/projects/${pid}/fields`}>Assign existing field</ButtonLink>
         <ButtonLink size="sm" href={`/fields/new?project=${pid}`} icon={Plus}>Register a field</ButtonLink>
-      </div>
+      </div>}
       {workflow.isLoading ? <Skeleton className="h-48" /> : workflow.error ? (
         <Alert tone="danger" title="Unable to load project progress">{workflow.error.message}</Alert>
       ) : !rows.length ? (
-        <EmptyState title="No fields in this project yet" description="Register a new field for this project or assign a standalone field."
-          action={<ButtonLink href={`/fields/new?project=${pid}`} icon={Plus}>Register a field</ButtonLink>} />
+        <EmptyState title="No fields in this project yet"
+          description={project.can_manage ? "Register a new field for this project or assign a standalone field."
+            : "A project lead adds fields to this project."}
+          action={project.can_manage ? <ButtonLink href={`/fields/new?project=${pid}`} icon={Plus}>Register a field</ButtonLink> : undefined} />
       ) : (
         <>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <StatCard label="Fields" value={String(rows.length)} />
             <StatCard label="Need attention" value={String(attention.length)} tone={attention.length ? "warning" : "neutral"} />
-            <StatCard label="Ready calculations" value={String(ready.length)} tone={ready.length ? "success" : "neutral"} />
+            <StatCard label="Ready to submit" value={String(ready.length)} tone={ready.length ? "success" : "neutral"} />
             <StatCard label="Internally approved" value={String(approved.length)} tone={approved.length ? "success" : "neutral"} />
           </div>
           <Card className="p-0">

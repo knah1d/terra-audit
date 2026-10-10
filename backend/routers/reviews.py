@@ -155,9 +155,12 @@ def list_project_submissions(project_id: str, status_filter: str | None = None, 
 
 
 @router.get("/reviews/my")
-def my_reviews(user=Depends(get_current_user)):
-    """Every submission currently assigned to the caller, across projects."""
-    return _with_overdue(reviews_db.list_submissions(user["org_id"], reviewer_id=user["user_id"]))
+def my_reviews(include_closed: bool = False, user=Depends(get_current_user)):
+    """Submissions assigned to the caller, across projects — only those still
+    awaiting the reviewer unless include_closed is set."""
+    return _with_overdue(reviews_db.list_submissions(
+        user["org_id"], reviewer_id=user["user_id"],
+        status_filter=None if include_closed else ["submitted", "in_review"]))
 
 
 @router.get("/submissions/{submission_id}")
@@ -203,6 +206,12 @@ def assign_reviewer(submission_id: str, body: AssignReviewerRequest, user=Depend
             )
         if body.reviewer_id == submission["submitted_by"]:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "The submitter cannot review their own submission")
+        from src.accounts.auth import list_org_users
+        reviewer = next((u for u in list_org_users(org_id) if u["user_id"] == body.reviewer_id), None)
+        if reviewer is None or reviewer["role"] not in ("admin", "analyst"):
+            # Every review action requires analyst or admin access.
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY,
+                                "A reviewer needs analyst or admin access — an organisation viewer cannot review.")
     try:
         return reviews_db.assign_reviewer(org_id, submission_id, body.reviewer_id, user["user_id"], body.reason)
     except ValueError as exc:

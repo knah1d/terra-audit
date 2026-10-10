@@ -45,6 +45,7 @@ def get_requirements(bundle_id: str, user=Depends(get_current_user)):
 def get_project_applicability(project_id: str, accounting_pathway: str, user=Depends(get_current_user)):
     if projects_db.get_project(user["org_id"], project_id) is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Project not found")
+    require_project_access(user["org_id"], project_id, user)
     explicit = registry.get_project_applicability(user["org_id"], project_id, accounting_pathway)
     resolved = registry.resolve_bundle_for_project(user["org_id"], project_id, accounting_pathway)
     return {"explicit_decision": explicit, "resolved_bundle": resolved}
@@ -89,6 +90,7 @@ def create_quantification_unit(field_id: str, body: QuantificationUnitCreate,
 def get_project_eligible_area(project_id: str, user=Depends(get_current_user)):
     if projects_db.get_project(user["org_id"], project_id) is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Project not found")
+    require_project_access(user["org_id"], project_id, user)
     return quantification.project_eligible_area(user["org_id"], project_id)
 
 

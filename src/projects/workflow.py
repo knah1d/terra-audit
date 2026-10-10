@@ -12,7 +12,7 @@ from sqlalchemy import text
 from src.evidence import monitoring
 from src.persistence.database import get_db_connection
 
-RICE_ORDER = ["crop-seasons", "enrollment", "signal-analytics", "calculations", "review"]
+RICE_ORDER = ["crop-seasons", "enrollment", "signal-analytics", "awd-validation", "calculations", "review"]
 ALM_ORDER = ["crop-seasons", "enrollment", "practice-data", "soil-evidence", "production-records",
              "calculations", "review"]
 OPEN = ("not_started", "in_progress", "needs_attention")
@@ -76,6 +76,14 @@ def _signal(org_id: str, field_id: str) -> dict:
     return _step("completed", f"Latest: {runs[0]['window_start']} – {runs[0]['window_end']}")
 
 
+def _awd_check(signal: dict) -> dict:
+    """The ML cross-check is optional and stores nothing; it becomes
+    available once a satellite analysis exists."""
+    if signal["status"] == "not_started":
+        return _step("not_started", "Run Signal Analytics first")
+    return _step("ready", "Optional: compare the detector with the ML model")
+
+
 def _practice(org_id: str, field_id: str) -> dict:
     from src.persistence.database import get_alm_practice_schedule, get_soc_measurements
     schedule = get_alm_practice_schedule(org_id, field_id)
@@ -125,10 +133,13 @@ def _review(org_id: str, field_id: str, project: dict | None, latest_calc: dict 
     if project is None:
         return _step("not_applicable", "Requires a project")
     with get_db_connection() as conn:
+        # Only this project's reviews: a field that moved keeps its old
+        # project's approval there, not here.
         row = conn.execute(text("""
-            SELECT status FROM review_submissions WHERE org_id = :org_id AND field_id = :field_id
+            SELECT status FROM review_submissions
+            WHERE org_id = :org_id AND field_id = :field_id AND project_id = :project_id
             ORDER BY submitted_at DESC LIMIT 1
-        """), {"org_id": org_id, "field_id": field_id}).mappings().fetchone()
+        """), {"org_id": org_id, "field_id": field_id, "project_id": project["project_id"]}).mappings().fetchone()
     status = row["status"] if row else None
     if status in ("submitted", "in_review"):
         return _step("in_progress", "Under internal review")
@@ -153,6 +164,7 @@ def field_workflow_status(org_id: str, field: dict, project: dict | None = None)
     }
     if field["field_type"] == "rice_awd":
         steps["signal-analytics"] = _signal(org_id, field_id)
+        steps["awd-validation"] = _awd_check(steps["signal-analytics"])
         order = RICE_ORDER
     else:
         steps.update({"practice-data": _practice(org_id, field_id), "soil-evidence": _soil(org_id, field_id),

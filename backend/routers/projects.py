@@ -1,14 +1,13 @@
 """Projects: operational grouping of fields for monitoring/reporting —
 deliberately separate from carbon-claim allocation (src.carbon.issuance/
-credit_history). A field can belong to more than one project at once;
-this router surfaces that overlap rather than hiding it, and never
-infers or changes a field's accounting methodology (field_type) from
-project membership.
+credit_history). A field belongs to at most one project at a time
+(src.projects.repository enforces it), and membership never infers or
+changes a field's accounting methodology (field_type).
 """
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from backend.deps import get_current_user, require_writer
-from backend.access import require_project_access, require_project_lead
+from backend.access import project_role, require_project_access, require_project_lead
 from backend.schemas.projects import (
     FieldMembershipAssign, FieldMembershipEnd, FieldMembershipStartUpdate, FieldMembershipOut,
     ProjectCreate, ProjectMemberCreate, ProjectMemberOut, ProjectOut, ProjectUpdate,
@@ -29,9 +28,25 @@ def _owned_project(org_id: str, project_id: str) -> dict:
     return project
 
 
+def _project_out(project: dict, user: dict, with_pathways: bool = False) -> ProjectOut:
+    role = project_role(user["org_id"], project["project_id"], user["user_id"])
+    writer = user["role"] in ("admin", "analyst")
+    pathways: list[str] = []
+    if with_pathways:
+        from src.carbon.calculations import PATHWAYS
+        for m in projects_db.list_project_fields(user["org_id"], project["project_id"]):
+            field = get_field(user["org_id"], m["field_id"]) if m["removed_at"] is None else None
+            pathway = PATHWAYS.get(field["field_type"]) if field else None
+            if pathway and pathway not in pathways:
+                pathways.append(pathway)
+    return ProjectOut(**project, my_role=role, pathways=pathways,
+                      can_manage=writer and (user["role"] == "admin" or role == "lead"),
+                      can_contribute=writer and (user["role"] == "admin" or role in ("lead", "contributor")))
+
+
 @router.get("/projects", response_model=list[ProjectOut])
 def list_projects(user=Depends(get_current_user)):
-    return [ProjectOut(**p) for p in projects_db.list_projects(user["org_id"])
+    return [_project_out(p, user) for p in projects_db.list_projects(user["org_id"])
             if user["role"] == "admin" or projects_db.get_project_member(user["org_id"], p["project_id"], user["user_id"])]
 
 
@@ -58,13 +73,13 @@ def create_project(body: ProjectCreate, user=Depends(require_writer)):
     )
     projects_db.add_project_member(user["org_id"], project_id, user["user_id"], "lead",
                                     actor=user["user_id"], reason="Project creator")
-    return ProjectOut(**projects_db.get_project(user["org_id"], project_id))
+    return _project_out(projects_db.get_project(user["org_id"], project_id), user)
 
 
 @router.get("/projects/{project_id}", response_model=ProjectOut)
 def get_project(project_id: str, user=Depends(get_current_user)):
     require_project_access(user["org_id"], project_id, user)
-    return ProjectOut(**_owned_project(user["org_id"], project_id))
+    return _project_out(_owned_project(user["org_id"], project_id), user, with_pathways=True)
 
 
 @router.patch("/projects/{project_id}", response_model=ProjectOut)
@@ -77,7 +92,16 @@ def update_project(project_id: str, body: ProjectUpdate, user=Depends(require_wr
         body.monitoring_end_date.isoformat() if body.monitoring_end_date else None,
         body.status,
     )
-    return ProjectOut(**projects_db.get_project(user["org_id"], project_id))
+    return _project_out(projects_db.get_project(user["org_id"], project_id), user)
+
+
+def _keep_a_lead(org_id: str, project_id: str, leaving_user_id: str) -> None:
+    """Removing or demoting the project's only lead would leave nobody able
+    to manage it (assign reviewers, fields or members)."""
+    leads = [m for m in projects_db.list_project_members(org_id, project_id) if m["project_role"] == "lead"]
+    if len(leads) == 1 and leads[0]["user_id"] == leaving_user_id:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            "This is the project's only lead. Make someone else lead first.")
 
 
 @router.get("/projects/{project_id}/members", response_model=list[ProjectMemberOut])
@@ -91,15 +115,21 @@ def get_project_members(project_id: str, user=Depends(get_current_user)):
 def member_candidates(project_id: str, user=Depends(require_writer)):
     require_project_lead(user["org_id"], project_id, user)
     _owned_project(user["org_id"], project_id)
-    return [{"user_id": row["user_id"], "email": row["email"]} for row in list_org_users(user["org_id"])]
+    return [{"user_id": row["user_id"], "email": row["email"], "role": row["role"]} for row in list_org_users(user["org_id"])]
 
 
 @router.post("/projects/{project_id}/members", response_model=list[ProjectMemberOut], status_code=status.HTTP_201_CREATED)
 def add_project_member(project_id: str, body: ProjectMemberCreate, user=Depends(require_writer)):
     require_project_lead(user["org_id"], project_id, user)
     _owned_project(user["org_id"], project_id)
-    if not any(u["user_id"] == body.user_id for u in list_org_users(user["org_id"])):
+    target = next((u for u in list_org_users(user["org_id"]) if u["user_id"] == body.user_id), None)
+    if target is None:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "User does not belong to this organization")
+    if body.project_role == "lead" and target["role"] == "viewer":
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            "An organisation viewer cannot lead a project — leads need analyst or admin access.")
+    if body.project_role != "lead":
+        _keep_a_lead(user["org_id"], project_id, body.user_id)
     projects_db.add_project_member(user["org_id"], project_id, body.user_id, body.project_role,
                                     actor=user["user_id"], reason=body.reason)
     return [ProjectMemberOut(**m) for m in projects_db.list_project_members(user["org_id"], project_id)]
@@ -109,6 +139,7 @@ def add_project_member(project_id: str, body: ProjectMemberCreate, user=Depends(
 def remove_project_member(project_id: str, user_id: str, reason: str | None = None, user=Depends(require_writer)):
     require_project_lead(user["org_id"], project_id, user)
     _owned_project(user["org_id"], project_id)
+    _keep_a_lead(user["org_id"], project_id, user_id)
     projects_db.remove_project_member(user["org_id"], project_id, user_id, actor=user["user_id"], reason=reason)
     return None
 
