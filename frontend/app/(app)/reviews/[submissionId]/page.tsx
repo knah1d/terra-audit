@@ -3,8 +3,11 @@
 import { formatDate, formatNumber, formatQueueTimestamp } from "@/lib/format";
 
 import { FileDown } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
+import { useSession } from "@/app/providers";
 import { useToast } from "@/components/ui/Toast";
 import { InputProvenance } from "@/components/calculations/InputProvenance";
 import { Alert } from "@/components/ui/Alert";
@@ -14,9 +17,8 @@ import { Card } from "@/components/ui/Card";
 import { Select, TextInput, TextArea } from "@/components/ui/Field";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { apiFetchBlob } from "@/lib/api";
+import { apiFetch, apiFetchBlob } from "@/lib/api";
 import { downloadBlob } from "@/lib/download";
-import { useTeamUsers } from "@/hooks/use-team";
 import { useAddProjectMember, useProjectMembers } from "@/hooks/use-projects";
 import {
   useAddComment, useAssignReviewer, useCloseFinding, useCreateFinding, useFindingComments,
@@ -73,7 +75,9 @@ function ReadinessList({ checklist }: { checklist: ReadinessCheck[] }) {
   );
 }
 
-function FindingCard({ finding, submissionId }: { finding: FindingOut; submissionId: string }) {
+function FindingCard({ finding, submissionId, who, canClose, canDiscuss }: {
+  finding: FindingOut; submissionId: string; who: (id: string | null) => string; canClose: boolean; canDiscuss: boolean;
+}) {
   const [expanded, setExpanded] = useState(false);
   const [closeReason, setCloseReason] = useState("");
   const [commentBody, setCommentBody] = useState("");
@@ -92,6 +96,7 @@ function FindingCard({ finding, submissionId }: { finding: FindingOut; submissio
         {finding.carried_from_finding_id && <Badge tone="neutral">carried forward</Badge>}
       </div>
       <p className="mt-1">{finding.description}</p>
+      <p className="ui-meta">Raised by {who(finding.author)}</p>
       {finding.requested_action && <p className="text-text-secondary">Requested: {finding.requested_action}</p>}
       {finding.status === "closed" && <p className="text-text-secondary">Closed: {finding.close_reason}</p>}
       <button className="mt-1 text-xs underline" onClick={() => setExpanded((v) => !v)}>
@@ -100,9 +105,9 @@ function FindingCard({ finding, submissionId }: { finding: FindingOut; submissio
       {expanded && (
         <div className="mt-2 space-y-2 rounded-lg bg-surface-muted/40 p-2">
           {(comments.data ?? []).map((cm) => (
-            <p key={cm.id} className="text-sm">{cm.is_proposed_resolution && <Badge tone="brand">proposed resolution</Badge>} {cm.body}</p>
+            <p key={cm.id} className="text-sm"><span className="font-medium">{who(cm.author)}:</span> {cm.is_proposed_resolution && <Badge tone="brand">proposed resolution</Badge>} {cm.body}</p>
           ))}
-          <form className="flex gap-2" onSubmit={(e) => {
+          {canDiscuss && <form className="flex gap-2" onSubmit={(e) => {
             e.preventDefault();
             addComment.mutateAsync({ body: commentBody, is_proposed_resolution: proposed })
               .then(() => setCommentBody(""))
@@ -111,15 +116,15 @@ function FindingCard({ finding, submissionId }: { finding: FindingOut; submissio
             <TextInput value={commentBody} onChange={(e) => setCommentBody(e.target.value)} placeholder="Reply…" required className="flex-1" />
             <label className="flex items-center gap-1 text-xs"><input type="checkbox" checked={proposed} onChange={(e) => setProposed(e.target.checked)} />Proposed resolution</label>
             <Button type="submit" size="sm" loading={addComment.isPending}>Reply</Button>
-          </form>
-          {finding.status === "open" && (
+          </form>}
+          {canClose && finding.status === "open" && (
             <form className="flex gap-2" onSubmit={(e) => {
               e.preventDefault();
               close.mutateAsync({ findingId: finding.finding_id, reason: closeReason })
                 .then(() => setCloseReason(""))
                 .catch((err) => toast.error(err, "Failed to close finding"));
             }}>
-              <TextInput value={closeReason} onChange={(e) => setCloseReason(e.target.value)} placeholder="Reason for closing (reviewer only)" required className="flex-1" />
+              <TextInput value={closeReason} onChange={(e) => setCloseReason(e.target.value)} placeholder="Why this is resolved" required className="flex-1" />
               <Button type="submit" variant="secondary" size="sm" loading={close.isPending}>Close finding</Button>
             </form>
           )}
@@ -132,12 +137,10 @@ function FindingCard({ finding, submissionId }: { finding: FindingOut; submissio
 export default function SubmissionDetailPage() {
   const { submissionId } = useParams<{ submissionId: string }>();
   const detail = useSubmissionDetail(submissionId);
-  const team = useTeamUsers();
+  const session = useSession();
   const toast = useToast();
   const [reviewerId, setReviewerId] = useState("");
   const [assignReason, setAssignReason] = useState("");
-  const [newMemberId, setNewMemberId] = useState("");
-  const [newMemberReason, setNewMemberReason] = useState("");
   const [toStatus, setToStatus] = useState("");
   const [reason, setReason] = useState("");
   const [findingSeverity, setFindingSeverity] = useState("major");
@@ -147,6 +150,14 @@ export default function SubmissionDetailPage() {
 
   const submission = detail.data?.submission;
   const projectMembers = useProjectMembers(submission?.project_id);
+  const myProjectRole = projectMembers.data?.find((m) => m.user_id === session?.user_id)?.project_role;
+  const isLead = session?.role === "admin" || myProjectRole === "lead";
+  // Every org user a lead may pick; non-members are added to the project first.
+  const candidates = useQuery({
+    queryKey: ["project-member-candidates", submission?.project_id],
+    queryFn: () => apiFetch<{ user_id: string; email: string }[]>(`/projects/${submission!.project_id}/member-candidates`),
+    enabled: !!submission && isLead,
+  });
   const addMember = useAddProjectMember(submission?.project_id);
   const assign = useAssignReviewer(submissionId, submission?.project_id);
   const transitionMutation = useTransitionSubmission(submissionId, submission?.project_id);
@@ -158,8 +169,35 @@ export default function SubmissionDetailPage() {
   if (!detail.data || !submission) return null;
 
   const { calculation, findings, events, assignment_history } = detail.data;
-  const options = NEXT_STATUSES[submission.status] ?? [];
   const openBlockers = findings.filter((f) => f.severity === "blocking" && f.status === "open");
+  const emails = new Map<string, string>([
+    ...(candidates.data ?? []).map((u) => [u.user_id, u.email] as const),
+    ...(projectMembers.data ?? []).map((m) => [m.user_id, m.email] as const),
+  ]);
+  const who = (id: string | null) => !id ? "nobody" : id === session?.user_id ? "you" : emails.get(id) ?? "a former member";
+  const isReviewer = !!session && submission.assigned_reviewer_id === session.user_id;
+  const isSubmitter = !!session && submission.submitted_by === session.user_id;
+  const closed = ["internally_approved", "rejected", "withdrawn"].includes(submission.status);
+  // Only the actions the server will accept from THIS user (backend/routers/reviews.py).
+  const options = (NEXT_STATUSES[submission.status] ?? []).filter((o) => o.value === "withdrawn"
+    ? session?.role === "admin" || isSubmitter || isLead
+    : isReviewer && !(o.value === "internally_approved" && isSubmitter));
+  const canRaiseFinding = !closed && (session?.role === "admin" || isReviewer || myProjectRole === "lead" || myProjectRole === "contributor");
+  const reviewerOptions = (candidates.data ?? projectMembers.data ?? []).filter((u) => u.user_id !== submission.submitted_by);
+  const calculationsHref = `/fields/${encodeURIComponent(calculation.field_id)}/calculations`;
+  const reviewer = who(submission.assigned_reviewer_id);
+  const nextStep = {
+    submitted: !submission.assigned_reviewer_id
+      ? `Next: a project lead assigns a reviewer${isLead ? " — choose one in Reviewer below" : ""}.`
+      : isReviewer ? "You are the reviewer. Choose “Start review” in Decision below." : `Waiting for ${reviewer} to start the review.`,
+    in_review: isReviewer
+      ? "Check the calculation, its inputs and the readiness checklist. Record a finding for anything that must change, then approve, request changes or reject."
+      : `${reviewer === "you" ? "You are" : `${reviewer} is`} reviewing this submission.`,
+    changes_requested: "Changes were requested. Correct the calculation (saving it as a correction), then submit the new version — open findings carry over.",
+    internally_approved: "Internally approved. The MRV report for this calculation is now final.",
+    rejected: "Rejected. This submission is closed.",
+    withdrawn: "Withdrawn. This submission is closed.",
+  }[submission.status];
 
   async function perform(action: () => Promise<void>) {
     try { await action(); } catch (e) { toast.error(e, "Action failed"); }
@@ -185,9 +223,15 @@ export default function SubmissionDetailPage() {
         }
       />
 
+      <Alert tone={submission.status === "internally_approved" ? "success" : submission.status === "changes_requested" ? "warning" : "info"} title="What happens next">
+        {nextStep}
+        {submission.status === "changes_requested" && <> <Link className="font-medium underline" href={calculationsHref}>Open calculations</Link></>}
+        <span className="mt-1 block text-xs">Submitted by {who(submission.submitted_by)} · reviewer: {reviewer}</span>
+      </Alert>
+
       <Card>
         <h3 className="ui-subsection-title mb-2">Calculation</h3>
-        <p className="text-sm">Field <span className="font-mono">{calculation.field_id}</span> · {calculation.accounting_pathway} · v{calculation.version}</p>
+        <p className="text-sm">Field <Link className="font-mono underline" href={calculationsHref}>{calculation.field_id}</Link> · {calculation.accounting_pathway} · v{calculation.version}</p>
         <p className="text-sm">Monitoring period {formatDate(calculation.monitoring_period_start)} to {formatDate(calculation.monitoring_period_end)}</p>
         <p className="text-sm font-mono">Calculated estimate (not issued credits): {formatNumber(calculation.final_issuance, "tco2e")} tCO2e</p>
         {calculation.accounting_pathway === "vm0051_rice_awd" && <InputProvenance value={calculation.snapshot.signal_input_provenance} fieldId={calculation.field_id} />}
@@ -223,47 +267,37 @@ export default function SubmissionDetailPage() {
 
       <Card>
         <h3 className="ui-subsection-title mb-2">Reviewer</h3>
-        <p className="text-sm">Currently assigned: <span className="font-mono">{submission.assigned_reviewer_id ?? "unassigned"}</span></p>
-        <p className="ui-meta mt-1">
-          The picker below only lists current project members — assigning a reviewer never grants project
-          access on its own. To assign someone new, add them as a project member first (below).
-        </p>
-        <form className="mt-3 flex flex-wrap gap-2" onSubmit={(e) => {
-          e.preventDefault();
-          void perform(async () => {
-            await assign.mutateAsync({ reviewer_id: reviewerId || null, reason: assignReason });
-            setAssignReason(""); toast.success("Reviewer assignment updated.");
-          });
-        }}>
-          <Select value={reviewerId} onChange={(e) => setReviewerId(e.target.value)} className="max-w-xs">
-            <option value="">Unassign</option>
-            {(projectMembers.data ?? [])
-              .filter((m) => m.user_id !== submission.submitted_by)
-              .map((m) => <option key={m.user_id} value={m.user_id}>{m.email} ({m.project_role})</option>)}
-          </Select>
-          <TextInput value={assignReason} onChange={(e) => setAssignReason(e.target.value)} placeholder="Reason for this assignment" required className="flex-1" />
-          <Button type="submit" variant="secondary" loading={assign.isPending}>Assign / reassign</Button>
-        </form>
-
-        <details className="mt-3">
-          <summary className="cursor-pointer text-sm underline">Add a new project member</summary>
-          <form className="mt-2 flex flex-wrap gap-2" onSubmit={(e) => {
+        <p className="text-sm">Assigned reviewer: <strong>{reviewer}</strong></p>
+        {isLead && !closed && <>
+          <p className="ui-meta mt-1">Anyone in your organisation except the submitter. Someone outside the project is added to it as a contributor first.</p>
+          <form className="mt-3 flex flex-wrap gap-2" onSubmit={(e) => {
             e.preventDefault();
             void perform(async () => {
-              await addMember.mutateAsync({ user_id: newMemberId, project_role: "contributor", reason: newMemberReason });
-              setNewMemberId(""); setNewMemberReason(""); toast.success("Project member added.");
+              const unassign = reviewerId === "__none__";
+              if (!unassign && !(projectMembers.data ?? []).some((m) => m.user_id === reviewerId)) {
+                await addMember.mutateAsync({ user_id: reviewerId, project_role: "contributor", reason: `Added as reviewer: ${assignReason}` });
+              }
+              await assign.mutateAsync({ reviewer_id: unassign ? null : reviewerId, reason: assignReason });
+              setReviewerId(""); setAssignReason("");
+              toast.success(unassign ? "Reviewer removed" : "Reviewer assigned", unassign ? undefined : { description: "They have been notified." });
             });
           }}>
-            <Select value={newMemberId} onChange={(e) => setNewMemberId(e.target.value)} className="max-w-xs" required>
-              <option value="">Choose a teammate…</option>
-              {(team.data ?? [])
-                .filter((u) => !(projectMembers.data ?? []).some((m) => m.user_id === u.user_id))
-                .map((u) => <option key={u.user_id} value={u.user_id}>{u.email}</option>)}
+            <Select value={reviewerId} onChange={(e) => setReviewerId(e.target.value)} required className="max-w-xs">
+              <option value="">Choose a reviewer…</option>
+              {reviewerOptions.map((u) => (
+                <option key={u.user_id} value={u.user_id}>
+                  {u.email}{(projectMembers.data ?? []).some((m) => m.user_id === u.user_id) ? "" : " (will be added to the project)"}
+                </option>
+              ))}
+              {submission.assigned_reviewer_id && <option value="__none__">Remove the reviewer</option>}
             </Select>
-            <TextInput value={newMemberReason} onChange={(e) => setNewMemberReason(e.target.value)} placeholder="Reason for adding them" className="flex-1" />
-            <Button type="submit" variant="secondary" size="sm" loading={addMember.isPending}>Add as contributor</Button>
+            <TextInput value={assignReason} onChange={(e) => setAssignReason(e.target.value)} placeholder="Reason (e.g. independent agronomist)" required className="flex-1" />
+            <Button type="submit" variant="secondary" loading={assign.isPending || addMember.isPending}>
+              {submission.assigned_reviewer_id ? "Change reviewer" : "Assign reviewer"}
+            </Button>
           </form>
-        </details>
+          {!reviewerOptions.length && <p className="ui-meta mt-2">No one else is in your organisation yet — invite a teammate from Team first.</p>}
+        </>}
       </Card>
 
       {!!options.length && (
@@ -285,17 +319,20 @@ export default function SubmissionDetailPage() {
               <option value="">Choose an action…</option>
               {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </Select>
-            <TextInput value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason / approval statement" className="flex-1" />
+            <TextInput value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason / approval statement"
+              required={!!options.find((o) => o.value === toStatus)?.reasonRequired} className="flex-1" />
             <Button type="submit" loading={transitionMutation.isPending}>Confirm</Button>
           </form>
         </Card>
       )}
 
       <Card>
-        <h3 className="ui-subsection-title mb-2">Findings</h3>
+        <h3 className="ui-subsection-title mb-1">Findings</h3>
+        <p className="ui-meta mb-2">Issues that must be addressed. Blocking findings prevent approval until the reviewer closes them.</p>
         {!findings.length ? <p className="ui-secondary">No findings recorded.</p> :
-          findings.map((f) => <FindingCard key={f.finding_id} finding={f} submissionId={submissionId} />)}
-        <form className="mt-3 grid gap-2 sm:grid-cols-2" onSubmit={(e) => {
+          findings.map((f) => <FindingCard key={f.finding_id} finding={f} submissionId={submissionId} who={who}
+            canClose={isReviewer && !closed} canDiscuss={!closed} />)}
+        {canRaiseFinding && <form className="mt-3 grid gap-2 sm:grid-cols-2" onSubmit={(e) => {
           e.preventDefault();
           void perform(async () => {
             await createFinding.mutateAsync({
@@ -312,14 +349,14 @@ export default function SubmissionDetailPage() {
           <TextArea value={findingDescription} onChange={(e) => setFindingDescription(e.target.value)} placeholder="Description" required className="sm:col-span-2" />
           <TextInput value={findingAction} onChange={(e) => setFindingAction(e.target.value)} placeholder="Requested action (optional)" className="sm:col-span-2" />
           <div><Button type="submit" variant="secondary" loading={createFinding.isPending}>Add finding</Button></div>
-        </form>
+        </form>}
       </Card>
 
       <Card>
         <h3 className="ui-subsection-title mb-2">Activity</h3>
         <div className="space-y-1 text-sm">
-          {[...events.map((e) => ({ at: e.created_at, text: `${e.from_status || "—"} → ${e.to_status}${e.reason ? `: ${e.reason}` : ""}` })),
-            ...assignment_history.map((a) => ({ at: a.created_at, text: `Reviewer set to ${a.reviewer_id ?? "unassigned"}: ${a.reason}` }))]
+          {[...events.map((e) => ({ at: e.created_at, text: `${who(e.actor)}: ${(e.from_status || "—").replace(/_/g, " ")} → ${e.to_status.replace(/_/g, " ")}${e.reason ? ` — ${e.reason}` : ""}` })),
+            ...assignment_history.map((a) => ({ at: a.created_at, text: `${who(a.assigned_by)} set the reviewer to ${who(a.reviewer_id)} — ${a.reason}` }))]
             .sort((a, b) => a.at.localeCompare(b.at))
             .map((item, i) => <p key={i} className="border-t border-border py-1.5 first:border-t-0">{formatQueueTimestamp(item.at)} — {item.text}</p>)}
         </div>

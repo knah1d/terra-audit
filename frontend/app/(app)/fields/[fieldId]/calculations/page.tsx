@@ -230,7 +230,13 @@ function CalculationsView() {
 
   function submitForReview(project: string, calculationId: string) {
     return perform("Couldn't submit for review", async () => {
-      const sub = await createSubmission.mutateAsync({ project_id: project, calculation_id: calculationId });
+      // A corrected version continues its chain's latest review: the server
+      // carries open findings forward and the reviewer gets a diff.
+      const calc = history.data?.find((r) => !r.legacy && r.calculation_id === calculationId);
+      const previous = calc && !calc.legacy
+        ? submissions.data?.find((sub) => sub.chain_id === calc.chain_id && sub.calculation_id !== calculationId) : undefined;
+      const sub = await createSubmission.mutateAsync({ project_id: project, calculation_id: calculationId,
+        previous_submission_id: previous?.submission_id });
       toast.success("Submitted for review", { description: "A project lead now assigns a reviewer.", action: { label: "Open review", href: `/reviews/${encodeURIComponent(sub.submission_id)}` } });
       await queryClient.invalidateQueries({ queryKey: ["field-workflow", field.field_id] });
     });
