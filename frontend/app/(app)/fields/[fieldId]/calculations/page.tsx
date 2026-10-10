@@ -1,7 +1,8 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Calculator, CheckCircle2, Save, Satellite, Sprout } from "lucide-react";
+import { Calculator, CheckCircle2, ListOrdered, Save, Satellite, Sprout } from "lucide-react";
+import { CalculationPreview } from "@/components/calculations/CalculationPreview";
 import { useSearchParams } from "next/navigation";
 import { useRef, useState } from "react";
 import { useToast } from "@/components/ui/Toast";
@@ -107,6 +108,7 @@ function CalculationsView() {
   const [lastBody, setLastBody] = useState<Record<string, unknown> | null>(null);
   // false until the user edits or recalculates: until then the remembered result is shown.
   const [touched, setTouched] = useState(false);
+  const [showFull, setShowFull] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
   const [saved, setSaved] = useState<{ id: string; status: string; version: number; projectId: string | null } | null>(null);
   const toast = useToast();
@@ -317,7 +319,15 @@ function CalculationsView() {
             {isRice && <StatCard label="Project CH4 (kg CH4)" value={formatNumber(result.result.e_project as number | null)} />}
           </div>
           {!!result.result.leakage_block_reason && <p className="text-sm text-danger-700">{String(result.result.leakage_block_reason)}</p>}
-          <p className="ui-meta">Calculated estimate — not issued credits.</p>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="ui-meta">Calculated estimate — not issued credits.</p>
+            <Button size="sm" variant="secondary" icon={ListOrdered} onClick={() => setShowFull(true)}>View full calculation</Button>
+          </div>
+          <CalculationPreview open={showFull} onClose={() => setShowFull(false)} result={result.result}
+            inputs={(bodyForSave?.engine_inputs as Record<string, unknown> | undefined) ?? {}}
+            context={{ field: field.name, areaHa: field.area_ha ?? null, start: context?.start ?? "", end: context?.end ?? "",
+              seasons: (context?.seasons ?? []).map((id) => allSeasons.find((s) => s.id === id)?.payload.name).filter(Boolean).join(", "),
+              project: field.current_project?.name ?? "Standalone (preliminary)", isRice }} />
 
           <p className="flex items-center gap-2 text-sm font-medium text-success-700"><CheckCircle2 className="size-4" />Ready to save{projectId ? " and submit for review" : ""}.</p>
 
