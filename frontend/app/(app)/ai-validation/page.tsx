@@ -1,7 +1,9 @@
 "use client";
 
 import { BrainCircuit, Database, Play } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
+import { AwdModelPerformance, type ResearchMetrics } from "@/components/ai/AwdModelPerformance";
 import { ConfusionMatrixHeatmap } from "@/components/ai/ConfusionMatrixHeatmap";
 import { FeatureImportanceBar } from "@/components/ai/FeatureImportanceBar";
 import { RocCurveChart } from "@/components/ai/RocCurveChart";
@@ -10,6 +12,7 @@ import { Button } from "@/components/ui/Button";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { RoleGate } from "@/components/ui/RoleGate";
 import { useBuildDataset, useModelValidation, useTrainModel } from "@/hooks/use-ai";
+import { apiFetch } from "@/lib/api";
 import { useJobPoll } from "@/hooks/use-job-poll";
 import type { AiTrainResult } from "@/types/api";
 
@@ -104,6 +107,10 @@ function ModelSection({ modelKey, label }: { modelKey: "random_forest" | "xgboos
 
 export default function AiValidationPage() {
   const buildDataset = useBuildDataset();
+  const awdModel = useQuery({
+    queryKey: ["awd-model-metrics"],
+    queryFn: () => apiFetch<{ research_benchmark: ResearchMetrics | null }>("/ai/awd-model/metrics"),
+  });
 
   return (
     <div className="ui-container flex flex-col gap-6">
@@ -111,6 +118,11 @@ export default function AiValidationPage() {
         title="AI Validation"
         subtitle="Cross-validate the Random Forest / XGBoost detectors against the Threshold Gate's own labels. Metrics show agreement with the gate, not independent field accuracy."
       />
+
+      {awdModel.error && <Alert tone="danger" title="Could not load the AWD model metrics">{awdModel.error.message}</Alert>}
+      {awdModel.data && (awdModel.data.research_benchmark
+        ? <AwdModelPerformance metrics={awdModel.data.research_benchmark} />
+        : <p className="ui-secondary">No trained AWD practice model is installed on this server.</p>)}
 
       <RoleGate allow={["admin", "analyst"]}>
         <div className="ui-card flex flex-wrap items-center justify-between gap-3">

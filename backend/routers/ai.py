@@ -118,6 +118,15 @@ def _compare(detector: dict | None, ml_is_awd: bool) -> dict:
     }
 
 
+@router.get("/ai/awd-model/metrics")
+def get_awd_model_metrics(user: dict = Depends(get_current_user)):
+    """Held-out performance of the installed AWD-vs-PTR model (trained on
+    microsoft/rice-irrigation-mapping-s1s2); null when no model is installed."""
+    from src.ai.ml.external_awd import read_metrics
+
+    return {"research_benchmark": read_metrics()}
+
+
 @router.get("/fields/{field_id}/awd-external-comparison")
 def get_external_awd_comparison(
     field_id: str,
