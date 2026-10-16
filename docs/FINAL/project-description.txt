@@ -1,0 +1,3 @@
+Terra-Audit: AI-Assisted Digital MRV Platform for AWD Rice Irrigation and Agricultural Land Management Carbon Credits
+
+Terra-Audit is a web platform that turns agricultural evidence into reviewed, verifier-ready carbon reports. It detects Alternate Wetting and Drying in rice fields from free Sentinel-1 satellite radar and calculates emission reductions under scoped Verra methodologies: VM0051 for rice and VM0042 for cropland, with VMD0054 leakage. Every calculation freezes its evidence, inputs and methodology version, passes automated readiness checks, and is approved by a second reviewer before export with a hashed evidence package. AI features explain results but never change them. Built with Next.js, FastAPI, PostgreSQL and Google Earth Engine.

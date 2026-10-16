@@ -1,0 +1,797 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Terra-Audit — Research Poster (A1)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  @page { size: 594mm 841mm; margin: 0; }
+  :root{
+    --ink:#0e2219; --ink2:#2c4238; --muted:#566b61; --line:#d3e2d9; --bg:#f4f8f5; --card:#ffffff;
+    --p900:#0b2a1e; --p800:#11392a; --p700:#186640; --p600:#1f7f4e; --p500:#2f9e63; --p300:#8ad4a9; --p100:#e2f3e9; --p50:#f0f8f3;
+    --w700:#155e8c; --w600:#1d74ab; --w300:#8cc3e6; --w100:#e3f0f9;
+    --a700:#a5610a; --a600:#c97c0f; --a300:#f2c472; --a100:#fcf0d9;
+    --r600:#c0392b; --r100:#fbe6e3; --s600:#5f6f78; --s100:#e9eef1;
+    --sans:"Inter","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    --mono:"JetBrains Mono","SFMono-Regular",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:#0b2a1e}
+  body{font-family:var(--sans);color:var(--ink);-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .poster{width:2850px;height:4035px;zoom:.787719;margin:0 auto;background:var(--bg);position:relative;overflow:hidden;display:flex;flex-direction:column}
+  svg.i{width:1em;height:1em;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+  .mono{font-family:var(--mono)}
+  b,strong{font-weight:700}
+
+  /* ---------- HEADER ---------- */
+  .hdr{flex:none;position:relative;background:radial-gradient(120% 140% at 0% 0%,#1d6a45 0%,#11392a 45%,#0a2419 100%);color:#fff;padding:36px 60px 32px;overflow:hidden}
+  .hdr::after{content:"";position:absolute;right:-180px;top:-220px;width:760px;height:760px;border-radius:50%;background:radial-gradient(circle,rgba(138,212,169,.18),rgba(138,212,169,0) 65%)}
+  .hdr-top{display:flex;justify-content:space-between;align-items:center;font-size:22px;letter-spacing:.14em;text-transform:uppercase;color:#b9e3c9;font-weight:600}
+  .hdr-top .pill{border:1.5px solid rgba(185,227,201,.45);border-radius:99px;padding:8px 22px;letter-spacing:.1em}
+  .hdr-main{display:flex;align-items:center;gap:36px;margin-top:20px;position:relative;z-index:1}
+  .logo{width:136px;height:136px;border-radius:38px;flex:none;background:linear-gradient(145deg,#33a06a,#155c39);box-shadow:inset 0 2px 0 rgba(255,255,255,.25),0 18px 40px rgba(0,0,0,.35);display:grid;place-items:center}
+  .logo svg{width:92px;height:92px;stroke:#f4fbf7;stroke-width:1.85}
+  .title{flex:1;min-width:0}
+  .title h1{font-size:104px;line-height:.95;font-weight:900;letter-spacing:-.02em}
+  .title h1 span{color:#8ad4a9}
+  .title h2{font-size:34px;line-height:1.22;font-weight:500;color:#e2f3e9;margin-top:10px}
+  .hdr-meta{display:grid;grid-template-columns:1fr 1fr;gap:14px;flex:none;width:960px;margin-left:auto;position:relative;z-index:1}
+  .meta{background:rgba(255,255,255,.07);border:1.5px solid rgba(255,255,255,.14);border-radius:18px;padding:12px 22px}
+  .meta .k{font-size:16px;letter-spacing:.16em;text-transform:uppercase;color:#9fd6b6;font-weight:700}
+  .meta .v{font-size:26px;font-weight:700;margin-top:3px}
+  .meta .s{font-size:19px;color:#cfe8da;margin-top:2px}
+  .meta.grow{flex:1}
+  .kw{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}
+  .kw span{font-size:17px;background:rgba(138,212,169,.16);color:#d9f2e3;border-radius:99px;padding:5px 14px;font-weight:600}
+
+  /* ---------- LAYOUT ---------- */
+  .body{flex:1;padding:20px 44px 20px;display:flex;flex-direction:column;gap:14px}
+  .row{display:grid;gap:16px}
+  .card{background:var(--card);border:1.5px solid var(--line);border-radius:24px;padding:18px 26px;position:relative;box-shadow:0 2px 0 rgba(14,34,25,.03)}
+  .sec{display:flex;align-items:center;gap:14px;margin-bottom:14px}
+  .sec .n{width:46px;height:46px;border-radius:14px;background:var(--p600);color:#fff;font-weight:800;font-size:22px;display:grid;place-items:center;flex:none}
+  .sec h3{font-size:31px;font-weight:800;letter-spacing:-.01em;color:var(--p800)}
+  .sec .tag{margin-left:auto;font-size:16px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--p600);background:var(--p100);border-radius:99px;padding:6px 14px}
+  p.lead{font-size:20.5px;line-height:1.45;color:var(--ink2)}
+  .hero{border:2.5px solid var(--p500);background:linear-gradient(180deg,#ffffff 0%,#f6fbf8 100%)}
+  .hero .sec .n{background:var(--p800)}
+
+  /* intro */
+  .sfw-strip{display:flex;align-items:center;gap:18px;margin-top:18px;background:var(--w100);border-radius:18px;padding:16px 20px}
+  .sfw-strip .big{font-size:52px;font-weight:900;color:var(--w700);line-height:1}
+  .sfw-strip .arrow{font-size:36px;color:var(--w600)}
+  .sfw-strip .txt{font-size:18.5px;line-height:1.35;color:var(--ink2)}
+  .sfw-strip .txt b{color:var(--w700)}
+  .chips{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}
+  .chip{font-size:17px;font-weight:700;border-radius:99px;padding:6px 15px;background:var(--p100);color:var(--p700)}
+  .chip.w{background:var(--w100);color:var(--w700)} .chip.a{background:var(--a100);color:var(--a700)}
+
+  /* problem */
+  .pains{display:flex;flex-direction:column;gap:10px}
+  .pain{display:flex;gap:14px;align-items:flex-start;background:var(--a100);border-radius:16px;padding:12px 16px}
+  .pain .ic{width:54px;height:54px;border-radius:15px;background:#fff;color:var(--a700);display:grid;place-items:center;font-size:30px;flex:none}
+  .pain h4{font-size:22px;font-weight:800;color:#6e4106}
+  .pain p{font-size:18.5px;line-height:1.35;color:#5b4a2e;margin-top:3px}
+  .gapbar{margin-top:14px;font-size:19px;line-height:1.4;color:var(--ink2);border-left:6px solid var(--p500);padding:6px 0 6px 16px}
+
+  /* objectives */
+  .objs{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+  .obj{display:flex;flex-direction:column;gap:9px;align-items:flex-start;background:var(--p50);border:1.5px solid var(--p100);border-radius:16px;padding:14px 15px}
+  .obj .ic{width:44px;height:44px;border-radius:12px;background:var(--p600);color:#fff;display:grid;place-items:center;font-size:24px;flex:none}
+  .obj h5{font-size:19px;font-weight:800;color:var(--p800);line-height:1.15}
+  .obj p{font-size:16.5px;line-height:1.3;color:var(--muted);margin-top:3px}
+
+  /* graphical abstract */
+  .ga{display:grid;grid-template-columns:repeat(5,1fr);gap:0;align-items:stretch;position:relative}
+  .stage{position:relative;padding:0 16px;display:flex;flex-direction:column;align-items:center;text-align:center}
+  .stage .ill{width:100%;height:178px;border-radius:22px;overflow:hidden;background:var(--p50);border:1.5px solid var(--line)}
+  .stage .ill svg{width:100%;height:100%;display:block}
+  .stage .kicker{margin-top:14px;font-size:16px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--p600)}
+  .stage h4{font-size:25px;font-weight:800;color:var(--p800);margin-top:3px}
+  .stage p{font-size:17.5px;line-height:1.35;color:var(--muted);margin-top:5px;max-width:360px}
+  .stage + .stage::before{content:"";position:absolute;left:-17px;top:70px;width:34px;height:34px;border-radius:50%;background:var(--p600);box-shadow:0 0 0 6px #fff}
+  .stage + .stage::after{content:"";position:absolute;left:-6px;top:79px;width:11px;height:11px;border-top:3.5px solid #fff;border-right:3.5px solid #fff;transform:rotate(45deg)}
+  .ga-bottom{display:grid;grid-template-columns:1.25fr 1fr;gap:18px;margin-top:16px}
+  .callout{display:flex;align-items:center;gap:22px;background:linear-gradient(100deg,var(--p800),var(--p600));color:#fff;border-radius:20px;padding:14px 26px}
+  .callout .num{font-size:60px;font-weight:900;line-height:1;letter-spacing:-.02em}
+  .callout .num small{white-space:nowrap;font-size:26px;font-weight:700;color:#bfe8cf;margin-left:4px}
+  .callout .eq{font-size:30px;color:#bfe8cf;font-weight:800}
+  .callout .txt{font-size:18px;line-height:1.35;color:#d7efe1}
+  .advis{display:flex;align-items:center;gap:18px;border:2.5px dashed var(--w300);background:var(--w100);border-radius:20px;padding:12px 22px}
+  .advis .ic{width:58px;height:58px;border-radius:16px;background:#fff;color:var(--w700);display:grid;place-items:center;font-size:32px;flex:none}
+  .advis h5{font-size:21px;font-weight:800;color:var(--w700)}
+  .advis p{font-size:17.5px;line-height:1.35;color:var(--ink2);margin-top:2px}
+
+  /* methodology */
+  .flow{display:grid;grid-template-columns:repeat(6,1fr);gap:22px;position:relative}
+  .step{position:relative;background:#fff;border:1.5px solid var(--line);border-radius:20px;padding:16px 18px 14px;display:flex;flex-direction:column}
+  .step .top{display:flex;align-items:center;justify-content:space-between}
+  .step .no{font-size:44px;font-weight:900;color:var(--p100);-webkit-text-stroke:2px var(--p500);line-height:1}
+  .step .ic{width:58px;height:58px;border-radius:16px;background:var(--p600);color:#fff;display:grid;place-items:center;font-size:31px}
+  .step h4{font-size:24px;font-weight:800;color:var(--p800);margin-top:8px}
+  .step p{font-size:17.5px;line-height:1.35;color:var(--muted);margin-top:6px;flex:1}
+  .step .who{margin-top:12px;align-self:flex-start;font-size:15px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;border-radius:99px;padding:5px 12px;background:var(--p100);color:var(--p700)}
+  .step .who.auto{background:var(--w100);color:var(--w700)}
+  .step:not(:last-child)::after{content:"";position:absolute;right:-21px;top:50%;width:0;height:0;border-top:13px solid transparent;border-bottom:13px solid transparent;border-left:16px solid var(--p500);transform:translateY(-50%)}
+  .flow-sub{display:grid;grid-template-columns:1.5fr 1fr 1fr;gap:16px;margin-top:16px}
+  .sub{border-radius:16px;padding:12px 18px;background:var(--p50);border:1.5px solid var(--p100)}
+  .sub .k{font-size:15px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--p600);display:flex;align-items:center;gap:8px}
+  .frozen{display:flex;flex-wrap:wrap;gap:7px;margin-top:9px}
+  .frozen span{font-size:15.5px;font-weight:600;background:#fff;border:1.5px solid var(--p300);color:var(--p800);border-radius:11px;padding:5px 10px;display:flex;gap:7px;align-items:center}
+  .states{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:10px}
+  .st{font-family:var(--mono);font-size:15.5px;font-weight:700;border-radius:10px;padding:6px 11px;background:#fff;border:1.5px solid var(--line);color:var(--ink2)}
+  .st.g{border-color:var(--p300);color:var(--p700)} .st.b{border-color:var(--w300);color:var(--w700)} .st.x{color:var(--muted)}
+  .arr{color:var(--p500);font-weight:900;font-size:20px}
+  .legend{display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:10px;font-size:16.5px;font-weight:600;color:var(--ink2)}
+  .dot{display:inline-block;width:14px;height:14px;border-radius:50%;margin-right:7px;vertical-align:-1px}
+
+  /* architecture */
+  .arch > svg{width:100%;height:385px;display:block}
+  .note{font-size:17.5px;line-height:1.4;color:var(--ink2);background:var(--p50);border-radius:16px;padding:12px 16px;margin-top:12px;display:flex;gap:12px;align-items:flex-start}
+  .note .ic{color:var(--p600);font-size:24px;margin-top:2px}
+  .lane{border-radius:18px;padding:14px 16px;margin-bottom:12px}
+  .lane .lk{font-size:15px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;display:flex;align-items:center;gap:8px}
+  .lane.det{background:var(--p50);border:2px solid var(--p300)} .lane.det .lk{color:var(--p700)}
+  .lane.adv{background:var(--w100);border:2px dashed var(--w300)} .lane.adv .lk{color:var(--w700)}
+  .pipe{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px}
+  .pipe .b{background:#fff;border:1.5px solid var(--line);border-radius:12px;padding:8px 12px;font-size:16.5px;font-weight:700;color:var(--ink2)}
+  .pipe .b.key{border-color:var(--p500);color:var(--p800)}
+  .pipe .b.wkey{border-color:var(--w600);color:var(--w700)}
+  .rules{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .rule{background:#fff;border:1.5px solid var(--line);border-radius:14px;padding:12px 14px}
+  .rule h6{font-size:17.5px;font-weight:800;color:var(--ink);display:flex;gap:8px;align-items:center}
+  .rule h6 .i{color:var(--w600)}
+  .rule p{font-size:15.5px;line-height:1.32;color:var(--muted);margin-top:4px}
+  .banner{margin-top:12px;background:var(--p800);color:#fff;border-radius:14px;padding:12px 16px;font-size:18px;font-weight:700;display:flex;gap:10px;align-items:center}
+  .banner .i{color:var(--p300);font-size:24px}
+
+  /* results */
+  .res{display:grid;grid-template-columns:1fr 1.32fr 1.15fr;grid-template-rows:auto auto;gap:16px}
+  .panel{background:#fff;border:1.5px solid var(--line);border-radius:20px;padding:16px 20px 14px;display:flex;flex-direction:column}
+  .panel .ph{display:flex;align-items:baseline;gap:10px}
+  .panel .pl{font-size:16px;font-weight:900;color:#fff;background:var(--p600);border-radius:8px;padding:2px 9px}
+  .panel h4{font-size:22px;font-weight:800;color:var(--p800)}
+  .panel .cap{font-size:15px;line-height:1.33;color:var(--muted);margin-top:auto;padding-top:6px}
+  .panel svg.ch{width:100%;height:236px;display:block;margin-top:4px}
+  svg.ch text{font-family:var(--sans)}
+  .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:12px}
+  .m{background:var(--w100);border-radius:14px;padding:12px 10px;text-align:center}
+  .m .v{font-size:34px;font-weight:900;color:var(--w700);line-height:1}
+  .m .k{font-size:14.5px;font-weight:700;color:var(--ink2);margin-top:6px;text-transform:uppercase;letter-spacing:.06em}
+  .bar{height:30px;border-radius:99px;background:var(--s100);overflow:hidden;margin-top:8px;position:relative}
+  .bar > i{display:block;height:100%;background:linear-gradient(90deg,var(--w600),var(--w300));border-radius:99px}
+  .bar > span{position:absolute;left:14px;top:50%;transform:translateY(-50%);font-size:16px;font-weight:800;color:#fff}
+  .pipeline{display:flex;align-items:center;gap:8px;margin-top:12px;flex-wrap:wrap}
+  .pipeline .b{font-size:15.5px;font-weight:700;border-radius:10px;padding:6px 10px;background:var(--p50);color:var(--p800);border:1.5px solid var(--p100)}
+  .tests{display:grid;grid-template-columns:1.1fr 1fr;gap:14px;align-items:center;margin-top:6px}
+  .bignum{font-size:96px;font-weight:900;color:var(--p600);line-height:.9;letter-spacing:-.03em}
+  .bignum small{display:block;font-size:19px;font-weight:700;color:var(--ink2);letter-spacing:0;margin-top:6px}
+  .checks{display:flex;flex-direction:column;gap:7px}
+  .chk{display:flex;align-items:center;gap:10px;font-size:17px;font-weight:600;color:var(--ink2)}
+  .chk .i{color:var(--p600);font-size:22px}
+  table.tc{width:100%;border-collapse:collapse;margin-top:10px;font-size:15.5px}
+  table.tc th{text-align:left;font-size:13.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:800;padding:5px 6px;border-bottom:1.5px solid var(--line)}
+  table.tc td{padding:4px 6px;border-bottom:1px solid var(--s100);color:var(--ink2);vertical-align:top;line-height:1.28}
+  table.tc td.id{font-family:var(--mono);font-weight:700;color:var(--p700);white-space:nowrap}
+  .pass{font-weight:900;color:#fff;background:var(--p600);border-radius:7px;padding:2px 8px;font-size:13.5px;letter-spacing:.06em}
+  .donutwrap{display:flex;gap:18px;align-items:center;margin-top:6px}
+  .dl{display:flex;flex-direction:column;gap:8px}
+  .dl div{font-size:17px;font-weight:600;color:var(--ink2);display:flex;align-items:center}
+  .dl b{font-family:var(--mono);margin-right:8px;min-width:18px;display:inline-block;text-align:right}
+  .rlist{list-style:none;display:flex;flex-direction:column;gap:7px;flex:1;min-width:0;border-left:1.5px solid var(--line);padding-left:16px}
+  .rlist li{display:flex;align-items:flex-start;font-size:15px;line-height:1.3;color:var(--ink2)}
+  .rlist li .dot{margin-top:4px;flex:none}
+  .rlist b{font-family:var(--mono);font-size:14px;color:var(--ink)}
+
+  /* honesty */
+  .honest{display:flex;align-items:center;gap:18px;background:#fff;border:2px solid var(--a300);border-radius:20px;padding:14px 22px}
+  .honest .ic{color:var(--a700);font-size:34px}
+  .honest h5{font-size:20px;font-weight:800;color:#6e4106;white-space:nowrap}
+  .honest .items{display:flex;flex-wrap:wrap;gap:8px 10px}
+  .honest .items span{font-size:16px;font-weight:700;background:var(--a100);color:#6e4106;border-radius:99px;padding:6px 13px}
+  .honest .eqn{margin-left:auto;font-size:18px;font-weight:800;color:var(--p800);white-space:nowrap}
+
+  /* discussion / conclusion / future */
+  .disc{display:flex;flex-direction:column;gap:11px}
+  .dp{display:flex;gap:13px;align-items:flex-start}
+  .dp .ic{width:40px;height:40px;border-radius:12px;background:var(--p100);color:var(--p700);display:grid;place-items:center;font-size:22px;flex:none}
+  .dp p{font-size:18px;line-height:1.38;color:var(--ink2)}
+  .dp p b{color:var(--p800)}
+  .concl{font-size:19.5px;line-height:1.45;color:var(--ink2)}
+  .ach{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:14px}
+  .ach div{background:var(--p50);border:1.5px solid var(--p100);border-radius:14px;padding:10px 12px;font-size:16px;font-weight:700;color:var(--p800);display:flex;gap:9px;align-items:center}
+  .ach .i{color:var(--p600);font-size:22px}
+  .road{display:flex;flex-direction:column;gap:12px}
+  .rq{display:grid;grid-template-columns:62px 1fr;gap:14px;align-items:start}
+  .rq .pr{font-size:21px;font-weight:900;border-radius:14px;padding:10px 0;text-align:center;color:#fff}
+  .rq.p0 .pr{background:var(--r600)} .rq.p1 .pr{background:var(--a600)} .rq.p2 .pr{background:var(--w600)}
+  .rq ul{list-style:none;display:flex;flex-direction:column;gap:4px}
+  .rq li{font-size:17px;line-height:1.32;color:var(--ink2);padding-left:16px;position:relative}
+  .rq li::before{content:"";position:absolute;left:0;top:10px;width:7px;height:7px;border-radius:50%;background:var(--p500)}
+
+  /* footer */
+  .foot{flex:none;margin-top:auto;background:var(--p900);color:#d6ece0;padding:26px 52px 28px;display:grid;grid-template-columns:2.3fr 1fr auto;gap:36px;align-items:start}
+  .foot h6{font-size:16px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:#8ad4a9;margin-bottom:10px}
+  .refs{columns:2;column-gap:30px;font-size:14.5px;line-height:1.38;counter-reset:r;list-style:none}
+  .refs li{break-inside:avoid;margin-bottom:5px;padding-left:28px;position:relative;color:#c4ddd0}
+  .refs li::before{counter-increment:r;content:"[" counter(r) "]";position:absolute;left:0;color:#8ad4a9;font-weight:700}
+  .ack{font-size:15.5px;line-height:1.45;color:#c4ddd0}
+  .qrs{display:flex;gap:18px}
+  .qr{text-align:center}
+  .qr .box{background:#fff;border-radius:14px;padding:12px;width:150px;height:150px}
+  .qr .box svg{width:100%;height:100%;display:block}
+  .qr .l{font-size:14px;font-weight:700;color:#d6ece0;margin-top:8px}
+  .qr .u{font-size:12.5px;color:#9fc7b2;font-family:var(--mono)}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-satellite" viewBox="0 0 24 24"><path d="m13.5 6.5-3.148-3.148a1.205 1.205 0 0 0-1.704 0L6.352 5.648a1.205 1.205 0 0 0 0 1.704L9.5 10.5"/><path d="M16.5 7.5 19 5"/><path d="m17.5 10.5 3.148 3.148a1.205 1.205 0 0 1 0 1.704l-2.296 2.296a1.205 1.205 0 0 1-1.704 0L13.5 14.5"/><path d="M9 21a6 6 0 0 0-6-6"/><path d="M9.352 10.648a1.205 1.205 0 0 0 0 1.704l2.296 2.296a1.205 1.205 0 0 0 1.704 0l4.296-4.296a1.205 1.205 0 0 0 0-1.704l-2.296-2.296a1.205 1.205 0 0 0-1.704 0z"/></symbol>
+<symbol id="i-sprout" viewBox="0 0 24 24"><path d="M14 9.536V7a4 4 0 0 1 4-4h1.5a.5.5 0 0 1 .5.5V5a4 4 0 0 1-4 4 4 4 0 0 0-4 4c0 2 1 3 1 5a5 5 0 0 1-1 3"/><path d="M4 9a5 5 0 0 1 8 4 5 5 0 0 1-8-4"/><path d="M5 21h14"/></symbol>
+<symbol id="i-calculator" viewBox="0 0 24 24"><rect width="16" height="20" x="4" y="2" rx="2"/><line x1="8" x2="16" y1="6" y2="6"/><line x1="16" x2="16" y1="14" y2="18"/><path d="M16 10h.01"/><path d="M12 10h.01"/><path d="M8 10h.01"/><path d="M12 14h.01"/><path d="M8 14h.01"/><path d="M12 18h.01"/><path d="M8 18h.01"/></symbol>
+<symbol id="i-clipboard-check" viewBox="0 0 24 24"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></symbol>
+<symbol id="i-file-check" viewBox="0 0 24 24"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/><path d="m9 15 2 2 4-4"/></symbol>
+<symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><path d="M16 3.128a4 4 0 0 1 0 7.744"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><circle cx="9" cy="7" r="4"/></symbol>
+<symbol id="i-database" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/></symbol>
+<symbol id="i-server" viewBox="0 0 24 24"><rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/></symbol>
+<symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></symbol>
+<symbol id="i-cpu" viewBox="0 0 24 24"><path d="M12 20v2"/><path d="M12 2v2"/><path d="M17 20v2"/><path d="M17 2v2"/><path d="M2 12h2"/><path d="M2 17h2"/><path d="M2 7h2"/><path d="M20 12h2"/><path d="M20 17h2"/><path d="M20 7h2"/><path d="M7 20v2"/><path d="M7 2v2"/><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="8" y="8" width="8" height="8" rx="1"/></symbol>
+<symbol id="i-shield-check" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></symbol>
+<symbol id="i-sparkles" viewBox="0 0 24 24"><path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"/><path d="M20 2v4"/><path d="M22 4h-4"/><circle cx="4" cy="20" r="2"/></symbol>
+<symbol id="i-layers" viewBox="0 0 24 24"><path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"/><path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12"/><path d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17"/></symbol>
+<symbol id="i-lock" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+<symbol id="i-droplets" viewBox="0 0 24 24"><path d="M7 16.3c2.2 0 4-1.83 4-4.05 0-1.16-.57-2.26-1.71-3.19S7.29 6.75 7 5.3c-.29 1.45-1.14 2.84-2.29 3.76S3 11.1 3 12.25c0 2.22 1.8 4.05 4 4.05z"/><path d="M12.56 6.6A10.97 10.97 0 0 0 14 3.02c.5 2.5 2 4.9 4 6.5s3 3.5 3 5.5a6.98 6.98 0 0 1-11.91 4.97"/></symbol>
+<symbol id="i-flask-conical" viewBox="0 0 24 24"><path d="M14 2v6a2 2 0 0 0 .245.96l5.51 10.08A2 2 0 0 1 18 22H6a2 2 0 0 1-1.755-2.96l5.51-10.08A2 2 0 0 0 10 8V2"/><path d="M6.453 15h11.094"/><path d="M8.5 2h7"/></symbol>
+<symbol id="i-wheat" viewBox="0 0 24 24"><path d="M2 22 16 8"/><path d="M3.47 12.53 5 11l1.53 1.53a3.5 3.5 0 0 1 0 4.94L5 19l-1.53-1.53a3.5 3.5 0 0 1 0-4.94Z"/><path d="M7.47 8.53 9 7l1.53 1.53a3.5 3.5 0 0 1 0 4.94L9 15l-1.53-1.53a3.5 3.5 0 0 1 0-4.94Z"/><path d="M11.47 4.53 13 3l1.53 1.53a3.5 3.5 0 0 1 0 4.94L13 11l-1.53-1.53a3.5 3.5 0 0 1 0-4.94Z"/><path d="M20 2h2v2a4 4 0 0 1-4 4h-2V6a4 4 0 0 1 4-4Z"/><path d="M11.47 17.47 13 19l-1.53 1.53a3.5 3.5 0 0 1-4.94 0L5 19l1.53-1.53a3.5 3.5 0 0 1 4.94 0Z"/><path d="M15.47 13.47 17 15l-1.53 1.53a3.5 3.5 0 0 1-4.94 0L9 15l1.53-1.53a3.5 3.5 0 0 1 4.94 0Z"/><path d="M19.47 9.47 21 11l-1.53 1.53a3.5 3.5 0 0 1-4.94 0L13 11l1.53-1.53a3.5 3.5 0 0 1 4.94 0Z"/></symbol>
+<symbol id="i-scale" viewBox="0 0 24 24"><path d="M12 3v18"/><path d="m19 8 3 8a5 5 0 0 1-6 0zV7"/><path d="M3 7h1a17 17 0 0 0 8-2 17 17 0 0 0 8 2h1"/><path d="m5 8 3 8a5 5 0 0 1-6 0zV7"/><path d="M7 21h10"/></symbol>
+<symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></symbol>
+<symbol id="i-triangle-alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+<symbol id="i-circle-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol>
+<symbol id="i-leaf" viewBox="0 0 24 24"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></symbol>
+<symbol id="i-radar" viewBox="0 0 24 24"><path d="M19.07 4.93A10 10 0 0 0 6.99 3.34"/><path d="M4 6h.01"/><path d="M2.29 9.62A10 10 0 1 0 21.31 8.35"/><path d="M16.24 7.76A6 6 0 1 0 8.23 16.67"/><path d="M12 18h.01"/><path d="M17.99 11.66A6 6 0 0 1 15.77 16.67"/><circle cx="12" cy="12" r="2"/><path d="m13.41 10.59 5.66-5.66"/></symbol>
+<symbol id="i-file-archive" viewBox="0 0 24 24"><path d="M13.659 22H18a2 2 0 0 0 2-2V8a2.4 2.4 0 0 0-.706-1.706l-3.588-3.588A2.4 2.4 0 0 0 14 2H6a2 2 0 0 0-2 2v11.5"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/><path d="M8 12v-1"/><path d="M8 18v-2"/><path d="M8 7V6"/><circle cx="8" cy="20" r="2"/></symbol>
+<symbol id="i-user-check" viewBox="0 0 24 24"><path d="m16 11 2 2 4-4"/><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></symbol>
+<symbol id="i-git-branch" viewBox="0 0 24 24"><path d="M15 6a9 9 0 0 0-9 9V3"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/></symbol>
+<symbol id="i-workflow" viewBox="0 0 24 24"><rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/></symbol>
+<symbol id="i-brain-circuit" viewBox="0 0 24 24"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M9 13a4.5 4.5 0 0 0 3-4"/><path d="M6.003 5.125A3 3 0 0 0 6.401 6.5"/><path d="M3.477 10.896a4 4 0 0 1 .585-.396"/><path d="M6 18a4 4 0 0 1-1.967-.516"/><path d="M12 13h4"/><path d="M12 18h6a2 2 0 0 1 2 2v1"/><path d="M12 8h8"/><path d="M16 8V5a2 2 0 0 1 2-2"/><circle cx="16" cy="13" r=".5"/><circle cx="18" cy="3" r=".5"/><circle cx="20" cy="21" r=".5"/><circle cx="20" cy="8" r=".5"/></symbol>
+<symbol id="i-map-pin" viewBox="0 0 24 24"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></symbol>
+<symbol id="i-ban" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M4.929 4.929 19.07 19.071"/></symbol>
+<symbol id="i-file-text" viewBox="0 0 24 24"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></symbol>
+<symbol id="i-hourglass" viewBox="0 0 24 24"><path d="M5 22h14"/><path d="M5 2h14"/><path d="M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22"/><path d="M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2"/></symbol>
+<symbol id="i-rocket" viewBox="0 0 24 24"><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09"/><path d="M9 12a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.4 22.4 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 .05 5 .05"/></symbol>
+<symbol id="i-microscope" viewBox="0 0 24 24"><path d="M6 18h8"/><path d="M3 22h18"/><path d="M14 22a7 7 0 1 0 0-14h-1"/><path d="M9 14h2"/><path d="M9 12a2 2 0 0 1-2-2V6h6v4a2 2 0 0 1-2 2Z"/><path d="M12 6V3a1 1 0 0 0-1-1H9a1 1 0 0 0-1 1v3"/></symbol>
+<symbol id="i-satellite-dish" viewBox="0 0 24 24"><path d="M4 10a7.31 7.31 0 0 0 10 10Z"/><path d="m9 15 3-3"/><path d="M17 13a6 6 0 0 0-6-6"/><path d="M21 13A10 10 0 0 0 11 3"/></symbol>
+<symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></symbol>
+<symbol id="i-cloud-rain" viewBox="0 0 24 24"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M16 14v6"/><path d="M8 14v6"/><path d="M12 16v6"/></symbol>
+<symbol id="i-timer" viewBox="0 0 24 24"><line x1="10" x2="14" y1="2" y2="2"/><line x1="12" x2="15" y1="14" y2="11"/><circle cx="12" cy="14" r="8"/></symbol>
+<symbol id="i-badge-check" viewBox="0 0 24 24"><path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"/><path d="m9 12 2 2 4-4"/></symbol>
+<symbol id="i-git-compare" viewBox="0 0 24 24"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><path d="M11 18H8a2 2 0 0 1-2-2V9"/></symbol>
+<symbol id="i-list-checks" viewBox="0 0 24 24"><path d="M13 5h8"/><path d="M13 12h8"/><path d="M13 19h8"/><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/></symbol>
+<symbol id="i-book-open-check" viewBox="0 0 24 24"><path d="M12 5v16"/><path d="m16 12 2 2 4-4"/><path d="M22 6V5a2 2 0 00-1.999-2L16 3.002A5 5 0 0012 5a5 5 0 00-4-2H4a2 2 0 00-2 2v12a2 2 0 001.999 2H8a5 5 0 014 2 5 5 0 014-2h4.001A2 2 0 0022 17v-1.344"/></symbol>
+<symbol id="i-gauge" viewBox="0 0 24 24"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></symbol>
+<symbol id="i-test-tube-diagonal" viewBox="0 0 24 24"><path d="M21 7 6.82 21.18a2.83 2.83 0 0 1-3.99-.01a2.83 2.83 0 0 1 0-4L17 3"/><path d="m16 2 6 6"/><path d="M12 16H4"/></symbol>
+<symbol id="i-shield-alert" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="M12 8v4"/><path d="M12 16h.01"/></symbol>
+<symbol id="i-tractor" viewBox="0 0 24 24"><path d="m10 11 11 .9a1 1 0 0 1 .8 1.1l-.665 4.158a1 1 0 0 1-.988.842H20"/><path d="M16 18h-5"/><path d="M18 5a1 1 0 0 0-1 1v5.573"/><path d="M3 4h8.129a1 1 0 0 1 .99.863L13 11.246"/><path d="M4 11V4"/><path d="M7 15h.01"/><path d="M8 10.1V4"/><circle cx="18" cy="18" r="2"/><circle cx="7" cy="15" r="5"/></symbol>
+<symbol id="i-scan-search" viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><circle cx="12" cy="12" r="3"/><path d="m16 16-1.9-1.9"/></symbol>
+<symbol id="i-bot" viewBox="0 0 24 24"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></symbol>
+<symbol id="i-circle-x" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></symbol>
+<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+<symbol id="i-repeat" viewBox="0 0 24 24"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></symbol>
+<symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol>
+<symbol id="i-split" viewBox="0 0 24 24"><path d="M16 3h5v5"/><path d="M8 3H3v5"/><path d="M12 22v-8.3a4 4 0 0 0-1.172-2.872L3 3"/><path d="m15 9 6-6"/></symbol>
+
+</defs></svg>
+
+<div class="poster">
+
+<!-- ======================= HEADER ======================= -->
+<header class="hdr">
+  <div class="hdr-top">
+    <span>Institute of Information Technology · University of Dhaka</span>
+    <span class="pill">SE801 · Software Project Lab 3 · Final Defense · October 2026</span>
+  </div>
+  <div class="hdr-main">
+    <div class="logo"><svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><use href="#i-leaf"/></svg></div>
+    <div class="title">
+      <h1>Terra<span>-</span>Audit</h1>
+      <h2>An AI-Assisted Digital MRV Platform for AWD Rice Irrigation and Agricultural Land Management Carbon Credits</h2>
+      <div class="kw"><span>Digital MRV</span><span>AWD rice</span><span>Sentinel-1 SAR</span><span>Carbon accounting</span><span>Evidence provenance</span><span>Readiness</span><span>Internal review</span></div>
+    </div>
+    <div class="hdr-meta">
+      <div class="meta"><div class="k">Presented by</div><div class="v">Kazi Nahid</div><div class="s">BSSE Roll 1437 · IIT, University of Dhaka</div></div>
+      <div class="meta"><div class="k">Supervised by</div><div class="v">Dr. Emon Kumar Dey</div><div class="s">Professor, IIT, University of Dhaka</div></div>
+      <div class="meta"><div class="k">Methodologies</div><div class="v">Verra VM0051 · VM0042</div><div class="s">+ VMD0054 v1.1 leakage adapter (scoped)</div></div>
+      <div class="meta"><div class="k">Deployed</div><div class="v">terra-audit.vercel.app</div><div class="s">Next.js · FastAPI · PostgreSQL · worker</div></div>
+    </div>
+  </div>
+</header>
+
+<main class="body">
+
+<!-- ======================= ROW 1 ======================= -->
+<section class="row" style="grid-template-columns:1fr 1.18fr 1.75fr">
+  <div class="card">
+    <div class="sec"><div class="n">1</div><h3>Introduction &amp; Background</h3></div>
+    <p class="lead">Flooded rice paddies are a major source of agricultural <b>methane</b>: waterlogged soil turns anaerobic and favours methane-producing microbes. <b>Alternate Wetting and Drying (AWD)</b> lets the water drop below the soil surface before re-irrigating, cutting methane while maintaining yield. Free <b>Sentinel-1 radar</b> sees through cloud and shows when a field is flooded.</p>
+    <div class="sfw-strip">
+      <div class="big">1.00</div><div class="arrow">→</div><div class="big">0.55</div>
+      <div class="txt">Daily CH₄ scaling factor, continuous flooding → true AWD (≥ 2 drydowns): <b>45% lower</b>. <span style="color:var(--muted)">IPCC 2019 Table 5.12 · VM0051</span></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="sec"><div class="n">2</div><h3>Problem Statement</h3></div>
+    <div class="pains">
+      <div class="pain"><div class="ic"><svg class="i"><use href="#i-scan-search"/></svg></div><div><h4>Practice claims are hard to verify</h4><p>Irrigation logs are incomplete; sensors on every smallholder plot are too costly.</p></div></div>
+      <div class="pain"><div class="ic"><svg class="i"><use href="#i-split"/></svg></div><div><h4>Evidence gets separated from the number</h4><p>Spreadsheets lose the factors, methodology version and history behind a result.</p></div></div>
+      <div class="pain"><div class="ic"><svg class="i"><use href="#i-link"/></svg></div><div><h4>Verification needs traceability</h4><p>Verifiers must trace every tonne of CO₂e back to its evidence and rule.</p></div></div>
+    </div>
+    <div class="gapbar"><b>Gap:</b> remote-sensing tools and carbon spreadsheets live apart; reviewers reconstruct by hand which plots, logs and methodology version produced a figure.</div>
+  </div>
+
+  <div class="card">
+    <div class="sec"><div class="n">3</div><h3>Research Objectives</h3></div>
+    <div class="objs">
+      <div class="obj"><div class="ic"><svg class="i"><use href="#i-satellite"/></svg></div><div><h5>Detect AWD from space</h5><p>Flooding &amp; drydown from free Sentinel-1 SAR, labelled as estimates.</p></div></div>
+      <div class="obj"><div class="ic"><svg class="i"><use href="#i-calculator"/></svg></div><div><h5>Scoped carbon engines</h5><p>VM0051 v1.1 (rice, QA3) and VM0042 v2.2 (cropland ALM) with visible intermediates.</p></div></div>
+      <div class="obj"><div class="ic"><svg class="i"><use href="#i-flask-conical"/></svg></div><div><h5>Cropland evidence</h5><p>Practices, production, soil sampling, lab, custody &amp; livestock records.</p></div></div>
+      <div class="obj"><div class="ic"><svg class="i"><use href="#i-list-checks"/></svg></div><div><h5>Readiness &amp; leakage</h5><p>Missing or unsupported rules shown, never silently counted as met or zero.</p></div></div>
+      <div class="obj"><div class="ic"><svg class="i"><use href="#i-lock"/></svg></div><div><h5>Frozen, versioned results</h5><p>Every calculation freezes its evidence, inputs and results.</p></div></div>
+      <div class="obj"><div class="ic"><svg class="i"><use href="#i-user-check"/></svg></div><div><h5>Internal review</h5><p>A second person approves before a result reaches a report.</p></div></div>
+      <div class="obj"><div class="ic"><svg class="i"><use href="#i-sparkles"/></svg></div><div><h5>AI as an aid only</h5><p>ML detectors &amp; LLM explanations never change a calculated value.</p></div></div>
+      <div class="obj"><div class="ic"><svg class="i"><use href="#i-users"/></svg></div><div><h5>Multi-user platform</h5><p>Org &amp; project access control, background jobs, history &amp; export.</p></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= GRAPHICAL ABSTRACT ======================= -->
+<section class="card hero">
+  <div class="sec"><div class="n">4</div><h3>Graphical Abstract</h3><span class="tag">From satellite evidence to a verifier-ready carbon report</span></div>
+  <div class="ga">
+    <!-- stage 1 -->
+    <div class="stage">
+      <div class="ill" style="background:linear-gradient(180deg,#dcecf7,#f3f9f6)">
+        <svg viewBox="0 0 470 200" preserveAspectRatio="xMidYMid meet" font-family="Inter,sans-serif">
+          <defs><linearGradient id="water" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7fb9df"/><stop offset="1" stop-color="#3f8fc4"/></linearGradient></defs>
+          <g transform="translate(34,14) scale(2.7)" fill="none" stroke="#155e8c" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><use href="#i-satellite" width="24" height="24"/></g>
+          <g stroke="#1d74ab" stroke-width="2.4" stroke-dasharray="8 7" fill="none" opacity=".85"><path d="M98 76 L170 132"/><path d="M104 68 L290 132"/><path d="M110 60 L410 132"/></g>
+          <polygon points="50,192 130,128 448,128 376,192" fill="url(#water)"/>
+          <g stroke="#e9f4fb" stroke-width="2.2" opacity=".75"><path d="M100 176 L380 176"/><path d="M122 160 L404 160"/><path d="M144 144 L426 144"/></g>
+          <g stroke="#2f9e63" stroke-width="3.2" stroke-linecap="round">
+            <path d="M96 188 l0 -17 M102 188 l-5 -14 M90 188 l5 -14"/><path d="M180 188 l0 -17 M186 188 l-5 -14 M174 188 l5 -14"/><path d="M264 188 l0 -17 M270 188 l-5 -14 M258 188 l5 -14"/><path d="M348 188 l0 -17 M354 188 l-5 -14 M342 188 l5 -14"/>
+            <path d="M200 150 l0 -14 M205 150 l-4 -11 M195 150 l4 -11"/><path d="M296 150 l0 -14 M301 150 l-4 -11 M291 150 l4 -11"/><path d="M392 150 l0 -14 M397 150 l-4 -11 M387 150 l4 -11"/>
+          </g>
+          <rect x="268" y="18" rx="12" width="180" height="40" fill="#fff" stroke="#8cc3e6" stroke-width="1.6"/>
+          <text x="358" y="45" text-anchor="middle" font-size="19" font-weight="800" fill="#155e8c">VV · VH radar</text>
+        </svg>
+      </div>
+      <div class="kicker">01 · Measure from space</div>
+      <h4>Sentinel-1 radar</h4>
+      <p>Earth Engine time series show when each field was flooded and drained, without field sensors.</p>
+    </div>
+    <!-- stage 2 -->
+    <div class="stage">
+      <div class="ill">
+        <svg viewBox="0 0 470 200" preserveAspectRatio="xMidYMid meet" font-family="Inter,sans-serif">
+          <g font-size="18" font-weight="700" fill="#11392a">
+            <g transform="translate(46,14)"><rect width="300" height="44" rx="12" fill="#fff" stroke="#8ad4a9" stroke-width="1.6"/><g transform="translate(12,10)" fill="none" stroke="#1f7f4e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-sprout" width="24" height="24"/></g><text x="48" y="29">Crop seasons &amp; rotations</text></g>
+            <g transform="translate(46,68)"><rect width="300" height="44" rx="12" fill="#fff" stroke="#8ad4a9" stroke-width="1.6"/><g transform="translate(12,10)" fill="none" stroke="#1f7f4e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-flask-conical" width="24" height="24"/></g><text x="48" y="29">Soil samples · lab · custody</text></g>
+            <g transform="translate(46,122)"><rect width="300" height="44" rx="12" fill="#fff" stroke="#8ad4a9" stroke-width="1.6"/><g transform="translate(12,10)" fill="none" stroke="#1f7f4e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-wheat" width="24" height="24"/></g><text x="48" y="29">Production &amp; practices</text></g>
+          </g>
+          <g transform="translate(372,48)"><circle cx="36" cy="36" r="36" fill="#1f7f4e"/><g transform="translate(18,18) scale(1.5)" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><use href="#i-lock" width="24" height="24"/></g></g>
+          <text x="408" y="146" text-anchor="middle" font-size="15" font-weight="800" fill="#566b61">files</text>
+          <text x="408" y="164" text-anchor="middle" font-size="15" font-weight="800" fill="#566b61">SHA-256</text>
+          <text x="196" y="190" text-anchor="middle" font-size="14.5" font-weight="700" fill="#566b61" letter-spacing="1.2">APPEND-ONLY CORRECTIONS</text>
+        </svg>
+      </div>
+      <div class="kicker">02 · Keep evidence together</div>
+      <h4>One evidence record</h4>
+      <p>Seasons, soil, production and files stay linked to the field; corrections are append-only.</p>
+    </div>
+    <!-- stage 3 -->
+    <div class="stage">
+      <div class="ill" style="background:#11392a;border-color:#11392a">
+        <svg viewBox="0 0 470 200" preserveAspectRatio="xMidYMid meet">
+          <g opacity=".12" stroke="#8ad4a9"><path d="M0 40 H470 M0 80 H470 M0 120 H470 M0 160 H470"/><path d="M47 0 V200 M141 0 V200 M235 0 V200 M329 0 V200 M423 0 V200"/></g>
+          <g font-family="JetBrains Mono,monospace" fill="#e2f3e9" font-weight="700" text-anchor="middle">
+            <text x="235" y="40" font-size="19">E = EF꜀×SF<tspan font-size="13" dy="4">w</tspan><tspan dy="-4">×SF</tspan><tspan font-size="13" dy="4">p</tspan><tspan dy="-4">×SF</tspan><tspan font-size="13" dy="4">o</tspan><tspan dy="-4">×days×ha</tspan></text>
+            <text x="235" y="74" font-size="17" fill="#8ad4a9">ΔCO₂e = (E_bsl − E_prj) × GWP 28</text>
+          </g>
+          <g font-family="Inter,sans-serif" font-weight="800" font-size="18" text-anchor="middle">
+            <rect x="40" y="94" width="122" height="38" rx="10" fill="#1f7f4e"/><text x="101" y="119" fill="#fff">VM0051</text>
+            <rect x="174" y="94" width="122" height="38" rx="10" fill="#1f7f4e"/><text x="235" y="119" fill="#fff">VM0042</text>
+            <rect x="308" y="94" width="122" height="38" rx="10" fill="#1f7f4e"/><text x="369" y="119" fill="#fff">VMD0054</text>
+            <rect x="80" y="146" width="310" height="38" rx="10" fill="none" stroke="#f2c472" stroke-width="2.2"/><text x="235" y="171" fill="#f2c472">blocks instead of guessing</text>
+          </g>
+        </svg>
+      </div>
+      <div class="kicker">03 · Calculate by the rules</div>
+      <h4>Deterministic engines</h4>
+      <p>Verra equations with cited IPCC factors; every intermediate value is kept.</p>
+    </div>
+    <!-- stage 4 -->
+    <div class="stage">
+      <div class="ill">
+        <svg viewBox="0 0 470 200" preserveAspectRatio="xMidYMid meet" font-family="Inter,sans-serif">
+          <rect x="34" y="14" width="300" height="172" rx="16" fill="#fff" stroke="#d3e2d9" stroke-width="1.6"/>
+          <g font-size="18" font-weight="700" fill="#2c4238">
+            <circle cx="60" cy="46" r="9" fill="#1f7f4e"/><text x="80" y="52">period coverage</text>
+            <circle cx="60" cy="82" r="9" fill="#c97c0f"/><text x="80" y="88">applicability</text>
+            <circle cx="60" cy="118" r="9" fill="#c0392b"/><text x="80" y="124">measurement inputs</text>
+            <circle cx="60" cy="154" r="9" fill="#5f6f78"/><text x="80" y="160">leakage (unsupported)</text>
+          </g>
+          <g transform="translate(358,40)"><circle cx="44" cy="44" r="44" fill="#1f7f4e"/><g transform="translate(20,20) scale(2)" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-user-check" width="24" height="24"/></g></g>
+          <text x="402" y="160" text-anchor="middle" font-size="17" font-weight="800" fill="#11392a">reviewer</text>
+        </svg>
+      </div>
+      <div class="kicker">04 · Check, then review</div>
+      <h4>Readiness &amp; review</h4>
+      <p>Checks block incomplete work; a second person approves or requests changes.</p>
+    </div>
+    <!-- stage 5 -->
+    <div class="stage">
+      <div class="ill">
+        <svg viewBox="0 0 470 200" preserveAspectRatio="xMidYMid meet" font-family="Inter,sans-serif">
+          <rect x="60" y="10" width="170" height="182" rx="12" fill="#fff" stroke="#8ad4a9" stroke-width="1.8"/>
+          <rect x="80" y="30" width="110" height="12" rx="6" fill="#1f7f4e"/>
+          <g fill="#d3e2d9"><rect x="80" y="54" width="130" height="8" rx="4"/><rect x="80" y="70" width="112" height="8" rx="4"/><rect x="80" y="86" width="124" height="8" rx="4"/></g>
+          <g transform="translate(80,104)"><rect width="12" height="44" fill="#8ad4a9"/><rect x="18" y="16" width="12" height="28" fill="#2f9e63"/><rect x="36" y="6" width="12" height="38" fill="#1f7f4e"/><rect x="54" y="24" width="12" height="20" fill="#8ad4a9"/></g>
+          <text x="145" y="178" text-anchor="middle" font-size="16" font-weight="800" fill="#11392a">MRV report (PDF)</text>
+          <g transform="translate(204,84)"><circle cx="34" cy="34" r="34" fill="#1f7f4e"/><g transform="translate(15,15) scale(1.6)" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-badge-check" width="24" height="24"/></g></g>
+          <rect x="284" y="24" width="150" height="96" rx="14" fill="#fff" stroke="#8cc3e6" stroke-width="1.8"/>
+          <g transform="translate(300,40) scale(1.3)" fill="none" stroke="#1d74ab" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><use href="#i-file-archive" width="24" height="24"/></g>
+          <text x="384" y="68" text-anchor="middle" font-size="22" font-weight="900" fill="#155e8c">ZIP</text>
+          <text x="359" y="104" text-anchor="middle" font-size="15.5" font-weight="700" fill="#566b61">SHA-256 manifest</text>
+          <text x="359" y="160" text-anchor="middle" font-size="16" font-weight="800" fill="#155e8c">→ external VVB</text>
+        </svg>
+      </div>
+      <div class="kicker">05 · Report for the verifier</div>
+      <h4>Verifier-ready package</h4>
+      <p>MRV report (PDF) plus an evidence ZIP with a SHA-256 manifest.</p>
+    </div>
+  </div>
+  <div class="ga-bottom">
+    <div class="callout">
+      <div><div class="num">2<small>drydowns</small></div></div>
+      <div class="eq">→</div>
+      <div><div class="num">2.12<small>tCO₂e / ha</small></div></div>
+      <div class="txt">Live run on the deployed app: Sentinel-1 detected 2 AWD drydowns in an 84-day season. The VM0051 engine returns a <b>net</b> reduction after the 15% uncertainty and N₂O deductions.</div>
+    </div>
+    <div class="advis">
+      <div class="ic"><svg class="i"><use href="#i-bot"/></svg></div>
+      <div><h5>Advisory AI lane: explains, never decides</h5><p>Random-forest cross-check and cited LLM explanations go to a human reviewer. No AI component can change a value, mark a requirement compliant, or create credits.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= METHODOLOGY ======================= -->
+<section class="card hero">
+  <div class="sec"><div class="n">5</div><h3>Materials &amp; Methodology: End-to-End Workflow</h3><span class="tag">Six steps, every one saved with its evidence</span></div>
+  <div class="flow">
+    <div class="step"><div class="top"><div class="no">01</div><div class="ic"><svg class="i"><use href="#i-map-pin"/></svg></div></div><h4>Register field</h4><p>Draw, upload (GeoJSON/KML) or paste the boundary; area, district and type are auto-detected.</p><span class="who">Field team</span></div>
+    <div class="step"><div class="top"><div class="no">02</div><div class="ic"><svg class="i"><use href="#i-sprout"/></svg></div></div><h4>Record season</h4><p>Crop, dates, rotations, fallow or missing periods and attachments; corrections are appended.</p><span class="who">Field team</span></div>
+    <div class="step"><div class="top"><div class="no">03</div><div class="ic"><svg class="i"><use href="#i-satellite"/></svg></div></div><h4>Satellite analysis</h4><p>A queued job pulls Sentinel-1, smooths it (Savitzky–Golay) and counts drydowns.</p><span class="who auto">Automatic · worker</span></div>
+    <div class="step"><div class="top"><div class="no">04</div><div class="ic"><svg class="i"><use href="#i-calculator"/></svg></div></div><h4>Calculate</h4><p>The engine runs on a frozen snapshot; issuance gates and readiness are evaluated.</p><span class="who">One click</span></div>
+    <div class="step"><div class="top"><div class="no">05</div><div class="ic"><svg class="i"><use href="#i-clipboard-check"/></svg></div></div><h4>Review</h4><p>A reviewer (never the submitter) records findings, diffs versions and decides.</p><span class="who">Reviewer</span></div>
+    <div class="step"><div class="top"><div class="no">06</div><div class="ic"><svg class="i"><use href="#i-file-check"/></svg></div></div><h4>MRV report</h4><p>Project PDF and a SHA-256-hashed evidence package for an external VVB.</p><span class="who">Project lead</span></div>
+  </div>
+  <div class="flow-sub">
+    <div class="sub">
+      <div class="k"><svg class="i"><use href="#i-lock"/></svg>Frozen at commit (immutable snapshot)</div>
+      <div class="frozen"><span>Field boundary &amp; area</span><span>Crop seasons &amp; engine inputs</span><span>Methodology bundle &amp; factors</span><span>Readiness result</span><span>Evidence &amp; provenance</span></div>
+    </div>
+    <div class="sub">
+      <div class="k"><svg class="i"><use href="#i-git-compare"/></svg>Calculation &amp; review states</div>
+      <div class="states"><span class="st x">draft</span><span class="arr">→</span><span class="st g">ready_for_review</span><span class="arr">→</span><span class="st x">superseded</span></div>
+      <div class="states"><span class="st b">submitted</span><span class="arr">→</span><span class="st b">in_review</span><span class="arr">→</span><span class="st g">internally_approved</span></div>
+    </div>
+    <div class="sub">
+      <div class="k"><svg class="i"><use href="#i-list-checks"/></svg>Readiness states per requirement</div>
+      <div class="legend"><span><i class="dot" style="background:var(--p600)"></i>satisfied</span><span><i class="dot" style="background:var(--a600)"></i>needs review</span><span><i class="dot" style="background:var(--r600)"></i>missing</span><span><i class="dot" style="background:var(--s600)"></i>unsupported (stays visible)</span><span><i class="dot" style="background:#b8c4bd"></i>not applicable</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= ARCHITECTURE + AI ======================= -->
+<section class="row" style="grid-template-columns:1.12fr 1fr">
+  <div class="card arch">
+    <div class="sec"><div class="n">6</div><h3>System Architecture &amp; Experimental Setup</h3></div>
+    <svg viewBox="0 0 1080 430" font-family="Inter,sans-serif">
+      <defs>
+        <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#2f9e63"/></marker>
+        <marker id="ahb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#1d74ab"/></marker>
+      </defs>
+      <!-- tiers -->
+      <g font-weight="800">
+        <rect x="10" y="40" width="200" height="120" rx="18" fill="#f0f8f3" stroke="#8ad4a9" stroke-width="2"/>
+        <g transform="translate(88,58) scale(1.8)" fill="none" stroke="#1f7f4e" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-users" width="24" height="24"/></g>
+        <text x="110" y="122" text-anchor="middle" font-size="21" fill="#11392a">Browser</text>
+        <text x="110" y="145" text-anchor="middle" font-size="14.5" font-weight="600" fill="#566b61">teams · leads · reviewers</text>
+
+        <rect x="272" y="40" width="230" height="120" rx="18" fill="#fff" stroke="#2f9e63" stroke-width="2.5"/>
+        <text x="387" y="88" text-anchor="middle" font-size="22" fill="#11392a">Next.js web app</text>
+        <text x="387" y="112" text-anchor="middle" font-size="14.5" font-weight="600" fill="#566b61">pages · forms · session proxy</text>
+        <rect x="327" y="124" width="120" height="24" rx="12" fill="#e2f3e9"/><text x="387" y="141" text-anchor="middle" font-size="13" fill="#186640">Vercel</text>
+
+        <rect x="564" y="40" width="240" height="120" rx="18" fill="#fff" stroke="#2f9e63" stroke-width="2.5"/>
+        <text x="684" y="88" text-anchor="middle" font-size="22" fill="#11392a">FastAPI backend</text>
+        <text x="684" y="112" text-anchor="middle" font-size="14.5" font-weight="600" fill="#566b61">auth · roles · rules · engines</text>
+        <rect x="609" y="124" width="150" height="24" rx="12" fill="#e2f3e9"/><text x="684" y="141" text-anchor="middle" font-size="13" fill="#186640">Railway (Docker)</text>
+
+        <rect x="866" y="40" width="204" height="120" rx="18" fill="#11392a"/>
+        <g transform="translate(948,52) scale(1.5)" fill="none" stroke="#8ad4a9" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><use href="#i-database" width="24" height="24"/></g>
+        <text x="968" y="114" text-anchor="middle" font-size="20" fill="#fff">PostgreSQL</text>
+        <text x="968" y="137" text-anchor="middle" font-size="13.5" font-weight="600" fill="#a9d9be">Neon · 50+ tables · job queue</text>
+
+        <rect x="564" y="254" width="240" height="120" rx="18" fill="#fff" stroke="#1d74ab" stroke-width="2.5"/>
+        <text x="684" y="302" text-anchor="middle" font-size="22" fill="#11392a">Python worker</text>
+        <text x="684" y="326" text-anchor="middle" font-size="14.5" font-weight="600" fill="#566b61">satellite · AI · indexing jobs</text>
+        <rect x="609" y="338" width="150" height="24" rx="12" fill="#e3f0f9"/><text x="684" y="355" text-anchor="middle" font-size="13" fill="#155e8c">Railway (Docker)</text>
+
+        <rect x="272" y="254" width="230" height="58" rx="16" fill="#e3f0f9" stroke="#8cc3e6" stroke-width="2"/>
+        <text x="387" y="289" text-anchor="middle" font-size="18" fill="#155e8c">Google Earth Engine</text>
+        <rect x="272" y="326" width="230" height="58" rx="16" fill="#e3f0f9" stroke="#8cc3e6" stroke-width="2"/>
+        <text x="387" y="361" text-anchor="middle" font-size="18" fill="#155e8c">Groq LLM (explanations)</text>
+
+        <rect x="866" y="254" width="204" height="120" rx="18" fill="#fff" stroke="#d3e2d9" stroke-width="2"/>
+        <g transform="translate(950,266) scale(1.4)" fill="none" stroke="#5f6f78" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><use href="#i-file-archive" width="24" height="24"/></g>
+        <text x="968" y="324" text-anchor="middle" font-size="19" fill="#11392a">File storage</text>
+        <text x="968" y="347" text-anchor="middle" font-size="13.5" font-weight="600" fill="#566b61">evidence · documents</text>
+      </g>
+      <!-- links -->
+      <g stroke="#2f9e63" stroke-width="3" fill="none">
+        <path d="M212 100 H268" marker-end="url(#ah)"/><path d="M504 100 H560" marker-end="url(#ah)"/><path d="M806 100 H862" marker-end="url(#ah)"/>
+              </g>
+      <g stroke="#1d74ab" stroke-width="3" fill="none">
+        <path d="M790 252 V204 H935 V166" marker-end="url(#ahb)"/>
+        <path d="M562 290 H506" marker-end="url(#ahb)"/><path d="M562 350 H506" marker-end="url(#ahb)"/>
+        <path d="M684 162 V250" marker-end="url(#ahb)" stroke-dasharray="7 6"/>
+      </g>
+      <g font-size="14" font-weight="800" fill="#566b61">
+        <text x="240" y="90" text-anchor="middle">HTTPS</text><text x="532" y="90" text-anchor="middle">REST</text><text x="834" y="90" text-anchor="middle">SQL</text>
+        <text x="676" y="214" text-anchor="end">queue job (API never waits)</text>
+        <text x="925" y="192" text-anchor="end" fill="#155e8c">claim job · save result</text>
+        <text x="534" y="282" text-anchor="middle" fill="#155e8c">S1</text><text x="534" y="342" text-anchor="middle" fill="#155e8c">LLM</text>
+      </g>
+      <text x="10" y="22" font-size="15" font-weight="800" fill="#1f7f4e" letter-spacing="2">PRODUCTION DEPLOYMENT · terra-audit.vercel.app</text>
+      <text x="10" y="416" font-size="14.5" font-weight="600" fill="#566b61">Durable queue: one worker per job (compare-and-set claim), heartbeat recovery, bounded retries, per-organization limits.</text>
+    </svg>
+    <div class="note"><svg class="i ic"><use href="#i-layers"/></svg><div>AI provider adapters: <b>fake</b> (tests), <b>self-hosted</b>, <b>Groq</b> and <b>OpenAI</b>, behind one interface. Methodology PDFs are indexed by section and equation for retrieval.</div></div>
+  </div>
+
+  <div class="card">
+    <div class="sec"><div class="n">7</div><h3>AI Authority Boundary</h3><span class="tag">Code decides · AI explains</span></div>
+    <div class="lane det">
+      <div class="lk"><svg class="i"><use href="#i-shield-check"/></svg>Authoritative · deterministic</div>
+      <div class="pipe"><span class="b">Project &amp; evidence</span><span class="arr">→</span><span class="b">Data validation</span><span class="arr">→</span><span class="b key">VM0051 / VM0042 engine</span><span class="arr">→</span><span class="b key">Results &amp; readiness</span></div>
+    </div>
+    <div class="lane adv">
+      <div class="lk"><svg class="i"><use href="#i-sparkles"/></svg>Advisory · AI</div>
+      <div class="pipe"><span class="b">Satellite, ML &amp; crop models</span><span class="arr" style="color:var(--w600)">→</span><span class="b">Bundle-scoped context packet</span><span class="arr" style="color:var(--w600)">→</span><span class="b">LLM provider</span><span class="arr" style="color:var(--w600)">→</span><span class="b wkey">Output validator</span><span class="arr" style="color:var(--w600)">→</span><span class="b">Draft explanation</span><span class="arr" style="color:var(--w600)">→</span><span class="b wkey">Human reviewer</span></div>
+    </div>
+    <div class="rules">
+      <div class="rule"><h6><svg class="i"><use href="#i-target"/></svg>Bounded context</h6><p>The model sees only the active methodology bundle, its corrections, the evidence and the calculation.</p></div>
+      <div class="rule"><h6><svg class="i"><use href="#i-badge-check"/></svg>Validated output</h6><p>14 named checks: cited sentences must exist, numbers must match, “certified” or “approved” claims are rejected.</p></div>
+      <div class="rule"><h6><svg class="i"><use href="#i-ban"/></svg>Fail closed</h6><p>One repair attempt, then fail; nothing partial is ever saved.</p></div>
+    </div>
+    <div class="banner"><svg class="i"><use href="#i-shield-alert"/></svg>No AI component can change a calculated value, mark a requirement compliant, or create registry credits.</div>
+  </div>
+</section>
+
+<!-- ======================= RESULTS ======================= -->
+<section class="card">
+  <div class="sec"><div class="n">8</div><h3>Results &amp; Analysis</h3><span class="tag">All values from the live app and the test suite</span></div>
+  <div class="res">
+
+    <!-- A: SFw -->
+    <div class="panel">
+      <div class="ph"><span class="pl">A</span><h4>Water regime drives the reduction</h4></div>
+      <svg class="ch" viewBox="0 0 440 276">
+        <g stroke="#e9eef1" stroke-width="1.5"><path d="M50 40 H430 M50 87.5 H430 M50 135 H430 M50 182.5 H430"/></g>
+        <path d="M50 230 H430" stroke="#94a7a0" stroke-width="2"/>
+        <g font-size="16" fill="#566b61" text-anchor="end" font-weight="600"><text x="42" y="45">1.0</text><text x="42" y="140">0.5</text><text x="42" y="235">0</text></g>
+        <rect x="80" y="40" width="88" height="190" rx="10" fill="#c97c0f"/>
+        <rect x="200" y="95.1" width="88" height="134.9" rx="10" fill="#8cc3e6"/>
+        <rect x="320" y="125.5" width="88" height="104.5" rx="10" fill="#1d74ab"/>
+        <g font-size="24" font-weight="900" text-anchor="middle"><text x="124" y="32" fill="#a5610a">1.00</text><text x="244" y="87" fill="#155e8c">0.71</text><text x="364" y="117" fill="#155e8c">0.55</text></g>
+        <g font-size="16" font-weight="700" fill="#2c4238" text-anchor="middle"><text x="124" y="252">Continuous</text><text x="244" y="252">Single aeration</text><text x="364" y="252">True AWD</text></g>
+        <g font-size="14.5" fill="#566b61" text-anchor="middle" font-weight="600"><text x="124" y="270">0 drydowns</text><text x="244" y="270">1 drydown</text><text x="364" y="270">≥ 2 drydowns</text></g>
+      </svg>
+      <div class="cap">Water-regime factor SF<sub>w</sub>, IPCC 2019 Table 5.12 (VM0051): 2 drydowns cut daily CH₄ by 45%.</div>
+    </div>
+
+    <!-- B: VV z-score -->
+    <div class="panel">
+      <div class="ph"><span class="pl">B</span><h4>Sentinel-1 drydown detection (live run)</h4></div>
+      <svg class="ch" viewBox="0 0 660 290">
+        <rect x="60" y="192.5" width="560" height="57.5" fill="#e3f0f9"/>
+        <text x="614" y="243" text-anchor="end" font-size="15" font-weight="800" fill="#1d74ab">FLOODED ZONE (z &lt; −0.8)</text>
+        <g stroke="#e9eef1" stroke-width="1.5"><path d="M60 31.5 H620 M60 89 H620 M60 204 H620"/></g>
+        <path d="M60 146.5 H620" stroke="#b8c4bd" stroke-width="1.5"/>
+        <path d="M60 192.5 H620" stroke="#1d74ab" stroke-width="2" stroke-dasharray="8 6"/>
+        <g font-size="16" fill="#566b61" text-anchor="end" font-weight="600"><text x="52" y="36">2</text><text x="52" y="94">1</text><text x="52" y="151">0</text><text x="52" y="209">−1</text></g>
+        <text x="16" y="140" font-size="15" font-weight="700" fill="#566b61" transform="rotate(-90 16 140)" text-anchor="middle">VV z-score</text>
+        <polyline fill="none" stroke="#1f7f4e" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round"
+          points="60,87.7 110.9,121.1 161.8,154.6 212.7,200.7 263.6,229.3 314.5,152.9 365.5,124.1 416.4,181.3 467.3,222.7 518.2,151.3 569.1,97.2 620,35.2"/>
+        <g fill="#fff" stroke="#1f7f4e" stroke-width="2.5">
+          <circle cx="60" cy="87.7" r="5.5"/><circle cx="110.9" cy="121.1" r="5.5"/><circle cx="161.8" cy="154.6" r="5.5"/><circle cx="365.5" cy="124.1" r="5.5"/><circle cx="416.4" cy="181.3" r="5.5"/><circle cx="569.1" cy="97.2" r="5.5"/><circle cx="620" cy="35.2" r="5.5"/>
+        </g>
+        <g fill="#1d74ab" stroke="#fff" stroke-width="2"><circle cx="212.7" cy="200.7" r="8"/><circle cx="263.6" cy="229.3" r="8"/><circle cx="467.3" cy="222.7" r="8"/></g>
+        <g fill="#c97c0f" stroke="#fff" stroke-width="2"><path d="M314.5 138 l11 19 h-22 z"/><path d="M518.2 136.4 l11 19 h-22 z"/></g>
+        <g font-size="16" font-weight="800" fill="#a5610a" text-anchor="middle"><text x="314.5" y="128">drydown 1</text><text x="518.2" y="126">drydown 2</text></g>
+        <g font-size="15.5" fill="#566b61" text-anchor="middle" font-weight="600">
+          <text x="60" y="272">09 Jan</text><text x="161.8" y="272">02 Feb</text><text x="263.6" y="272">26 Feb</text><text x="365.5" y="272">22 Mar</text><text x="467.3" y="272">15 Apr</text><text x="569.1" y="272">09 May</text>
+        </g>
+        <g font-size="13" font-weight="700" fill="#2c4238"><circle cx="70" cy="286" r="0"/></g>
+      </svg>
+      <div class="cap"><b style="color:var(--w700)">●</b> flooded &nbsp;<b style="color:var(--a600)">▲</b> drydown (&gt; 1.2σ rise after a flooded date) · 12 scenes, Jan–May 2026 → <b>2 AWD events · 84-day season</b></div>
+    </div>
+
+    <!-- C: waterfall -->
+    <div class="panel">
+      <div class="ph"><span class="pl">C</span><h4>Worked VM0051 calculation</h4></div>
+      <svg class="ch" viewBox="0 0 540 300">
+        <g font-size="17" font-weight="700" fill="#2c4238">
+          <text x="0" y="24">Baseline CH₄</text><rect x="128" y="8" width="330" height="22" rx="11" fill="#c97c0f"/><text x="466" y="25" font-family="JetBrains Mono,monospace" font-size="16">205.5 kg</text>
+          <text x="0" y="58">Project CH₄</text><rect x="128" y="42" width="181.5" height="22" rx="11" fill="#1d74ab"/><text x="317" y="59" font-family="JetBrains Mono,monospace" font-size="16">113.0 kg</text>
+        </g>
+        <path d="M40 282 H530" stroke="#94a7a0" stroke-width="2"/>
+        <rect x="56" y="104" width="96" height="178" rx="8" fill="#2f9e63"/>
+        <rect x="178" y="104" width="96" height="27" rx="6" fill="#c0392b"/>
+        <rect x="300" y="131" width="96" height="6" rx="3" fill="#c97c0f"/>
+        <rect x="422" y="137" width="96" height="145" rx="8" fill="#186640"/>
+        <g stroke="#94a7a0" stroke-dasharray="4 4" stroke-width="1.5"><path d="M152 104 H178"/><path d="M274 131 H300"/><path d="M396 137 H422"/></g>
+        <g font-weight="900" text-anchor="middle" font-size="24"><text x="104" y="96" fill="#186640">2.59</text><text x="226" y="96" fill="#c0392b">−0.39</text><text x="348" y="123" fill="#a5610a">−0.08</text><text x="470" y="129" fill="#186640">2.12</text></g>
+        <g font-size="16" font-weight="800" fill="#fff" text-anchor="middle"><text x="104" y="270">Avoided</text><text x="470" y="270">Net</text></g>
+        <g font-size="15" font-weight="700" fill="#2c4238" text-anchor="middle"><text x="226" y="154">15% QA3</text><text x="226" y="172">uncertainty</text><text x="348" y="160">N₂O</text><text x="348" y="178">penalty</text></g>
+      </svg>
+      <div class="cap">tCO₂e · 1 ha · 84 days · 2 drydowns · 100 kg N/ha · avoided 92.5 kg CH₄ × GWP 28 · EF꜀ 0.85 kg CH₄/ha/day.</div>
+    </div>
+
+    <!-- D: ML -->
+    <div class="panel">
+      <div class="ph"><span class="pl">D</span><h4>ML cross-check of the detector</h4></div>
+      <div class="pipeline"><span class="b">863 labelled plots → 688 train / 172 held-out</span><span class="b">Random forest · Sentinel-1 + Satellite Embedding</span></div>
+      <div class="metrics">
+        <div class="m"><div class="v">72.7%</div><div class="k">Precision</div></div>
+        <div class="m"><div class="v">71.1%</div><div class="k">Recall</div></div>
+        <div class="m"><div class="v">0.719</div><div class="k">F1</div></div>
+        <div class="m"><div class="v">0.754</div><div class="k">ROC-AUC</div></div>
+      </div>
+      <div style="font-size:16.5px;font-weight:700;color:var(--ink2);margin-top:12px">AWD plots correctly identified (held-out)</div>
+      <div class="bar"><i style="width:71.1%"></i><span>64 / 90</span></div>
+      <div class="cap">Repeated 5×5 cross-validation: <b>66.3% ± 4.2%</b>. Data: microsoft/rice-irrigation-mapping-s1s2 (Punjab labels, not Bangladesh). Advisory only: it flags disagreement and never changes a calculation.</div>
+    </div>
+
+    <!-- E: readiness donut -->
+    <div class="panel">
+      <div class="ph"><span class="pl">E</span><h4>Readiness gate on a VM0051 field</h4></div>
+      <div class="donutwrap">
+        <svg viewBox="0 0 200 200" style="width:200px;height:200px;flex:none">
+          <g transform="rotate(-90 100 100)" fill="none" stroke-width="34">
+            <circle cx="100" cy="100" r="70" stroke="#1f7f4e" stroke-dasharray="52.98 386.84" stroke-dashoffset="0"/>
+            <circle cx="100" cy="100" r="70" stroke="#c97c0f" stroke-dasharray="162.93 276.89" stroke-dashoffset="-54.98"/>
+            <circle cx="100" cy="100" r="70" stroke="#c0392b" stroke-dasharray="52.98 386.84" stroke-dashoffset="-219.91"/>
+            <circle cx="100" cy="100" r="70" stroke="#5f6f78" stroke-dasharray="162.93 276.89" stroke-dashoffset="-274.89"/>
+          </g>
+          <text x="100" y="98" text-anchor="middle" font-size="44" font-weight="900" fill="#11392a">8</text>
+          <text x="100" y="124" text-anchor="middle" font-size="15" font-weight="700" fill="#566b61">checks</text>
+        </svg>
+        <div class="dl">
+          <div><i class="dot" style="background:var(--p600)"></i><b>1</b>satisfied</div>
+          <div><i class="dot" style="background:var(--a600)"></i><b>3</b>needs review</div>
+          <div><i class="dot" style="background:var(--r600)"></i><b>1</b>missing</div>
+          <div><i class="dot" style="background:var(--s600)"></i><b>3</b>unsupported</div>
+        </div>
+        <ul class="rlist">
+          <li><i class="dot" style="background:var(--p600)"></i><span><b>monitoring_period_coverage</b>: crop seasons cover the period</span></li>
+          <li><i class="dot" style="background:var(--a600)"></i><span><b>methodology_applicability</b>: crop outside usual scope, reviewer confirms</span></li>
+          <li><i class="dot" style="background:var(--a600)"></i><span><b>evidence_review_status</b>: observations not yet accepted by a second person</span></li>
+          <li><i class="dot" style="background:var(--r600)"></i><span><b>required_measurement_inputs</b>: AWD events &amp; season length not supplied</span></li>
+          <li><i class="dot" style="background:var(--s600)"></i><span><b>leakage_assessment</b>: not implemented, stays blocking</span></li>
+          <li><i class="dot" style="background:var(--s600)"></i><span><b>n2o_baseline_fertilizer</b>: not implemented, shown to the verifier</span></li>
+        </ul>
+      </div>
+      <div class="cap">Example run on the deployed app (6 of 8 checks listed). Unsupported rules are never silently satisfied; while anything is missing or needs review the version stays <span class="mono">draft</span>.</div>
+    </div>
+
+    <!-- F: verification -->
+    <div class="panel">
+      <div class="ph"><span class="pl">F</span><h4>Software verification</h4></div>
+      <div class="tests">
+        <div class="bignum">184<small>backend tests · 0 failed</small></div>
+        <div class="checks">
+          <div class="chk"><svg class="i"><use href="#i-circle-check"/></svg>4 / 4 frontend tests</div>
+          <div class="chk"><svg class="i"><use href="#i-circle-check"/></svg>Production build</div>
+          <div class="chk"><svg class="i"><use href="#i-circle-check"/></svg>TypeScript check</div>
+          <div class="chk"><svg class="i"><use href="#i-circle-check"/></svg>0 lint errors</div>
+        </div>
+      </div>
+      <table class="tc">
+        <tr><th>ID</th><th>Scenario → expected</th><th></th></tr>
+        <tr><td class="id">TC-01</td><td>500,000 ha field → rejected above 60,000 tCO₂e/yr</td><td><span class="pass">PASS</span></td></tr>
+        <tr><td class="id">TC-03</td><td>Another organization reads a field → 404</td><td><span class="pass">PASS</span></td></tr>
+        <tr><td class="id">TC-04</td><td>PDF after evidence edits → built from frozen snapshot</td><td><span class="pass">PASS</span></td></tr>
+        <tr><td class="id">TC-06</td><td>AI claims “certified” → rejected, nothing saved</td><td><span class="pass">PASS</span></td></tr>
+      </table>
+      <div class="cap">pytest, npm test, next build, tsc and ESLint re-run on 10 Oct 2026.</div>
+    </div>
+  </div>
+  <div class="honest" style="margin-top:14px">
+    <svg class="i ic"><use href="#i-triangle-alert"/></svg>
+    <h5>Not claimed (not executed):</h5>
+    <div class="items"><span>Independent AWD field ground truth</span><span>Browser end-to-end tests</span><span>Live PostgreSQL migration verification</span><span>20-case AI evaluation</span></div>
+    <div class="eqn">Software verification ≠ VVB verification ≠ Verra issuance</div>
+  </div>
+</section>
+
+<!-- ======================= DISCUSSION / CONCLUSION / FUTURE ======================= -->
+<section class="row" style="grid-template-columns:1.12fr 1fr 1fr">
+  <div class="card">
+    <div class="sec"><div class="n">9</div><h3>Discussion</h3></div>
+    <div class="disc">
+      <div class="dp"><div class="ic"><svg class="i"><use href="#i-radar"/></svg></div><p><b>Free radar can surface AWD.</b> Sentinel-1 drydown signatures were detected without field sensors, but they remain satellite estimates: a field can drain and re-flood between two passes.</p></div>
+      <div class="dp"><div class="ic"><svg class="i"><use href="#i-lock"/></svg></div><p><b>Reproducibility comes from freezing.</b> Calculating only from an immutable snapshot means a report rebuilt later shows the same numbers and evidence (TC-04).</p></div>
+      <div class="dp"><div class="ic"><svg class="i"><use href="#i-ban"/></svg></div><p><b>Failing closed beats guessing.</b> Gates block oversized projects, unsupported rules and incomplete leakage instead of reporting zero. Golden-value tests caught a wrong emission factor (1.4 → 0.85).</p></div>
+      <div class="dp"><div class="ic"><svg class="i"><use href="#i-brain-circuit"/></svg></div><p><b>ML is a second opinion, not proof.</b> About 71% of unseen plots are classified correctly with out-of-region labels, so the model stays advisory.</p></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="sec"><div class="n">10</div><h3>Conclusion</h3></div>
+    <p class="concl">Terra-Audit shows that the evidence behind an agricultural carbon claim can be <b>collected, calculated under VM0051 and VM0042, and reviewed in one system</b>, with every result traceable from field evidence to the final estimate and the calculation kept separate from the AI around it. A result the implemented methodology cannot support is blocked, not reported.</p>
+    <div class="ach">
+      <div><svg class="i"><use href="#i-satellite"/></svg>Satellite AWD evidence</div>
+      <div><svg class="i"><use href="#i-calculator"/></svg>2 Verra engines + leakage</div>
+      <div><svg class="i"><use href="#i-lock"/></svg>Immutable versions</div>
+      <div><svg class="i"><use href="#i-user-check"/></svg>Two-person review</div>
+      <div><svg class="i"><use href="#i-file-archive"/></svg>Hashed MRV package</div>
+      <div><svg class="i"><use href="#i-shield-check"/></svg>Bounded, validated AI</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="sec"><div class="n">11</div><h3>Future Scope</h3></div>
+    <div class="road">
+      <div class="rq p0"><div class="pr">P0</div><ul><li>Fix CI ordering and close endpoint authorization gaps</li><li>Resolve the additionality/readiness contradiction without weakening the gate</li></ul></div>
+      <div class="rq p1"><div class="pr">P1</div><ul><li><b>Field ground-truth campaign</b> for AWD in Bangladesh / South Asia</li><li>Per-calculation rice provenance and a tamper-evident evidence manifest</li><li>Complete the 20-case AI evaluation; verify PostgreSQL, storage and worker recovery</li></ul></div>
+      <div class="rq p2"><div class="pr">P2</div><ul><li>Versioned migrations; Eq. 38 uncertainty for large projects</li><li>Remaining VM0051 terms, extended only with expert or VVB review</li></ul></div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!-- ======================= FOOTER ======================= -->
+<footer class="foot">
+  <div>
+    <h6>12 · Key References</h6>
+    <ol class="refs">
+      <li>Verra, <i>VM0051 v1.1: Improved Management in Rice Production Systems</i>.</li>
+      <li>Verra, <i>VM0042 v2.2: Improved Agricultural Land Management</i> (incl. 11 Jun 2026 corrections).</li>
+      <li>Verra, <i>VMD0054 v1.1: Leakage from the Displacement of Agricultural Activities</i>.</li>
+      <li>IPCC, <i>2019 Refinement to the 2006 Guidelines</i>, Vol. 4, Ch. 5, 10, 11 (Tables 5.12–5.14, 11.1).</li>
+      <li>IPCC, <i>AR5 Climate Change 2013: The Physical Science Basis</i>, GWP100 values.</li>
+      <li>ESA / Copernicus, <i>Sentinel-1 SAR User Guide</i>; Google Earth Engine (COPERNICUS/S1_GRD).</li>
+      <li>Lampayan et al., “Adoption and economics of AWD …,” <i>Field Crops Research</i> 170, 2015.</li>
+      <li>Savitzky &amp; Golay, “Smoothing and differentiation of data …,” <i>Anal. Chem.</i> 36(8), 1964.</li>
+      <li>Breiman, “Random Forests,” <i>Machine Learning</i> 45, 2001; Chen &amp; Guestrin, “XGBoost,” KDD 2016.</li>
+      <li>Microsoft, <i>rice-irrigation-mapping-s1s2</i> dataset (Punjab AWD labels).</li>
+    </ol>
+  </div>
+  <div>
+    <h6>Acknowledgement</h6>
+    <p class="ack">Sincere thanks to <b style="color:#fff">Dr. Emon Kumar Dey</b>, Professor, IIT, University of Dhaka, for guidance at every stage, and to the Institute of Information Technology, classmates and family for their feedback and support.</p>
+    <p class="ack" style="margin-top:10px;color:#8ad4a9;font-weight:700">Next.js · FastAPI · PostgreSQL · Python worker · Google Earth Engine · scikit-learn / XGBoost</p>
+  </div>
+  <div class="qrs">
+    <div class="qr"><div class="box"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 29 29" shape-rendering="crispEdges" class="segno"><path class="qrline" stroke="#0f2e22" d="M0 0.5h7m2 0h1m4 0h2m2 0h3m1 0h7m-29 1h1m5 0h1m1 0h2m3 0h1m6 0h1m1 0h1m5 0h1m-29 1h1m1 0h3m1 0h1m1 0h1m1 0h1m2 0h1m2 0h1m3 0h1m1 0h1m1 0h3m1 0h1m-29 1h1m1 0h3m1 0h1m3 0h1m1 0h6m1 0h2m1 0h1m1 0h3m1 0h1m-29 1h1m1 0h3m1 0h1m3 0h1m1 0h1m1 0h6m2 0h1m1 0h3m1 0h1m-29 1h1m5 0h1m2 0h3m3 0h1m3 0h2m1 0h1m5 0h1m-29 1h7m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h7m-20 1h2m1 0h1m1 0h5m-18 1h3m1 0h2m5 0h1m2 0h5m6 0h2m-26 1h1m2 0h1m5 0h3m5 0h1m2 0h3m1 0h1m1 0h1m-28 1h2m1 0h5m1 0h1m1 0h2m2 0h1m3 0h1m1 0h1m2 0h3m-26 1h3m2 0h1m2 0h7m2 0h2m2 0h1m4 0h1m-28 1h1m1 0h1m1 0h2m2 0h1m1 0h1m3 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h4m-29 1h1m2 0h1m1 0h1m1 0h3m1 0h3m3 0h1m1 0h1m2 0h2m1 0h2m1 0h1m-29 1h2m1 0h2m1 0h1m2 0h2m2 0h2m4 0h1m2 0h4m1 0h2m-28 1h2m2 0h1m1 0h1m2 0h3m1 0h2m2 0h1m1 0h3m1 0h2m1 0h1m-26 1h1m1 0h3m2 0h1m1 0h4m3 0h1m1 0h2m1 0h3m1 0h1m-27 1h3m1 0h1m5 0h2m1 0h1m3 0h1m1 0h1m2 0h1m-24 1h1m3 0h6m2 0h1m5 0h1m1 0h1m1 0h1m-21 1h1m5 0h1m3 0h1m1 0h5m2 0h2m3 0h1m1 0h1m-28 1h3m1 0h2m2 0h2m1 0h2m1 0h1m1 0h1m1 0h9m-20 1h4m1 0h2m1 0h1m1 0h3m3 0h2m1 0h2m-29 1h7m2 0h1m1 0h3m2 0h2m1 0h2m1 0h1m1 0h1m1 0h2m-28 1h1m5 0h1m1 0h2m4 0h1m1 0h1m3 0h1m3 0h1m2 0h2m-29 1h1m1 0h3m1 0h1m6 0h3m2 0h1m1 0h7m-27 1h1m1 0h3m1 0h1m1 0h1m2 0h2m1 0h1m4 0h1m4 0h2m1 0h1m-28 1h1m1 0h3m1 0h1m1 0h3m1 0h3m1 0h1m1 0h1m1 0h1m2 0h1m1 0h2m1 0h1m-29 1h1m5 0h1m1 0h1m1 0h1m3 0h2m4 0h2m2 0h2m1 0h1m-28 1h7m2 0h3m1 0h1m4 0h6m1 0h1m1 0h1"/></svg></div><div class="l">Live app</div><div class="u">terra-audit.vercel.app</div></div>
+    <div class="qr"><div class="box"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 29 29" shape-rendering="crispEdges" class="segno"><path class="qrline" stroke="#0f2e22" d="M0 0.5h7m4 0h2m2 0h1m1 0h3m2 0h7m-29 1h1m5 0h1m1 0h1m4 0h5m1 0h2m1 0h1m5 0h1m-29 1h1m1 0h3m1 0h1m2 0h1m2 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h3m1 0h1m-29 1h1m1 0h3m1 0h1m4 0h3m5 0h1m2 0h1m1 0h3m1 0h1m-29 1h1m1 0h3m1 0h1m1 0h1m1 0h1m3 0h2m3 0h1m2 0h1m1 0h3m1 0h1m-29 1h1m5 0h1m4 0h1m1 0h1m1 0h1m1 0h1m1 0h1m2 0h1m5 0h1m-29 1h7m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h7m-19 1h1m1 0h2m1 0h4m1 0h1m-21 1h1m1 0h1m1 0h1m1 0h1m5 0h1m1 0h1m1 0h2m1 0h2m3 0h1m2 0h1m-27 1h1m2 0h2m2 0h3m5 0h2m2 0h1m1 0h1m2 0h1m2 0h1m-29 1h1m2 0h5m1 0h1m1 0h3m7 0h2m1 0h1m1 0h3m-28 1h3m1 0h1m1 0h3m1 0h1m3 0h3m5 0h2m2 0h1m-28 1h1m1 0h2m2 0h3m2 0h1m5 0h6m2 0h1m1 0h2m-29 1h2m7 0h2m1 0h2m2 0h1m3 0h3m2 0h1m2 0h1m-28 1h2m3 0h1m1 0h2m4 0h1m2 0h1m4 0h1m1 0h2m1 0h2m-28 1h1m2 0h2m1 0h1m1 0h2m1 0h4m1 0h2m1 0h3m2 0h1m1 0h1m-28 1h2m3 0h2m7 0h1m1 0h2m1 0h2m1 0h2m1 0h1m1 0h2m-26 1h1m3 0h1m1 0h1m1 0h1m2 0h1m1 0h3m2 0h2m2 0h2m1 0h1m-29 1h1m4 0h2m3 0h1m2 0h1m7 0h1m1 0h2m2 0h2m-28 1h2m6 0h1m1 0h1m3 0h3m1 0h7m1 0h1m-28 1h1m4 0h3m1 0h4m2 0h3m1 0h6m-17 1h1m1 0h2m1 0h1m3 0h1m1 0h2m3 0h1m1 0h3m-29 1h7m2 0h1m4 0h1m4 0h2m1 0h1m1 0h2m1 0h2m-29 1h1m5 0h1m2 0h2m2 0h3m1 0h2m1 0h1m3 0h2m-26 1h1m1 0h3m1 0h1m1 0h2m1 0h1m2 0h1m1 0h2m2 0h5m2 0h2m-29 1h1m1 0h3m1 0h1m3 0h1m1 0h1m1 0h1m1 0h3m1 0h1m2 0h2m1 0h3m-29 1h1m1 0h3m1 0h1m1 0h1m2 0h1m2 0h1m1 0h4m3 0h3m2 0h1m-29 1h1m5 0h1m3 0h1m2 0h1m3 0h1m1 0h3m2 0h1m2 0h1m-28 1h7m1 0h3m1 0h3m2 0h1m1 0h3m1 0h2m2 0h2"/></svg></div><div class="l">Source code</div><div class="u">github.com/knah1d/terra-audit</div></div>
+  </div>
+</footer>
+
+</div>
+</body>
+</html>
